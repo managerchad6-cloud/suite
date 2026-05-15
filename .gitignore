@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.zip
+tsconfig.tsbuildinfo
+public/assets/gallery/
+public/assets/*.webp
+public/assets/*.ttf
+public/assets/chars/
+public/assets/logo.png

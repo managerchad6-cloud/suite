@@ -19,18 +19,20 @@ export function ChatInput({ address: _address }: { address: string }) {
 
   return (
     <div className="chat-input-wrap">
-      <input
-        className="chat-input"
-        placeholder="Message the stream… /meme Virgin X vs Chad Y · /suggestion · /voteMeme 1"
-        value={msg}
-        onChange={(e) => setMsg(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSend() }}
-        disabled={sending}
-        maxLength={300}
-      />
-      <button className="chat-send-btn" onClick={handleSend} disabled={sending || !msg.trim()}>
-        {sending ? '…' : '▶'}
-      </button>
+      <div className="chat-input-row">
+        <input
+          className="chat-input"
+          placeholder="Say something… they're listening"
+          value={msg}
+          onChange={(e) => setMsg(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSend() }}
+          disabled={sending}
+          maxLength={300}
+        />
+        <button className="chat-send-btn" onClick={handleSend} disabled={sending || !msg.trim()}>
+          {sending ? '…' : '▶ SEND'}
+        </button>
+      </div>
     </div>
   )
 }

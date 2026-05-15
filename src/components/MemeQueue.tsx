@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getMemeIntake, voteMeme, WS_URL } from '../api/livestream'
+import { getMemeIntake, voteMeme, submitMemeToLivestream, WS_URL } from '../api/livestream'
 import { OrchestratorWS, type MemeVoteItem, type MemeIntakeState } from '../api/ws'
 
 type VotingState = 'idle' | 'voting' | 'rolling'
@@ -15,6 +15,11 @@ export function MemeQueue({ address: _address }: { address: string }) {
   const [countdown, setCountdown] = useState<number | null>(null)
   const [voting, setVoting] = useState<number | null>(null)
   const wsRef = useRef<OrchestratorWS | null>(null)
+
+  const [memeText, setMemeText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitMsg, setSubmitMsg] = useState<string | null>(null)
+  const submitMsgRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function applyState(d: MemeIntakeState) {
     setPool(d.mimo?.pool ?? [])
@@ -48,6 +53,24 @@ export function MemeQueue({ address: _address }: { address: string }) {
     catch { /* rejected */ } finally { setVoting(null) }
   }
 
+  const handleMemeSubmit = async () => {
+    const text = memeText.trim()
+    if (!text || submitting) return
+    setSubmitting(true)
+    setSubmitMsg(null)
+    try {
+      await submitMemeToLivestream(text)
+      setMemeText('')
+      setSubmitMsg('Submitted!')
+    } catch (err) {
+      setSubmitMsg(err instanceof Error ? err.message : 'Submit failed')
+    } finally {
+      setSubmitting(false)
+      if (submitMsgRef.current) clearTimeout(submitMsgRef.current)
+      submitMsgRef.current = setTimeout(() => setSubmitMsg(null), 3000)
+    }
+  }
+
   return (
     <div className="panel">
       <div className="panel-header">
@@ -56,9 +79,30 @@ export function MemeQueue({ address: _address }: { address: string }) {
         {state === 'rolling' && <span className="panel-badge rolling">ROLLING</span>}
         {state === 'idle'    && <span className="panel-badge idle">WAITING</span>}
       </div>
+      <div className="panel-form">
+        <textarea
+          className="yt-input"
+          placeholder="Virgin X vs Chad Y…"
+          value={memeText}
+          onChange={(e) => setMemeText(e.target.value)}
+          disabled={submitting}
+          maxLength={400}
+          style={{ width: '100%', height: 58, resize: 'none', display: 'block', marginBottom: 8 }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            className="suggestion-submit-btn"
+            onClick={handleMemeSubmit}
+            disabled={submitting || !memeText.trim()}
+          >
+            {submitting ? '…' : 'Submit Meme'}
+          </button>
+          {submitMsg && <span style={{ fontSize: 13, fontFamily: 'var(--font-ui)', color: 'var(--gold)' }}>{submitMsg}</span>}
+        </div>
+      </div>
       <div className="panel-body">
         {pool.length === 0 ? (
-          <div className="panel-empty">No memes in queue</div>
+          <div className="panel-empty">Drop a meme idea above ↑</div>
         ) : pool.map((item) => (
           <div key={item.id} className="queue-item">
             <span className="queue-num">#{item.number}</span>

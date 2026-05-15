@@ -14,6 +14,7 @@ export interface RoadmapItem {
   id: string
   title: string
   votes: number
+  description?: string
 }
 
 export async function getRanks(): Promise<Video[]> {

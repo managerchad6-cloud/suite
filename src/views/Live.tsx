@@ -1,7 +1,7 @@
 import { StreamPlayer } from '../components/StreamPlayer'
 import { ChatInput } from '../components/ChatInput'
 import { MemeQueue } from '../components/MemeQueue'
-import { VideoQueue } from '../components/VideoQueue'
+import { YtVideosPanel } from '../components/YtVideosPanel'
 
 export function Live({ address }: { address: string }) {
   return (
@@ -12,7 +12,7 @@ export function Live({ address }: { address: string }) {
       </div>
       <div className="live-right">
         <MemeQueue address={address} />
-        <VideoQueue address={address} />
+        <YtVideosPanel address={address} />
       </div>
     </div>
   )

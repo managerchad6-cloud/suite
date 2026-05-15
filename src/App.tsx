@@ -6,6 +6,37 @@ import { Vote } from './views/Vote'
 
 type View = 'live' | 'memes' | 'vote'
 
+// Virgin spectrum — most degenerate (top) descending to borderline
+const REEL_L = [
+  'gizzard','bad','wraith','grandwizard','witch','wizard',
+  'lshad','cad','legbeard','neckbeard','femcel','incel',
+  'brad','brandy','virgin',
+] as const
+
+// Chad spectrum — Virgin at base, ascending to Gad
+const REEL_R = [
+  'virgin','becky','basic','veronica','basdchad','stacy',
+  'thad','tracy','lad','lacy','shlad','boomer',
+  'zad','ogchad','gad',
+] as const
+
+function GateReel({ images, dir, side }: {
+  images: readonly string[]
+  dir: 'up' | 'down'
+  side: 'virgin' | 'chad'
+}) {
+  const doubled = [...images, ...images]
+  return (
+    <div className={`gate-reel gate-reel--${side}`}>
+      <div className={`gate-reel-track gate-reel-track--${dir}`}>
+        {doubled.map((name, i) => (
+          <img key={i} src={`/assets/chars/${name}.png`} alt={name} className="gate-reel-img" draggable={false} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function WalletGate({ onConnect }: { onConnect: (addr: string) => void }) {
   const [connecting, setConnecting] = useState(false)
   const phantom = isPhantomInstalled()
@@ -26,13 +57,17 @@ function WalletGate({ onConnect }: { onConnect: (addr: string) => void }) {
 
   return (
     <div className="suite-gate">
+      <GateReel images={REEL_L} dir="up" side="virgin" />
       <div className="suite-gate-inner">
-        <div className="suite-gate-logo">$VVC SUITE</div>
-        <div className="suite-gate-sub">The Virgin vs Chad Command Center</div>
+        <div className="suite-gate-vignette" />
+        <img src="/assets/logo.png" alt="Virgin VS Chad" className="suite-gate-logo" />
         <button className="suite-gate-btn" onClick={handleConnect} disabled={connecting}>
           {connecting ? 'Connecting…' : phantom ? 'Connect Phantom' : 'Install Phantom →'}
         </button>
+        <img src="/assets/virgin_back.webp" alt="" className="gate-watcher gate-watcher--virgin" draggable={false} />
+        <img src="/assets/chad_back.webp"   alt="" className="gate-watcher gate-watcher--chad"   draggable={false} />
       </div>
+      <GateReel images={REEL_R} dir="down" side="chad" />
     </div>
   )
 }
@@ -55,7 +90,7 @@ export default function App() {
   return (
     <div className="suite-shell">
       <nav className="suite-nav">
-        <div className="suite-nav-brand">$VVC</div>
+        <img src="/assets/logo.png" alt="Virgin VS Chad" className="suite-nav-brand" />
         <div className="suite-nav-links">
           {([
             { id: 'live',  icon: '◉', label: 'LIVE'  },
