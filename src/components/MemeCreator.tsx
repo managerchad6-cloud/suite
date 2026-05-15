@@ -3,8 +3,9 @@ import { Connection, PublicKey, Transaction } from '@solana/web3.js'
 import { getAssociatedTokenAddressSync, createTransferInstruction } from '@solana/spl-token'
 import { getPhantomProvider } from '@mf/wallet'
 
-const MEME_FACTORY = (import.meta as unknown as { env: Record<string, string> }).env.VITE_MEME_FACTORY_URL ?? ''
-const SOLANA_RPC   = 'https://api.mainnet-beta.solana.com'
+const _env         = (import.meta as unknown as { env: Record<string, string> }).env
+const MEME_FACTORY = _env.VITE_MEME_FACTORY_URL ?? ''
+const SOLANA_RPC   = _env.VITE_HELIUS_RPC_URL ?? 'https://mainnet.helius-rpc.com'
 const USDC_MINT    = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
 const TREASURY     = new PublicKey('BvqPmrhAMJHozjpmJ9r7zLwkbZbS99pSaEkfQw3HxUQS')
 const USDC_AMOUNT  = 1_000_000 // 1 USDC — 6 decimal places
