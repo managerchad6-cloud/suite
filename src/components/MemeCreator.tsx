@@ -5,7 +5,7 @@ import {
   createTransferInstruction,
   createAssociatedTokenAccountIdempotentInstruction,
 } from '@solana/spl-token'
-import { getPhantomProvider } from '@mf/wallet'
+import { getActiveProvider } from '@mf/wallet'
 
 const _env         = (import.meta as unknown as { env: Record<string, string> }).env
 const MEME_FACTORY = _env.VITE_MEME_FACTORY_URL ?? ''
@@ -101,8 +101,8 @@ export const MemeCreator = forwardRef<HTMLElement, Props>(
         //    signAndSendTransaction triggers Phantom's domain-reputation filter;
         //    signTransaction + manual sendRawTransaction bypasses that check.
         setStage('approving')
-        const phantom = getPhantomProvider()
-        if (!phantom) throw new Error('Phantom wallet not found — is it installed?')
+        const phantom = getActiveProvider()
+        if (!phantom) throw new Error('Meme generation requires a Solana wallet (Phantom, Solflare, or Backpack)')
         const signedTx = await phantom.signTransaction(tx)
 
         setStage('confirming')
