@@ -16,7 +16,7 @@
     "noUnusedParameters": false,
     "baseUrl": ".",
     "paths": {
-      "@mf/*": ["../src/*"]
+      "@mf/*": ["./src/*"]
     }
   },
   "include": ["src"]
