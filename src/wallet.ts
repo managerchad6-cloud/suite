@@ -8,6 +8,8 @@ export type PhantomProvider = {
   disconnect(): Promise<void>
   signMessage(msg: Uint8Array, enc: string): Promise<{ signature: Uint8Array }>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  signTransaction(tx: any): Promise<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   signAndSendTransaction(tx: any): Promise<{ signature: string }>
 }
 

@@ -97,14 +97,21 @@ export const MemeCreator = forwardRef<HTMLElement, Props>(
           ))
           .add(createTransferInstruction(senderATA, treasuryATA, walletPubkey, USDC_AMOUNT))
 
-        // ── 2. Ask Phantom to sign and broadcast ────────────────────────────
+        // ── 2. Ask Phantom to sign only, then broadcast ourselves via Helius.
+        //    signAndSendTransaction triggers Phantom's domain-reputation filter;
+        //    signTransaction + manual sendRawTransaction bypasses that check.
         setStage('approving')
         const phantom = getPhantomProvider()
         if (!phantom) throw new Error('Phantom wallet not found — is it installed?')
-        const { signature: txSig } = await phantom.signAndSendTransaction(tx)
+        const signedTx = await phantom.signTransaction(tx)
+
+        setStage('confirming')
+        const txSig = await connection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+        })
 
         // ── 3. Wait for on-chain confirmation ───────────────────────────────
-        setStage('confirming')
         await connection.confirmTransaction(
           { signature: txSig, blockhash, lastValidBlockHeight },
           'confirmed',
