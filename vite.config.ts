@@ -5,6 +5,9 @@ import { fileURLToPath, URL } from 'url'
 export default defineConfig({
   plugins: [react()],
   server: { port: 5291 },
+  define: {
+    global: 'globalThis',
+  },
   resolve: {
     alias: {
       '@mf': fileURLToPath(new URL('./src', import.meta.url)),
