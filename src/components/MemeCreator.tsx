@@ -1,5 +1,5 @@
 import { forwardRef, useState, useEffect, useRef } from 'react'
-import { Connection, PublicKey, Transaction } from '@solana/web3.js'
+import { Connection, PublicKey, Transaction, SendTransactionError } from '@solana/web3.js'
 import {
   getAssociatedTokenAddressSync,
   createTransferInstruction,
@@ -77,12 +77,26 @@ export const MemeCreator = forwardRef<HTMLElement, Props>(
         const senderATA    = getAssociatedTokenAddressSync(USDC_MINT, walletPubkey)
         const treasuryATA  = getAssociatedTokenAddressSync(USDC_MINT, TREASURY)
 
-        // Verify the sender has a USDC token account before building the tx.
-        // If it doesn't exist the transfer will fail in simulation and Phantom
-        // shows a "could be malicious" warning instead of a useful error.
-        const senderAcct = await connection.getAccountInfo(senderATA)
+        // Pre-flight: verify sender ATA exists, check SOL balance for fees.
+        const [senderAcct, treasuryAcct, solBalance] = await Promise.all([
+          connection.getAccountInfo(senderATA),
+          connection.getAccountInfo(treasuryATA),
+          connection.getBalance(walletPubkey),
+        ])
+
         if (!senderAcct) {
           throw new Error('No USDC token account found. Add USDC to your wallet first.')
+        }
+
+        // Treasury ATA creation costs ~0.00204 SOL rent if it doesn't exist yet.
+        const needsAta    = !treasuryAcct
+        const minLamports = needsAta ? 2_100_000 : 15_000
+        if (solBalance < minLamports) {
+          const min = (minLamports / 1e9).toFixed(6).replace(/0+$/, '')
+          throw new Error(
+            `Need at least ${min} SOL in your wallet for fees` +
+            (needsAta ? ' (includes one-time treasury account setup)' : '') + '.',
+          )
         }
 
         const { blockhash, lastValidBlockHeight } =
@@ -106,10 +120,29 @@ export const MemeCreator = forwardRef<HTMLElement, Props>(
         const signedTx = await phantom.signTransaction(tx)
 
         setStage('confirming')
-        const txSig = await connection.sendRawTransaction(signedTx.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: 'confirmed',
-        })
+        let txSig: string
+        try {
+          txSig = await connection.sendRawTransaction(signedTx.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+          })
+        } catch (sendErr) {
+          if (sendErr instanceof SendTransactionError) {
+            // Extract simulation logs for a meaningful error message
+            let detail = sendErr.message
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const logs: string[] | null = await (sendErr as any).getLogs?.(connection) ?? null
+              const hit = logs?.find(l => l.includes('Error') || l.includes('failed'))
+              if (hit) detail = hit
+            } catch {}
+            if (detail.includes('no record of a prior credit') || detail.includes('insufficient lamports')) {
+              throw new Error('Insufficient SOL for transaction fees. Add SOL to your wallet and try again.')
+            }
+            throw new Error(`Simulation failed: ${detail}`)
+          }
+          throw sendErr
+        }
 
         // ── 3. Wait for on-chain confirmation ───────────────────────────────
         await connection.confirmTransaction(
