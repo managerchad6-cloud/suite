@@ -7,7 +7,7 @@ export default defineConfig({
   server: { port: 5291 },
   resolve: {
     alias: {
-      '@mf': fileURLToPath(new URL('../src', import.meta.url)),
+      '@mf': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
 })

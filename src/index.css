@@ -373,6 +373,223 @@ html, body, #root {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Meme Creator ─────────────────────────────────────────────── */
+.mc-wrap {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.mc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.mc-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+}
+.mc-price {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  background: rgba(232,160,32,0.08);
+  padding: 2px 8px;
+}
+.mc-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.mc-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.mc-side { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mc-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  margin-bottom: 2px;
+}
+.mc-label-virgin { color: #7aacf0; }
+.mc-label-chad   { color: var(--gold); }
+.mc-vs {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text-dim);
+  padding-top: 28px;
+  flex-shrink: 0;
+}
+.mc-input {
+  background: var(--dark);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.mc-input:focus { border-color: #444; }
+.mc-input:disabled { opacity: 0.45; cursor: default; }
+.mc-input-labels { font-size: 11px; color: var(--text-dim); }
+.mc-input-labels::placeholder { font-size: 10px; }
+.mc-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(220,60,60,0.1);
+  border: 1px solid rgba(220,60,60,0.3);
+  color: #e87070;
+  font-size: 11px;
+  padding: 8px 10px;
+}
+.mc-error-dismiss {
+  background: none;
+  border: none;
+  color: #e87070;
+  cursor: pointer;
+  font-size: 12px;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+.mc-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 4px 0;
+}
+.mc-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.mc-btn-generate {
+  background: var(--gold);
+  color: #000;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  padding: 10px 20px;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity 0.15s;
+}
+.mc-btn-generate:hover:not(:disabled) { opacity: 0.85; }
+.mc-btn-generate:disabled { opacity: 0.35; cursor: default; }
+.mc-btn-again {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 7px 14px;
+  cursor: pointer;
+  width: 100%;
+  transition: color 0.1s, border-color 0.1s;
+}
+.mc-btn-again:hover { color: var(--text); border-color: #444; }
+.mc-result { border-top: 1px solid var(--border); }
+.mc-result-img { width: 100%; display: block; }
+
+/* ── Meme Gallery ─────────────────────────────────────────────── */
+.mg-wrap { padding-bottom: 32px; }
+.mg-header {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.mg-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+}
+.mg-loading, .mg-empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border-top: 1px solid var(--border);
+}
+.mg-card {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  transition: background 0.1s;
+}
+.mg-card:hover { background: var(--surface-2); }
+.mg-card-own { outline: 1px solid var(--gold-dim); outline-offset: -1px; }
+.mg-img-wrap { aspect-ratio: 1; overflow: hidden; background: #000; }
+.mg-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mg-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mg-card-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mg-badge-own {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  background: rgba(232,160,32,0.1);
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+.mg-date { font-size: 10px; color: var(--text-dim); }
+.mg-vote-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 10px;
+  padding: 3px 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.1s, border-color 0.1s;
+  white-space: nowrap;
+}
+.mg-vote-btn:hover:not(:disabled) { color: var(--gold); border-color: var(--gold); }
+.mg-vote-btn-voted { color: var(--gold); border-color: var(--gold-dim); }
+.mg-vote-btn:disabled { cursor: default; opacity: 0.7; }
+.mg-more-wrap { padding: 16px 20px; text-align: center; }
+.mg-more-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 7px 24px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+.mg-more-btn:hover:not(:disabled) { color: var(--text); border-color: #444; }
+.mg-more-btn:disabled { opacity: 0.4; cursor: default; }
+
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 860px) {
   .suite-nav { width: 52px; }
