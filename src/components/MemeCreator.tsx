@@ -1,6 +1,10 @@
 import { forwardRef, useState, useEffect, useRef } from 'react'
 import { Connection, PublicKey, Transaction } from '@solana/web3.js'
-import { getAssociatedTokenAddressSync, createTransferInstruction } from '@solana/spl-token'
+import {
+  getAssociatedTokenAddressSync,
+  createTransferInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
+} from '@solana/spl-token'
 import { getPhantomProvider } from '@mf/wallet'
 
 const _env         = (import.meta as unknown as { env: Record<string, string> }).env
@@ -73,10 +77,24 @@ export const MemeCreator = forwardRef<HTMLElement, Props>(
         const senderATA    = getAssociatedTokenAddressSync(USDC_MINT, walletPubkey)
         const treasuryATA  = getAssociatedTokenAddressSync(USDC_MINT, TREASURY)
 
+        // Verify the sender has a USDC token account before building the tx.
+        // If it doesn't exist the transfer will fail in simulation and Phantom
+        // shows a "could be malicious" warning instead of a useful error.
+        const senderAcct = await connection.getAccountInfo(senderATA)
+        if (!senderAcct) {
+          throw new Error('No USDC token account found. Add USDC to your wallet first.')
+        }
+
         const { blockhash, lastValidBlockHeight } =
           await connection.getLatestBlockhash('confirmed')
 
         const tx = new Transaction({ recentBlockhash: blockhash, feePayer: walletPubkey })
+          // Create treasury ATA if it doesn't exist yet — idempotent, safe to
+          // include every time. Simulation fails (→ Phantom "malicious" block)
+          // when the destination account is missing.
+          .add(createAssociatedTokenAccountIdempotentInstruction(
+            walletPubkey, treasuryATA, TREASURY, USDC_MINT,
+          ))
           .add(createTransferInstruction(senderATA, treasuryATA, walletPubkey, USDC_AMOUNT))
 
         // ── 2. Ask Phantom to sign and broadcast ────────────────────────────
