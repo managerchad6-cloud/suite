@@ -3,8 +3,10 @@ import { connectWallet, disconnectWallet, tryAutoConnect, isPhantomInstalled, tr
 import { Live } from './views/Live'
 import { Memes } from './views/Memes'
 import { Vote } from './views/Vote'
+import { Characters } from './views/Characters'
+import { Quiz } from './views/Quiz'
 
-type View = 'live' | 'memes' | 'vote'
+type View = 'live' | 'memes' | 'vote' | 'characters' | 'quiz'
 
 // Virgin spectrum — most degenerate (top) descending to borderline
 const REEL_L = [
@@ -93,9 +95,11 @@ export default function App() {
         <img src="/assets/logo.png" alt="Virgin VS Chad" className="suite-nav-brand" />
         <div className="suite-nav-links">
           {([
-            { id: 'live',  icon: '◉', label: 'LIVE'  },
-            { id: 'memes', icon: '🎭', label: 'MEMES' },
-            { id: 'vote',  icon: '🗳', label: 'VOTE'  },
+            { id: 'live',       icon: '◉', label: 'LIVE'      },
+            { id: 'memes',      icon: '🎭', label: 'MEMES'     },
+            { id: 'vote',       icon: '🗳', label: 'VOTE'      },
+            { id: 'characters', icon: '⚡', label: 'ROSTER'    },
+            { id: 'quiz',       icon: '◈', label: 'ORACLE'    },
           ] as { id: View; icon: string; label: string }[]).map(({ id, icon, label }) => (
             <button
               key={id}
@@ -113,9 +117,11 @@ export default function App() {
         </div>
       </nav>
       <main className="suite-content">
-        {view === 'live'  && <Live  address={address} />}
-        {view === 'memes' && <Memes address={address} />}
-        {view === 'vote'  && <Vote  address={address} />}
+        {view === 'live'       && <Live       address={address} />}
+        {view === 'memes'      && <Memes      address={address} />}
+        {view === 'vote'       && <Vote       address={address} />}
+        {view === 'characters' && <Characters />}
+        {view === 'quiz'       && <Quiz />}
       </main>
     </div>
   )

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'url'
 
+const QUIZ_LOGGER = 'http://localhost:3015'
 const GENERATOR = 'http://93.127.214.75:8000'
 const RANKING   = 'http://93.127.214.75:3007'
 const CHAT      = 'http://94.130.36.242:3002'
@@ -12,6 +13,7 @@ export default defineConfig({
   server: {
     port: 5291,
     proxy: {
+      '/api/quiz-log': { target: QUIZ_LOGGER, changeOrigin: true },
       '/generate':   { target: GENERATOR, changeOrigin: true },
       '/parse':      { target: GENERATOR, changeOrigin: true },
       '/jobs':       { target: GENERATOR, changeOrigin: true },
