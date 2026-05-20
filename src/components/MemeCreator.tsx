@@ -1,10 +1,4 @@
 import { useState, useEffect, useRef, forwardRef } from 'react'
-import { Connection, PublicKey, Transaction, SendTransactionError } from '@solana/web3.js'
-import {
-  getAssociatedTokenAddressSync,
-  createTransferInstruction,
-  createAssociatedTokenAccountIdempotentInstruction,
-} from '@solana/spl-token'
 import {
   generateRaw,
   generateFreestyle,
@@ -17,10 +11,10 @@ import {
 } from '../api/memes'
 import { getActiveProvider, getActiveType, detectWallets, connectWalletByType } from '../wallet'
 
-const SOLANA_RPC  = '/solana-rpc'
-const USDC_MINT   = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
-const TREASURY    = new PublicKey('BvqPmrhAMJHozjpmJ9r7zLwkbZbS99pSaEkfQw3HxUQS')
-const USDC_AMOUNT = 1_000_000 // 1 USDC — 6 decimals
+const SOLANA_RPC   = '/solana-rpc'
+const USDC_MINT_PK = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+const TREASURY_PK  = 'BvqPmrhAMJHozjpmJ9r7zLwkbZbS99pSaEkfQw3HxUQS'
+const USDC_AMOUNT  = 1_000_000 // 1 USDC — 6 decimals
 
 type Phase = 'idle' | 'building' | 'approving' | 'confirming' | 'submitting' | 'polling' | 'resolving' | 'done' | 'error'
 
@@ -189,8 +183,14 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
 
         // ── 1. Build USDC payment transaction ──────────────────────────────
         setPhase('building')
+        const [{ Connection, PublicKey, Transaction, SendTransactionError }, { getAssociatedTokenAddressSync, createTransferInstruction, createAssociatedTokenAccountIdempotentInstruction }] = await Promise.all([
+          import('@solana/web3.js'),
+          import('@solana/spl-token'),
+        ])
         const connection   = new Connection(SOLANA_RPC, 'confirmed')
         const walletPubkey = new PublicKey(address)
+        const USDC_MINT    = new PublicKey(USDC_MINT_PK)
+        const TREASURY     = new PublicKey(TREASURY_PK)
         const senderATA    = getAssociatedTokenAddressSync(USDC_MINT, walletPubkey)
         const treasuryATA  = getAssociatedTokenAddressSync(USDC_MINT, TREASURY)
 
