@@ -1,4 +1,4 @@
-const API_KEY    = 'AIzaSyCKhS-jCwRmLq3H-1hfUxNtAgWECfsekOU'
+const API_KEY    = 'AIzaSyA5TnxZGAdGRRpQB5z9C_9prQZ_SX5Qcv4'
 const CHAT_MODEL = 'gemini-2.5-flash'
 
 export type QuestionType = 'single' | 'multi' | 'open'
