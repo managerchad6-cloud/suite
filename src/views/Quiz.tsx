@@ -1,10 +1,31 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component, type ReactNode } from 'react'
 import {
   sendMessage, makeUserMessage, makeModelMessage,
   type Message, type QuizQuestion, type QuizResult, type QuizResponse,
 } from '../api/quiz'
 import { generatePfp, generatePortraitPfp, LEGENDARY_CHARS } from '../api/pfp'
 import { saveQuizEntry, saveProfile, loadProfile, blobUrlToDataUrl, historyToConversation, type UserProfile } from '../lib/quizLog'
+
+class QuizErrorBoundary extends Component<{ children: ReactNode }, { crashed: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { crashed: false }
+  }
+  static getDerivedStateFromError() { return { crashed: true } }
+  render() {
+    if (this.state.crashed) return (
+      <div className="quiz-idle">
+        <p className="quiz-oracle-label">VVC ARCHETYPE ORACLE</p>
+        <h1 className="quiz-idle-title">Something went wrong.</h1>
+        <p className="quiz-idle-sub">The oracle had a vision it couldn't process.</p>
+        <button className="quiz-start-btn" onClick={() => this.setState({ crashed: false })}>
+          Reset
+        </button>
+      </div>
+    )
+    return this.props.children
+  }
+}
 
 const CHAR_TEMPLATE: Record<string, string> = {
   gigachad:  'gigachad_template',
@@ -65,7 +86,11 @@ interface Props {
   onProfileUpdate: (p: UserProfile) => void
 }
 
-export function Quiz({ address, onProfileUpdate }: Props) {
+export function Quiz(props: Props) {
+  return <QuizErrorBoundary><QuizInner {...props} /></QuizErrorBoundary>
+}
+
+function QuizInner({ address, onProfileUpdate }: Props) {
   const [phase, setPhase]           = useState<Phase>('idle')
   const [history, setHistory]       = useState<Message[]>([])
   const [currentQ, setCurrentQ]     = useState<QuizQuestion | null>(null)
@@ -92,6 +117,10 @@ export function Quiz({ address, onProfileUpdate }: Props) {
       })
     })
   }, [address])
+
+  useEffect(() => {
+    if (phase === 'revealed' && !reveal) setPhase('idle')
+  }, [phase, reveal])
 
   const buildPrompt = (result: QuizResult) => {
     const attrLines = Object.entries(result.attributes).map(([k, v]) => `- ${k}: ${v}`).join('\n')
