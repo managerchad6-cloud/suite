@@ -3,7 +3,7 @@ import {
   sendMessage, makeUserMessage, makeModelMessage,
   type Message, type QuizQuestion, type QuizResult, type QuizResponse,
 } from '../api/quiz'
-import { generatePfp } from '../api/pfp'
+import { generatePfp, generatePortraitPfp, LEGENDARY_CHARS } from '../api/pfp'
 import { saveQuizEntry, historyToConversation } from '../lib/quizLog'
 
 const CHAR_TEMPLATE: Record<string, string> = {
@@ -67,6 +67,8 @@ export function Quiz() {
   const [reveal, setReveal]         = useState<RevealData | null>(null)
   const [error, setError]           = useState<string | null>(null)
   const [thinking, setThinking]     = useState(false)
+  const [portraitUrl, setPortraitUrl]       = useState<string | null>(null)
+  const [portraitLoading, setPortraitLoading] = useState(false)
 
   const applyResponse = (response: QuizResponse, baseHistory: Message[]) => {
     const modelMsg = makeModelMessage(response)
@@ -155,6 +157,22 @@ export function Quiz() {
     setReveal(null)
     setError(null)
     setThinking(false)
+    setPortraitUrl(null)
+    setPortraitLoading(false)
+  }
+
+  const handleGeneratePortrait = async () => {
+    if (!reveal) return
+    setPortraitLoading(true)
+    setPortraitUrl(null)
+    try {
+      const url = await generatePortraitPfp(reveal.imageUrl, LEGENDARY_CHARS.has(reveal.character))
+      setPortraitUrl(url)
+    } catch (e: any) {
+      setError(`Portrait generation failed: ${e.message}`)
+    } finally {
+      setPortraitLoading(false)
+    }
   }
 
   const progress = Math.min(Math.round((questionCount / 15) * 88), 88)
@@ -195,10 +213,30 @@ export function Quiz() {
         </div>
         <div className="quiz-reveal-actions">
           <a href={reveal.imageUrl} download={`${reveal.character}_pfp.jpg`} className="pfp-modal-download">
-            Download PFP
+            Download
           </a>
+          <button
+            className="quiz-portrait-btn"
+            onClick={handleGeneratePortrait}
+            disabled={portraitLoading}
+          >
+            {portraitLoading ? 'Generating…' : 'Generate Profile Picture'}
+          </button>
           <button className="quiz-retake-btn" onClick={reset}>Retake</button>
         </div>
+
+        {portraitLoading && (
+          <div className="quiz-gen-ring quiz-portrait-spinner" />
+        )}
+
+        {portraitUrl && (
+          <div className="quiz-portrait-result">
+            <img src={portraitUrl} alt="Profile picture" className="quiz-portrait-img" />
+            <a href={portraitUrl} download={`${reveal.character}_portrait.jpg`} className="pfp-modal-download">
+              Download Portrait
+            </a>
+          </div>
+        )}
       </div>
     )
   }

@@ -1259,6 +1259,40 @@ html, body, #root {
 }
 .quiz-retake-btn:hover { border-color: #fff; color: #fff; }
 
+.quiz-portrait-btn {
+  padding: 8px 24px;
+  background: var(--accent, #f0c040);
+  border: none;
+  border-radius: 4px;
+  color: #000;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.quiz-portrait-btn:hover:not(:disabled) { opacity: 0.85; }
+.quiz-portrait-btn:disabled { opacity: 0.45; cursor: default; }
+
+.quiz-portrait-spinner { margin: 20px auto 0; width: 48px; height: 48px; }
+
+.quiz-portrait-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.quiz-portrait-img {
+  width: 280px;
+  height: 280px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
 .quiz-error {
   font-size: 11px;
   color: #e05050;
