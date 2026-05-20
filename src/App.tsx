@@ -5,17 +5,17 @@ import { Memes } from './views/Memes'
 import { Vote } from './views/Vote'
 import { Characters } from './views/Characters'
 import { Quiz } from './views/Quiz'
+import { Profile } from './views/Profile'
+import { loadProfile, type UserProfile } from './lib/quizLog'
 
-type View = 'live' | 'memes' | 'vote' | 'characters' | 'quiz'
+type View = 'live' | 'memes' | 'vote' | 'characters' | 'quiz' | 'profile'
 
-// Virgin spectrum — most degenerate (top) descending to borderline
 const REEL_L = [
   'gizzard','bad','wraith','grandwizard','witch','wizard',
   'lshad','cad','legbeard','neckbeard','femcel','incel',
   'brad','brandy','virgin',
 ] as const
 
-// Chad spectrum — Virgin at base, ascending to Gad
 const REEL_R = [
   'virgin','becky','basic','veronica','basdchad','stacy',
   'thad','tracy','lad','lacy','shlad','boomer',
@@ -75,19 +75,28 @@ function WalletGate({ onConnect }: { onConnect: (addr: string) => void }) {
 }
 
 export default function App() {
-  const [address, setAddress] = useState<string | null>(null)
-  const [view, setView] = useState<View>('live')
+  const [address, setAddress]   = useState<string | null>(null)
+  const [view, setView]         = useState<View>('live')
+  const [profile, setProfile]   = useState<UserProfile | null>(null)
 
   useEffect(() => {
     tryAutoConnect().then((addr) => { if (addr) setAddress(addr) })
   }, [])
+
+  useEffect(() => {
+    if (!address) { setProfile(null); return }
+    loadProfile(address).then(p => { if (p) setProfile(p) })
+  }, [address])
 
   if (!address) return <WalletGate onConnect={setAddress} />
 
   const handleDisconnect = async () => {
     await disconnectWallet()
     setAddress(null)
+    setProfile(null)
   }
+
+  const avatar = profile?.portraitDataUrl ?? (profile ? `/assets/chars/${profile.character}.png` : null)
 
   return (
     <div className="suite-shell">
@@ -112,7 +121,17 @@ export default function App() {
           ))}
         </div>
         <div className="suite-nav-footer">
-          <div className="suite-nav-wallet">{truncateAddress(address)}</div>
+          <button
+            className={`suite-nav-profile-btn ${view === 'profile' ? 'active' : ''}`}
+            onClick={() => setView('profile')}
+            title="My Profile"
+          >
+            {avatar
+              ? <img src={avatar} alt="profile" className="suite-nav-avatar" />
+              : <span className="suite-nav-avatar-placeholder">?</span>
+            }
+            <span className="suite-nav-wallet-label">{truncateAddress(address)}</span>
+          </button>
           <button className="suite-nav-disconnect" onClick={handleDisconnect}>Disconnect</button>
         </div>
       </nav>
@@ -121,7 +140,8 @@ export default function App() {
         {view === 'memes'      && <Memes      address={address} />}
         {view === 'vote'       && <Vote       address={address} />}
         {view === 'characters' && <Characters />}
-        {view === 'quiz'       && <Quiz address={address} />}
+        {view === 'quiz'       && <Quiz address={address} onProfileUpdate={p => { setProfile(p); }} />}
+        {view === 'profile'    && <Profile address={address} profile={profile} onGoToOracle={() => setView('quiz')} />}
       </main>
     </div>
   )

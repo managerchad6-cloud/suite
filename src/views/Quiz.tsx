@@ -4,7 +4,7 @@ import {
   type Message, type QuizQuestion, type QuizResult, type QuizResponse,
 } from '../api/quiz'
 import { generatePfp, generatePortraitPfp, LEGENDARY_CHARS } from '../api/pfp'
-import { saveQuizEntry, saveProfile, loadProfile, historyToConversation } from '../lib/quizLog'
+import { saveQuizEntry, saveProfile, loadProfile, blobUrlToDataUrl, historyToConversation, type UserProfile } from '../lib/quizLog'
 
 const CHAR_TEMPLATE: Record<string, string> = {
   gigachad:  'gigachad_template',
@@ -60,9 +60,12 @@ interface RevealData {
   imageUrl: string
 }
 
-interface Props { address: string }
+interface Props {
+  address: string
+  onProfileUpdate: (p: UserProfile) => void
+}
 
-export function Quiz({ address }: Props) {
+export function Quiz({ address, onProfileUpdate }: Props) {
   const [phase, setPhase]           = useState<Phase>('idle')
   const [history, setHistory]       = useState<Message[]>([])
   const [currentQ, setCurrentQ]     = useState<QuizQuestion | null>(null)
@@ -116,7 +119,9 @@ export function Quiz({ address }: Props) {
       const imageUrl = await generatePfp(template, buildPrompt(result))
       const conversation = historyToConversation(hist)
       saveQuizEntry({ conversation, character: result.character, attributes: result.attributes })
-      saveProfile({ walletAddress: address, character: result.character, description: result.description, attributes: result.attributes })
+      const prof: UserProfile = { walletAddress: address, character: result.character, description: result.description, attributes: result.attributes }
+      saveProfile(prof)
+      onProfileUpdate(prof)
       setReveal({ character: result.character, description: result.description, attrs: result.attributes, imageUrl })
       setPhase('revealed')
     } catch (e: any) {
@@ -182,7 +187,9 @@ export function Quiz({ address }: Props) {
         const template = CHAR_TEMPLATE[result.character] ?? 'basic_template'
         setPhase('generating')
         const imageUrl = await generatePfp(template, buildPrompt(result))
-        saveProfile({ walletAddress: address, character: result.character, description: result.description, attributes: result.attributes })
+        const prof: UserProfile = { walletAddress: address, character: result.character, description: result.description, attributes: result.attributes }
+        saveProfile(prof)
+        onProfileUpdate(prof)
         setReveal({ character: result.character, description: result.description, attrs: result.attributes, imageUrl })
         setPhase('revealed')
       }
@@ -200,6 +207,11 @@ export function Quiz({ address }: Props) {
     try {
       const url = await generatePortraitPfp(reveal.imageUrl, LEGENDARY_CHARS.has(reveal.character))
       setPortraitUrl(url)
+      // Save portrait as persistent data URL in profile
+      const dataUrl = await blobUrlToDataUrl(url)
+      const prof: UserProfile = { walletAddress: address, character: reveal.character, description: reveal.description, attributes: reveal.attrs, portraitDataUrl: dataUrl }
+      saveProfile(prof)
+      onProfileUpdate(prof)
     } catch (e: any) {
       setError(`Portrait generation failed: ${e.message}`)
     } finally {

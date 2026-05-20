@@ -10,8 +10,27 @@ export interface UserProfile {
   character: string
   description: string
   attributes: Record<string, string>
+  portraitDataUrl?: string
   updatedAt?: string
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+export async function blobUrlToDataUrl(blobUrl: string): Promise<string> {
+  const blob = await fetch(blobUrl).then(r => r.blob())
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload  = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+function localKey(walletAddress: string) {
+  return `vvc_profile_${walletAddress}`
+}
+
+// ── Quiz log ──────────────────────────────────────────────────────────────
 
 export async function saveQuizEntry(
   entry: Omit<QuizLogEntry, 'timestamp'>
@@ -27,7 +46,12 @@ export async function saveQuizEntry(
   }
 }
 
+// ── Profile ───────────────────────────────────────────────────────────────
+
 export async function saveProfile(profile: UserProfile): Promise<void> {
+  // Always persist locally first — survives server downtime
+  try { localStorage.setItem(localKey(profile.walletAddress), JSON.stringify(profile)) } catch {}
+  // Then sync to backend
   try {
     await fetch('/api/profile', {
       method: 'POST',
@@ -35,33 +59,40 @@ export async function saveProfile(profile: UserProfile): Promise<void> {
       body: JSON.stringify(profile),
     })
   } catch (e) {
-    console.warn('[profile] could not save:', e)
+    console.warn('[profile] backend save failed (local copy kept):', e)
   }
 }
 
 export async function loadProfile(walletAddress: string): Promise<UserProfile | null> {
+  // Try backend first
   try {
     const res = await fetch(`/api/profile/${encodeURIComponent(walletAddress)}`)
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
+    if (res.ok) {
+      const data: UserProfile = await res.json()
+      // Keep local copy in sync
+      try { localStorage.setItem(localKey(walletAddress), JSON.stringify(data)) } catch {}
+      return data
+    }
+  } catch {}
+  // Fall back to localStorage
+  try {
+    const raw = localStorage.getItem(localKey(walletAddress))
+    if (raw) return JSON.parse(raw) as UserProfile
+  } catch {}
+  return null
 }
 
-// Reconstruct Q&A pairs from raw Gemini history.
-// History is already [model(opener), user(ans1), model(q2), user(ans2), ..., model(final)]
+// ── Conversation reconstruction ───────────────────────────────────────────
+
 export function historyToConversation(
   history: { role: string; parts: [{ text: string }] }[]
 ): { question: string; answer: string }[] {
   const pairs: { question: string; answer: string }[] = []
-
   for (let i = 0; i < history.length - 1; i += 2) {
     const modelMsg = history[i]
     const userMsg  = history[i + 1]
     if (!modelMsg || !userMsg) break
     if (modelMsg.role !== 'model' || userMsg.role !== 'user') continue
-
     let question = ''
     try {
       const parsed = JSON.parse(modelMsg.parts[0].text)
@@ -69,9 +100,7 @@ export function historyToConversation(
       question = parsed.question ?? ''
     } catch { continue }
     if (!question) continue
-
     pairs.push({ question, answer: userMsg.parts[0].text })
   }
-
   return pairs
 }
