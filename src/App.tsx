@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
-import { connectWallet, disconnectWallet, tryAutoConnect, isPhantomInstalled, truncateAddress } from '@mf/wallet'
+import {
+  disconnectWallet, tryAutoConnect, truncateAddress,
+  detectWallets, connectWalletByType,
+  type WalletType, type WalletInfo,
+} from '@mf/wallet'
 import { Live } from './views/Live'
 import { Memes } from './views/Memes'
 import { Vote } from './views/Vote'
@@ -39,21 +43,23 @@ function GateReel({ images, dir, side }: {
   )
 }
 
-function WalletGate({ onConnect }: { onConnect: (addr: string) => void }) {
-  const [connecting, setConnecting] = useState(false)
-  const phantom = isPhantomInstalled()
+const WALLET_LETTER: Record<WalletType, string> = {
+  phantom: 'P', solflare: 'S', backpack: 'B', rabby: 'R',
+}
 
-  const handleConnect = async () => {
-    if (!phantom) {
-      window.open('https://phantom.app/', '_blank', 'noopener')
-      return
-    }
-    setConnecting(true)
+function WalletGate({ onConnect }: { onConnect: (addr: string) => void }) {
+  const [connecting, setConnecting] = useState<WalletType | null>(null)
+  const wallets = detectWallets()
+
+  const handle = async (info: WalletInfo) => {
+    if (connecting) return
+    if (!info.detected) { window.open(info.installUrl, '_blank', 'noopener'); return }
+    setConnecting(info.type)
     try {
-      const addr = await connectWallet()
+      const addr = await connectWalletByType(info.type)
       onConnect(addr)
     } catch { /* rejected */ } finally {
-      setConnecting(false)
+      setConnecting(null)
     }
   }
 
@@ -63,9 +69,28 @@ function WalletGate({ onConnect }: { onConnect: (addr: string) => void }) {
       <div className="suite-gate-inner">
         <div className="suite-gate-vignette" />
         <img src="/assets/logo.png" alt="Virgin VS Chad" className="suite-gate-logo" />
-        <button className="suite-gate-btn" onClick={handleConnect} disabled={connecting}>
-          {connecting ? 'Connecting…' : phantom ? 'Connect Phantom' : 'Install Phantom →'}
-        </button>
+        <div className="wg-grid">
+          {wallets.map(info => (
+            <button
+              key={info.type}
+              className={[
+                'wg-btn',
+                !info.detected           ? 'wg-btn-uninstalled' : '',
+                connecting === info.type ? 'wg-btn-busy'        : '',
+              ].filter(Boolean).join(' ')}
+              onClick={() => handle(info)}
+              disabled={!!connecting}
+            >
+              <span className={`wg-icon wg-icon-${info.type}`}>{WALLET_LETTER[info.type]}</span>
+              <span className="wg-name">{info.name}</span>
+              <span className="wg-action">
+                {connecting === info.type ? 'Connecting…' : info.detected ? 'Connect' : 'Install →'}
+              </span>
+              {info.isEvm && <span className="wg-evm-tag">EVM</span>}
+            </button>
+          ))}
+        </div>
+        <div className="wg-note">Solana wallets required for meme generation</div>
         <img src="/assets/virgin_back.webp" alt="" className="gate-watcher gate-watcher--virgin" draggable={false} />
         <img src="/assets/chad_back.webp"   alt="" className="gate-watcher gate-watcher--chad"   draggable={false} />
       </div>

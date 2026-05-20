@@ -1,4 +1,10 @@
 import { useState, useEffect, useRef, forwardRef } from 'react'
+import { Connection, PublicKey, Transaction, SendTransactionError } from '@solana/web3.js'
+import {
+  getAssociatedTokenAddressSync,
+  createTransferInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
+} from '@solana/spl-token'
 import {
   generateRaw,
   generateFreestyle,
@@ -9,9 +15,14 @@ import {
   buildTweetUrl,
   type JobMetadata,
 } from '../api/memes'
-import { signAction, connectWallet, isPhantomInstalled } from '../wallet'
+import { getActiveProvider, getActiveType, detectWallets, connectWalletByType } from '../wallet'
 
-type Phase = 'idle' | 'signing' | 'submitting' | 'polling' | 'resolving' | 'done' | 'error'
+const SOLANA_RPC  = '/solana-rpc'
+const USDC_MINT   = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
+const TREASURY    = new PublicKey('BvqPmrhAMJHozjpmJ9r7zLwkbZbS99pSaEkfQw3HxUQS')
+const USDC_AMOUNT = 1_000_000 // 1 USDC — 6 decimals
+
+type Phase = 'idle' | 'building' | 'approving' | 'confirming' | 'submitting' | 'polling' | 'resolving' | 'done' | 'error'
 
 function fakeProgress(elapsed: number): number {
   return Math.min(95 * (1 - Math.exp(-elapsed / 30)), 93)
@@ -154,10 +165,11 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
     }
 
     const handleConnectInline = async () => {
-      if (!isPhantomInstalled()) { window.open('https://phantom.app/', '_blank', 'noopener'); return }
+      const available = detectWallets().filter(w => !w.isEvm && w.detected)
+      if (available.length === 0) { window.open('https://phantom.app/', '_blank', 'noopener'); return }
       setConnectingInline(true)
       try {
-        const addr = await connectWallet()
+        const addr = await connectWalletByType(available[0].type)
         window.dispatchEvent(new CustomEvent('vvc:wallet-connected', { detail: addr }))
       } catch { /* rejected */ } finally { setConnectingInline(false) }
     }
@@ -171,22 +183,87 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
       const filteredVL = virginLabels.map(l => l.trim()).filter(Boolean)
       const filteredCL = chadLabels.map(l => l.trim()).filter(Boolean)
       const hasLabels = filteredVL.length > 0 || filteredCL.length > 0
+
       try {
         setErrorMsg(null); setMetadata(null); setFinalImage(null)
-        setPhase('signing')
-        const sig = await signAction(isFreestyle ? 'create_meme:freestyle' : `create_meme:${v}:vs:${c}`, address)
+
+        // ── 1. Build USDC payment transaction ──────────────────────────────
+        setPhase('building')
+        const connection   = new Connection(SOLANA_RPC, 'confirmed')
+        const walletPubkey = new PublicKey(address)
+        const senderATA    = getAssociatedTokenAddressSync(USDC_MINT, walletPubkey)
+        const treasuryATA  = getAssociatedTokenAddressSync(USDC_MINT, TREASURY)
+
+        const [senderAcct, treasuryAcct, solBalance] = await Promise.all([
+          connection.getAccountInfo(senderATA),
+          connection.getAccountInfo(treasuryATA),
+          connection.getBalance(walletPubkey),
+        ])
+
+        if (!senderAcct) throw new Error('No USDC token account found. Add USDC to your wallet first.')
+
+        const needsAta    = !treasuryAcct
+        const minLamports = needsAta ? 2_100_000 : 15_000
+        if (solBalance < minLamports) {
+          const min = (minLamports / 1e9).toFixed(6).replace(/0+$/, '')
+          throw new Error(`Need at least ${min} SOL for fees` + (needsAta ? ' (one-time treasury setup)' : '') + '.')
+        }
+
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+        const tx = new Transaction({ recentBlockhash: blockhash, feePayer: walletPubkey })
+          .add(createAssociatedTokenAccountIdempotentInstruction(walletPubkey, treasuryATA, TREASURY, USDC_MINT))
+          .add(createTransferInstruction(senderATA, treasuryATA, walletPubkey, USDC_AMOUNT))
+
+        // ── 2. User approves in wallet ─────────────────────────────────────
+        const walletName = getActiveType() ?? 'wallet'
+        setPhase('approving')
+        const provider = getActiveProvider()
+        if (!provider) throw new Error('No Solana wallet connected. Only Phantom, Solflare, and Backpack can sign transactions.')
+        const signedTx = await provider.signTransaction(tx)
+
+        // ── 3. Broadcast + wait for confirmation ───────────────────────────
+        setPhase('confirming')
+        let txSig: string
+        try {
+          txSig = await connection.sendRawTransaction(signedTx.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+          })
+        } catch (sendErr) {
+          if (sendErr instanceof SendTransactionError) {
+            let detail = sendErr.message
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const logs: string[] | null = await (sendErr as any).getLogs?.(connection) ?? null
+              const hit = logs?.find(l => l.includes('Error') || l.includes('failed'))
+              if (hit) detail = hit
+            } catch {}
+            if (detail.includes('no record of a prior credit') || detail.includes('insufficient lamports')) {
+              throw new Error('Insufficient SOL for fees. Add SOL to your wallet.')
+            }
+            throw new Error(`Transaction failed: ${detail}`)
+          }
+          throw sendErr
+        }
+
+        await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, 'confirmed')
+
+        // ── 4. Submit to backend with tx proof ─────────────────────────────
         setPhase('submitting')
+        void walletName // used in approving label above
         const result: { job_id: string } = isFreestyle
-          ? await generateFreestyle(ft, address, sig)
+          ? await generateFreestyle(ft, address, undefined, txSig)
           : (hasLabels || !context.trim())
-            ? await generateRaw(v, c, address, sig, filteredVL, filteredCL)
-            : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, address, sig)
+            ? await generateRaw(v, c, address, undefined, filteredVL, filteredCL, txSig)
+            : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, address, undefined, txSig)
+
         setJobId(result.job_id)
         setPhase('polling')
         startPolling(result.job_id)
+
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Something went wrong.'
-        if (msg.toLowerCase().includes('rejected') || msg.toLowerCase().includes('cancelled')) {
+        if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancelled')) {
           setPhase('idle')
         } else { setErrorMsg(msg); setPhase('error') }
       }
@@ -213,7 +290,7 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
     const canSubmit = !!address && phase === 'idle' && (
       formMode === 'freestyle' ? !!freetext.trim() : !!(virgin.trim() && chad.trim())
     )
-    const isActive    = phase !== 'idle' && phase !== 'done' && phase !== 'error'
+    const isActive = phase !== 'idle' && phase !== 'done' && phase !== 'error'
     const showForm    = phase === 'idle' || phase === 'error'
     const formDisabled = isActive || !!readOnly
 
@@ -351,15 +428,24 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
             </>
           )}
 
-          {/* Signing / submitting */}
-          {(phase === 'signing' || phase === 'submitting') && (
+          {/* Payment flow states */}
+          {(phase === 'building' || phase === 'approving' || phase === 'confirming' || phase === 'submitting') && (
             <div className="creator-inline-state">
-              <span className="signing-icon">👻</span>
+              {phase === 'approving'
+                ? <span className="signing-icon">💳</span>
+                : <div className="creator-loading-spinner" />
+              }
               <div className="signing-title">
-                {phase === 'signing' ? 'Waiting for Phantom…' : 'Submitting to AI…'}
+                {phase === 'building'   && 'Preparing payment…'}
+                {phase === 'approving'  && 'Approve 1 USDC in your wallet'}
+                {phase === 'confirming' && 'Confirming on-chain…'}
+                {phase === 'submitting' && 'Submitting to AI…'}
               </div>
               <div className="signing-sub">
-                {phase === 'signing' ? 'Approve the signature in Phantom' : 'Sending your idea to the factory'}
+                {phase === 'building'   && 'Computing token accounts'}
+                {phase === 'approving'  && '1 USDC will be sent to the treasury'}
+                {phase === 'confirming' && 'Waiting for Solana confirmation'}
+                {phase === 'submitting' && 'Sending your meme idea to the factory'}
               </div>
             </div>
           )}
@@ -441,8 +527,10 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
                 onClick={phase === 'done' ? handleReset : handleSubmit}
                 disabled={phase === 'done' ? false : !canSubmit}
               >
-                {phase === 'idle'       ? 'CREATE YOUR OWN →'
-                : phase === 'signing'   ? 'Confirm in Phantom…'
+                {phase === 'idle'       ? 'CREATE — 1 USDC →'
+                : phase === 'building'  ? 'Building transaction…'
+                : phase === 'approving' ? 'Approve in wallet…'
+                : phase === 'confirming'? 'Confirming on-chain…'
                 : phase === 'submitting'? 'Submitting…'
                 : phase === 'polling'   ? `Generating… ${elapsed}s`
                 : phase === 'resolving' ? 'Done!'

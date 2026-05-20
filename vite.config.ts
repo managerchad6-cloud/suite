@@ -10,9 +10,13 @@ const ANIM      = 'http://94.130.36.242:3003'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    global: 'globalThis',
+  },
   server: {
     port: 5291,
     proxy: {
+      '/solana-rpc': { target: 'https://api.mainnet-beta.solana.com', changeOrigin: true, rewrite: (p) => p.replace('/solana-rpc', '') },
       '/api/quiz-log':  { target: QUIZ_LOGGER, changeOrigin: true },
       '/api/profile':  { target: QUIZ_LOGGER, changeOrigin: true },
       '/generate':   { target: GENERATOR, changeOrigin: true },

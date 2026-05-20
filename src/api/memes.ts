@@ -50,12 +50,13 @@ export async function generateRaw(
   wallet?: string,
   signature?: string,
   virgin_labels?: string[],
-  chad_labels?: string[]
+  chad_labels?: string[],
+  tx_signature?: string,
 ): Promise<{ job_id: string; status: string }> {
   const res = await fetch(`${BASE}/generate/raw`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ virgin, chad, wallet, signature, virgin_labels, chad_labels }),
+    body: JSON.stringify({ virgin, chad, wallet, signature, virgin_labels, chad_labels, tx_signature }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -67,12 +68,13 @@ export async function generateRaw(
 export async function generateFreestyle(
   text: string,
   wallet?: string,
-  signature?: string
+  signature?: string,
+  tx_signature?: string,
 ): Promise<{ job_id: string; status: string; parsed?: unknown }> {
   const res = await fetch(`${BASE}/generate/freestyle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, wallet, signature }),
+    body: JSON.stringify({ text, wallet, signature, tx_signature }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

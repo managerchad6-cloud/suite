@@ -9,6 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.3",
+    "buffer": "^6.0.3",
     "hls.js": "^1.5.15",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
