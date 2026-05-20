@@ -11,7 +11,7 @@ import {
 } from '../api/memes'
 import { getActiveProvider, getActiveType, detectWallets, connectWalletByType } from '../wallet'
 
-const SOLANA_RPC   = '/solana-rpc'
+const SOLANA_RPC   = `${window.location.origin}/solana-rpc`
 const USDC_MINT_PK = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const TREASURY_PK  = 'BvqPmrhAMJHozjpmJ9r7zLwkbZbS99pSaEkfQw3HxUQS'
 const USDC_AMOUNT  = 1_000_000 // 1 USDC — 6 decimals
