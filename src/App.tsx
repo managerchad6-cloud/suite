@@ -121,7 +121,7 @@ export default function App() {
         {view === 'memes'      && <Memes      address={address} />}
         {view === 'vote'       && <Vote       address={address} />}
         {view === 'characters' && <Characters />}
-        {view === 'quiz'       && <Quiz />}
+        {view === 'quiz'       && <Quiz address={address} />}
       </main>
     </div>
   )

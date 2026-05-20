@@ -5,6 +5,14 @@ export interface QuizLogEntry {
   attributes: Record<string, string>
 }
 
+export interface UserProfile {
+  walletAddress: string
+  character: string
+  description: string
+  attributes: Record<string, string>
+  updatedAt?: string
+}
+
 export async function saveQuizEntry(
   entry: Omit<QuizLogEntry, 'timestamp'>
 ): Promise<void> {
@@ -16,6 +24,28 @@ export async function saveQuizEntry(
     })
   } catch (e) {
     console.warn('[quiz-log] could not save session:', e)
+  }
+}
+
+export async function saveProfile(profile: UserProfile): Promise<void> {
+  try {
+    await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    })
+  } catch (e) {
+    console.warn('[profile] could not save:', e)
+  }
+}
+
+export async function loadProfile(walletAddress: string): Promise<UserProfile | null> {
+  try {
+    const res = await fetch(`/api/profile/${encodeURIComponent(walletAddress)}`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
   }
 }
 

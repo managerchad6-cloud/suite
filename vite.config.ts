@@ -13,7 +13,8 @@ export default defineConfig({
   server: {
     port: 5291,
     proxy: {
-      '/api/quiz-log': { target: QUIZ_LOGGER, changeOrigin: true },
+      '/api/quiz-log':  { target: QUIZ_LOGGER, changeOrigin: true },
+      '/api/profile':  { target: QUIZ_LOGGER, changeOrigin: true },
       '/generate':   { target: GENERATOR, changeOrigin: true },
       '/parse':      { target: GENERATOR, changeOrigin: true },
       '/jobs':       { target: GENERATOR, changeOrigin: true },

@@ -1,4 +1,4 @@
-const API_KEY    = 'AIzaSyCJFGxK97J9dQVszXm483PG2pvnVcR26go'
+const API_KEY    = 'AIzaSyCKhS-jCwRmLq3H-1hfUxNtAgWECfsekOU'
 const CHAT_MODEL = 'gemini-2.5-flash'
 
 export type QuestionType = 'single' | 'multi' | 'open'
@@ -13,6 +13,7 @@ export interface QuizQuestion {
 export interface QuizResult {
   done: true
   character: string
+  description: string
   attributes: Record<string, string>
 }
 
@@ -125,7 +126,16 @@ Close-ended (Phase 2 only, sparingly):
 {"done":false,"type":"multi","question":"...","options":["...","...","..."]}
 
 Final output:
-{"done":true,"character":"neckbeard","attributes":{"shirt":"faded Iron Maiden tee, pit stains and all","hair":"greasy curtains parted down the middle","grip":"phone permanently in hand, PumpFun open, everything red","desk":"KFC bucket from Tuesday still on the desk","energy":"the specific exhaustion of someone who last touched grass three weeks ago"}}
+{"done":true,"character":"neckbeard","description":"Two monitors, zero productivity — PumpFun has been open since 3am and everything is red. The KFC bucket from Tuesday is still on the desk. The Iron Maiden shirt isn't a choice, it's a uniform. Last confirmed grass contact: disputed.","attributes":{"shirt":"faded Iron Maiden tee, pit stains and all","hair":"greasy curtains parted down the middle","grip":"phone permanently in hand, PumpFun open, everything red","desk":"KFC bucket from Tuesday still on the desk","energy":"the specific exhaustion of someone who last touched grass three weeks ago"}}
+
+## Description rules
+
+The "description" is a 2–3 sentence degen roast of the user written in second person. It must:
+- Be brutally honest and funny — a caricature, not a summary
+- Reference at least 2–3 specific things the user said during the interview (exact answers, things they mentioned, their numbers)
+- Sound like it was written by someone who has seen too much internet
+- NOT name the archetype or telegraph the character assignment
+- Land like an accurate read that makes them laugh and wince simultaneously
 
 ## Attribute rules
 
