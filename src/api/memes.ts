@@ -149,6 +149,15 @@ export async function fetchMemes(page = 1, limit = 40): Promise<MemesResponse> {
   return res.json();
 }
 
+export async function fetchMemesByWallet(wallet: string, limit = 100): Promise<Meme[]> {
+  // Try backend wallet filter first; fall back to client-side filter
+  const res = await fetch(`${BASE}/memes?limit=${limit}&status=done&wallet=${encodeURIComponent(wallet)}`);
+  if (!res.ok) throw new Error('Failed to fetch memes');
+  const data: MemesResponse = await res.json();
+  // If backend doesn't support wallet filter it returns all — filter client-side
+  return data.items.filter(m => m.wallet === wallet);
+}
+
 export async function submitVote(
   job_id: string,
   wallet: string,

@@ -487,6 +487,45 @@ html, body, #root {
   font-style: italic;
   margin: 0;
 }
+.profile-memes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+.profile-meme-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.profile-meme-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+.profile-meme-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  gap: 6px;
+  min-width: 0;
+}
+.profile-meme-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.profile-meme-virgin { color: #7aacf0; }
+.profile-meme-chad   { color: var(--gold); }
+.profile-meme-vs     { color: var(--text-dim); }
+.profile-meme-votes  { font-size: 10px; color: var(--gold); flex-shrink: 0; }
 
 .profile-empty {
   display: flex;

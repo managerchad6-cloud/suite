@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+import { fetchMemesByWallet, imageUrl, parseMemeId, type Meme } from '../api/memes'
 import type { UserProfile } from '../lib/quizLog'
 
 const CHAR_NAME: Record<string, string> = {
@@ -16,6 +18,17 @@ interface Props {
 }
 
 export function Profile({ address, profile, onGoToOracle }: Props) {
+  const [memes, setMemes]       = useState<Meme[]>([])
+  const [memesLoading, setMemesLoading] = useState(true)
+
+  useEffect(() => {
+    setMemesLoading(true)
+    fetchMemesByWallet(address)
+      .then(setMemes)
+      .catch(() => {})
+      .finally(() => setMemesLoading(false))
+  }, [address])
+
   if (!profile) return (
     <div className="profile-empty">
       <p className="quiz-oracle-label">MY PROFILE</p>
@@ -62,8 +75,31 @@ export function Profile({ address, profile, onGoToOracle }: Props) {
       </div>
 
       <div className="profile-section">
-        <h3 className="profile-section-title">Memes</h3>
-        <p className="profile-section-empty">Memes you've generated will appear here.</p>
+        <h3 className="profile-section-title">Memes ({memesLoading ? '…' : memes.length})</h3>
+        {memesLoading ? (
+          <p className="profile-section-empty">Loading…</p>
+        ) : memes.length === 0 ? (
+          <p className="profile-section-empty">No memes yet — create one in the Memes tab.</p>
+        ) : (
+          <div className="profile-memes-grid">
+            {memes.map(m => {
+              const { virgin, chad } = parseMemeId(m.meme_id)
+              return (
+                <div key={m.job_id} className="profile-meme-card">
+                  <img src={imageUrl(m.job_id)} alt={`${virgin} vs ${chad}`} className="profile-meme-img" />
+                  <div className="profile-meme-footer">
+                    <span className="profile-meme-label">
+                      <span className="profile-meme-virgin">{virgin}</span>
+                      <span className="profile-meme-vs"> vs </span>
+                      <span className="profile-meme-chad">{chad}</span>
+                    </span>
+                    {m.vote_count > 0 && <span className="profile-meme-votes">↑ {m.vote_count}</span>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div className="profile-section">
