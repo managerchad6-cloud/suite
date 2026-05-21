@@ -16,8 +16,7 @@ export default defineConfig({
   server: {
     port: 5291,
     proxy: {
-      '/solana-rpc': { target: 'https://api.mainnet-beta.solana.com', changeOrigin: true, rewrite: (p) => p.replace('/solana-rpc', '') },
-      '/api/quiz-log':  { target: QUIZ_LOGGER, changeOrigin: true },
+'/api/quiz-log':  { target: QUIZ_LOGGER, changeOrigin: true },
       '/api/profile':  { target: QUIZ_LOGGER, changeOrigin: true },
       '/generate':   { target: GENERATOR, changeOrigin: true },
       '/parse':      { target: GENERATOR, changeOrigin: true },
