@@ -10,6 +10,35 @@ import {
 } from '../api/memes'
 import { signAction, connectWallet, isPhantomInstalled, truncateAddress } from '../wallet'
 
+// ── Creator avatar ─────────────────────────────────────────────────
+type CachedProfile = { character: string; portraitDataUrl?: string } | null
+const _profileCache = new Map<string, Promise<CachedProfile>>()
+
+function fetchCreatorProfile(wallet: string): Promise<CachedProfile> {
+  if (!_profileCache.has(wallet)) {
+    _profileCache.set(wallet,
+      fetch(`/api/profile/${encodeURIComponent(wallet)}`)
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null)
+    )
+  }
+  return _profileCache.get(wallet)!
+}
+
+function CreatorAvatar({ wallet }: { wallet: string }) {
+  const [profile, setProfile] = useState<CachedProfile | undefined>(undefined)
+  useEffect(() => { fetchCreatorProfile(wallet).then(setProfile) }, [wallet])
+
+  if (profile === undefined) return <div className="creator-avatar creator-avatar--pulse" />
+  if (!profile) return (
+    <div className="creator-avatar creator-avatar--placeholder">
+      {wallet.slice(0, 2).toUpperCase()}
+    </div>
+  )
+  const src = profile.portraitDataUrl ?? `/assets/chars/${profile.character}.png`
+  return <img className="creator-avatar" src={src} alt="" />
+}
+
 type Tab = 'daily' | 'weekly' | 'monthly' | 'all' | 'winners'
 
 const CUTOFFS: Partial<Record<Tab, number>> = {
@@ -130,9 +159,14 @@ function MemeCard({ item, address, onSelect }: MemeCardProps) {
           </div>
         </div>
         <div className="meme-card-footer">
-          <span className="meme-date">
-            {item.wallet ? truncateAddress(item.wallet) : formatDate(item.created_at)}
-          </span>
+          {item.wallet ? (
+            <div className="meme-creator">
+              <CreatorAvatar wallet={item.wallet} />
+              <span className="meme-date">{truncateAddress(item.wallet)}</span>
+            </div>
+          ) : (
+            <span className="meme-date">{formatDate(item.created_at)}</span>
+          )}
           <button
             className={`btn-vote ${voted ? 'voted' : voting ? 'voting' : 'unvoted'}`}
             onClick={handleVote}
