@@ -1,0 +1,206 @@
+/* ── Panel container — flex sibling of .feed-carousel, not fixed ── */
+.cp-panel {
+  width: 360px;
+  flex-shrink: 0;
+  height: 100%;
+  background: #0d0d0d;
+  border-left: 1px solid #1e1e1e;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: cp-slide-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes cp-slide-in {
+  from { width: 0; opacity: 0; }
+  to   { width: 360px; opacity: 1; }
+}
+
+/* ── Header ── */
+.cp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #1e1e1e;
+  flex-shrink: 0;
+}
+.cp-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ddd;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cp-count {
+  font-size: 11px;
+  color: #666;
+  font-weight: 400;
+}
+.cp-close {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.12s, background 0.12s;
+}
+.cp-close:hover { color: #ccc; background: #1e1e1e; }
+
+/* ── Comment list ── */
+.cp-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+.cp-empty {
+  padding: 24px 18px;
+  font-size: 13px;
+  color: #444;
+  text-align: center;
+  margin: 0;
+}
+
+/* ── Individual comment ── */
+.cp-comment {
+  display: flex;
+  gap: 10px;
+  padding: 10px 18px;
+}
+.cp-comment--reply {
+  padding-left: 48px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.cp-comment-avatar { flex-shrink: 0; }
+.cp-avatar-img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.cp-comment--reply .cp-avatar-img { width: 26px; height: 26px; }
+.cp-avatar-placeholder {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #2a2a2a;
+  color: #666;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cp-comment--reply .cp-avatar-placeholder { width: 26px; height: 26px; font-size: 11px; }
+
+.cp-comment-body { flex: 1; min-width: 0; }
+.cp-comment-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.cp-comment-wallet { font-size: 12px; font-weight: 700; color: #aaa; }
+.cp-comment-time   { font-size: 10px; color: #555; }
+
+.cp-comment-text {
+  font-size: 13px;
+  color: #ccc;
+  line-height: 1.45;
+  margin: 0 0 6px;
+  word-break: break-word;
+}
+
+.cp-comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cp-like-btn, .cp-reply-btn, .cp-delete-btn {
+  background: none;
+  border: none;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color 0.12s;
+}
+.cp-like-btn  { color: #555; display: flex; align-items: center; gap: 4px; }
+.cp-like-btn.active { color: #e05080; }
+.cp-like-btn:hover  { color: #e05080; }
+.cp-reply-btn  { color: #555; font-weight: 700; letter-spacing: 0.03em; }
+.cp-reply-btn:hover  { color: #aaa; }
+.cp-delete-btn { color: #3a2020; }
+.cp-delete-btn:hover { color: #c04040; }
+
+/* ── Compose ── */
+.cp-compose {
+  flex-shrink: 0;
+  border-top: 1px solid #1e1e1e;
+  padding: 10px 14px 14px;
+}
+.cp-reply-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 6px;
+  padding: 0 4px;
+}
+.cp-cancel-reply {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+.cp-cancel-reply:hover { color: #ccc; }
+
+.cp-compose-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.cp-input {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 20px;
+  padding: 8px 14px;
+  color: #ccc;
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  min-height: 36px;
+  max-height: 120px;
+  overflow-y: auto;
+  line-height: 1.4;
+  transition: border-color 0.12s;
+}
+.cp-input:focus { outline: none; border-color: #444; }
+.cp-input::placeholder { color: #444; }
+
+.cp-post-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #F0A020;
+  color: #000;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, transform 0.1s;
+}
+.cp-post-btn:hover:not(:disabled) { background: #ffb830; transform: scale(1.05); }
+.cp-post-btn:disabled { opacity: 0.35; cursor: default; }

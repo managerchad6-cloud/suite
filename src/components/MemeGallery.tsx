@@ -17,7 +17,7 @@ const _profileCache = new Map<string, Promise<CachedProfile>>()
 function fetchCreatorProfile(wallet: string): Promise<CachedProfile> {
   if (!_profileCache.has(wallet)) {
     _profileCache.set(wallet,
-      fetch(`/api/profile/${encodeURIComponent(wallet)}`)
+      fetch(`/profiles/${encodeURIComponent(wallet)}`)
         .then(r => r.ok ? r.json() : null)
         .catch(() => null)
     )
@@ -107,9 +107,11 @@ interface MemeCardProps {
   item: Meme
   address: string | null
   onSelect: (item: Meme) => void
+  onOpenDetail?: (item: Meme) => void
+  onOpenProfile?: (wallet: string) => void
 }
 
-function MemeCard({ item, address, onSelect }: MemeCardProps) {
+function MemeCard({ item, address, onSelect, onOpenDetail, onOpenProfile }: MemeCardProps) {
   const { virgin, chad } = parseMemeId(item.meme_id)
   const [imgFailed, setImgFailed] = useState(false)
   const [voting, setVoting] = useState(false)
@@ -160,21 +162,35 @@ function MemeCard({ item, address, onSelect }: MemeCardProps) {
         </div>
         <div className="meme-card-footer">
           {item.wallet ? (
-            <div className="meme-creator">
+            <div
+              className={`meme-creator ${onOpenProfile ? 'meme-creator--clickable' : ''}`}
+              onClick={(e) => { e.stopPropagation(); onOpenProfile?.(item.wallet!) }}
+            >
               <CreatorAvatar wallet={item.wallet} />
               <span className="meme-date">{truncateAddress(item.wallet)}</span>
             </div>
           ) : (
             <span className="meme-date">{formatDate(item.created_at)}</span>
           )}
-          <button
-            className={`btn-vote ${voted ? 'voted' : voting ? 'voting' : 'unvoted'}`}
-            onClick={handleVote}
-            disabled={!address || voted || voting}
-            title={voted ? 'Already voted' : !address ? 'Connect wallet to vote' : undefined}
-          >
-            {voted ? `✓ ${voteCount}` : voting ? '…' : `↑ ${voteCount || 'Vote'}`}
-          </button>
+          <div className="meme-card-actions">
+            {onOpenDetail && (
+              <button
+                className="btn-meme-page"
+                onClick={(e) => { e.stopPropagation(); onOpenDetail(item) }}
+                title="View meme page"
+              >
+                ↗
+              </button>
+            )}
+            <button
+              className={`btn-vote ${voted ? 'voted' : voting ? 'voting' : 'unvoted'}`}
+              onClick={handleVote}
+              disabled={!address || voted || voting}
+              title={voted ? 'Already voted' : !address ? 'Connect wallet to vote' : undefined}
+            >
+              {voted ? `✓ ${voteCount}` : voting ? '…' : `↑ ${voteCount || 'Vote'}`}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -183,7 +199,7 @@ function MemeCard({ item, address, onSelect }: MemeCardProps) {
 
 // ── Leaderboard ───────────────────────────────────────────────────
 
-function Leaderboard() {
+function Leaderboard({ onOpenProfile }: { onOpenProfile?: (wallet: string) => void }) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -234,7 +250,10 @@ function Leaderboard() {
                   <span className="leaderboard-vs">vs</span>
                   <span className="leaderboard-chad">Chad {chad}</span>
                 </div>
-                <div className="leaderboard-wallet">{truncateAddress(entry.wallet)}</div>
+                <div
+                  className={`leaderboard-wallet ${onOpenProfile ? 'leaderboard-wallet--clickable' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); onOpenProfile?.(entry.wallet) }}
+                >{truncateAddress(entry.wallet)}</div>
               </div>
               <div className="leaderboard-votes">
                 <span className="leaderboard-vote-count">{entry.vote_count}</span>
@@ -250,7 +269,7 @@ function Leaderboard() {
 
 // ── Winners & Rewards ─────────────────────────────────────────────
 
-function WinnersRewards({ address, onConnect }: { address: string | null; onConnect: (a: string) => void }) {
+function WinnersRewards({ address, onConnect, onOpenProfile }: { address: string | null; onConnect: (a: string) => void; onOpenProfile?: (wallet: string) => void }) {
   const [connecting, setConnecting] = useState(false)
 
   const userRewards = null as { prize: string; memeId: string } | null
@@ -306,7 +325,7 @@ function WinnersRewards({ address, onConnect }: { address: string | null; onConn
       <div className="winners-block winners-block--leaderboard">
         <h3 className="winners-block-title">Top 15 — User memes</h3>
         <p className="winners-block-sub">Ranked by community votes · click to preview</p>
-        <Leaderboard />
+        <Leaderboard onOpenProfile={onOpenProfile} />
       </div>
     </div>
   )
@@ -317,10 +336,15 @@ function WinnersRewards({ address, onConnect }: { address: string | null; onConn
 interface MemeGalleryProps {
   address: string | null
   onSelectMeme?: (meme: Meme) => void
+  onAutoSelect?: (meme: Meme) => void
+  onOpenDetail?: (meme: Meme) => void
+  onOpenProfile?: (wallet: string) => void
+  characterFilter?: string | null
+  onClearCharacterFilter?: () => void
 }
 
 export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
-  ({ address, onSelectMeme }, ref) => {
+  ({ address, onSelectMeme, onAutoSelect, onOpenDetail, onOpenProfile, characterFilter, onClearCharacterFilter }, ref) => {
     const [tab, setTab] = useState<Tab>('all')
     const [allMemes, setAllMemes] = useState<Meme[]>([])
     const [loading, setLoading] = useState(true)
@@ -350,7 +374,7 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
         const data = await fetchMemes(pageNum, 40)
         const userMemes = data.items.filter((m) => m.wallet !== null)
         setAllMemes((prev) => replace ? userMemes : [...prev, ...userMemes])
-        if (replace && userMemes[0]) onSelectMeme?.(userMemes[0])
+        if (replace && userMemes[0]) onAutoSelect?.(userMemes[0])
         setHasMore(data.has_next)
         setPage(pageNum)
       } catch {
@@ -372,7 +396,13 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
       load(page + 1, false)
     }
 
-    const visible = tab === 'winners' ? [] : filterMemes(allMemes, tab)
+    const tabFiltered = tab === 'winners' ? [] : filterMemes(allMemes, tab)
+    const visible = characterFilter
+      ? tabFiltered.filter(m => {
+          const { virgin, chad } = parseMemeId(m.meme_id)
+          return virgin === characterFilter || chad === characterFilter
+        })
+      : tabFiltered
     const showGrid = tab !== 'winners'
 
     const handleSelectMeme = (item: Meme) => {
@@ -384,7 +414,15 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
       <section className="gallery-section" ref={ref}>
         <div className="container">
           <div className="gallery-top-bar">
-            <h2 className="section-title">Meme Gallery</h2>
+            <div className="gallery-title-row">
+              <h2 className="section-title">Meme Gallery</h2>
+              {characterFilter && (
+                <div className="gallery-char-filter">
+                  <span className="gallery-char-filter-label">{characterFilter}</span>
+                  <button className="gallery-char-filter-clear" onClick={onClearCharacterFilter} title="Clear filter">×</button>
+                </div>
+              )}
+            </div>
             <div className="gallery-tabs">
               {TABS.map((t) => (
                 <button
@@ -399,7 +437,7 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
           </div>
 
           {tab === 'winners' && (
-            <WinnersRewards address={walletAddress} onConnect={handleConnect} />
+            <WinnersRewards address={walletAddress} onConnect={handleConnect} onOpenProfile={onOpenProfile} />
           )}
 
           {showGrid && (
@@ -421,6 +459,8 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
                   item={item}
                   address={walletAddress}
                   onSelect={handleSelectMeme}
+                  onOpenDetail={onOpenDetail}
+                  onOpenProfile={onOpenProfile}
                 />
               ))}
               {hasMore && !loading && !error && (

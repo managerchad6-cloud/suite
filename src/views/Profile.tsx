@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import { fetchMemesByWallet, imageUrl, parseMemeId, type Meme } from '../api/memes'
 import type { UserProfile } from '../lib/quizLog'
+import { fetchPlayer, type PlayerState } from '../api/player'
+import { RankBadge } from '../components/RankBadge'
+import { SpectrumMeter } from '../components/SpectrumMeter'
+import { ShadowEconomy } from '../components/ShadowEconomy'
+
 
 const CHAR_NAME: Record<string, string> = {
   gigachad: 'Gigachad', chad: 'Chad', thad: 'Thad', lad: 'Lad',
@@ -15,11 +20,13 @@ interface Props {
   address: string
   profile: UserProfile | null
   onGoToOracle: () => void
+  onOpenDetail?: (meme: Meme) => void
 }
 
-export function Profile({ address, profile, onGoToOracle }: Props) {
-  const [memes, setMemes]       = useState<Meme[]>([])
+export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props) {
+  const [memes,        setMemes]        = useState<Meme[]>([])
   const [memesLoading, setMemesLoading] = useState(true)
+  const [player,       setPlayer]       = useState<PlayerState | null>(null)
 
   useEffect(() => {
     setMemesLoading(true)
@@ -27,6 +34,7 @@ export function Profile({ address, profile, onGoToOracle }: Props) {
       .then(setMemes)
       .catch(() => {})
       .finally(() => setMemesLoading(false))
+    fetchPlayer(address).then(setPlayer).catch(() => {})
   }, [address])
 
   if (!profile) return (
@@ -63,6 +71,40 @@ export function Profile({ address, profile, onGoToOracle }: Props) {
         </div>
       </div>
 
+      {player && (
+        <div className="profile-section">
+          <h3 className="profile-section-title">Progression</h3>
+          <div className="profile-progression">
+            <div className="profile-rank-row">
+              <RankBadge rank={player.current_rank} size="md" />
+              <div className="profile-xp-info">
+                <span className="profile-xp-label">Total XP</span>
+                <span className="profile-xp-val">{player.total_xp.toLocaleString()}</span>
+              </div>
+            </div>
+            <SpectrumMeter
+              position={player.spectrum_position}
+              rank={player.current_rank}
+              progress={player.rank_progress}
+              size="md"
+            />
+            <div className="profile-streaks">
+              {[
+                { label: 'Login', count: player.login_streak },
+                { label: 'Create', count: player.creation_streak },
+                { label: 'Vote', count: player.voting_streak },
+              ].map(({ label, count }) => (
+                <div key={label} className="profile-streak">
+                  <span className="profile-streak-icon">{count >= 3 ? '🔥' : '○'}</span>
+                  <span className="profile-streak-label">{label}</span>
+                  <span className="profile-streak-count">{count}d</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="profile-section">
         <h3 className="profile-section-title">Traits</h3>
         <div className="quiz-reveal-attrs">
@@ -85,7 +127,12 @@ export function Profile({ address, profile, onGoToOracle }: Props) {
             {memes.map(m => {
               const { virgin, chad } = parseMemeId(m.meme_id)
               return (
-                <div key={m.job_id} className="profile-meme-card">
+                <div
+                  key={m.job_id}
+                  className="profile-meme-card"
+                  onClick={() => onOpenDetail?.(m)}
+                  style={onOpenDetail ? { cursor: 'pointer' } : undefined}
+                >
                   <img src={imageUrl(m.job_id)} alt={`${virgin} vs ${chad}`} className="profile-meme-img" />
                   <div className="profile-meme-footer">
                     <span className="profile-meme-label">
@@ -100,6 +147,11 @@ export function Profile({ address, profile, onGoToOracle }: Props) {
             })}
           </div>
         )}
+      </div>
+
+      <div className="profile-section">
+        <h3 className="profile-section-title">Shadow Economy</h3>
+        <ShadowEconomy wallet={address} />
       </div>
 
       <div className="profile-section">

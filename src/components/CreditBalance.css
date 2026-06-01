@@ -1,0 +1,23 @@
+.credit-balance-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 20px;
+  padding: 5px 12px 5px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.credit-balance-btn:hover { border-color: #F0A020; background: #1a1000; }
+.credit-balance-btn.empty { border-color: #c04040; background: #1a0808; }
+.credit-balance-btn.empty:hover { border-color: #e05050; }
+
+.credit-balance-icon { font-size: 13px; line-height: 1; }
+.credit-balance-num  {
+  font-size: 13px; font-weight: 800; color: #F0A020;
+  font-family: monospace; line-height: 1;
+}
+.credit-balance-btn.empty .credit-balance-num { color: #e05050; }
+.credit-balance-label { font-size: 10px; color: #666; font-weight: 600; letter-spacing: 0.04em; }

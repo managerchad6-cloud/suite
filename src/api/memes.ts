@@ -21,6 +21,9 @@ export interface Meme {
   completed_at: string | null;
   wallet: string | null;
   vote_count: number;
+  // hand-made meme fields
+  type?: 'ai' | 'handmade';
+  characters?: string[];
 }
 
 export interface LeaderboardEntry {
@@ -52,11 +55,12 @@ export async function generateRaw(
   virgin_labels?: string[],
   chad_labels?: string[],
   tx_signature?: string,
+  credit_token?: { wallet: string; ts: number; sig: string },
 ): Promise<{ job_id: string; status: string }> {
   const res = await fetch(`${BASE}/generate/raw`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ virgin, chad, wallet, signature, virgin_labels, chad_labels, tx_signature }),
+    body: JSON.stringify({ virgin, chad, wallet, signature, virgin_labels, chad_labels, tx_signature, credit_token }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -70,11 +74,12 @@ export async function generateFreestyle(
   wallet?: string,
   signature?: string,
   tx_signature?: string,
+  credit_token?: { wallet: string; ts: number; sig: string },
 ): Promise<{ job_id: string; status: string; parsed?: unknown }> {
   const res = await fetch(`${BASE}/generate/freestyle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, wallet, signature, tx_signature }),
+    body: JSON.stringify({ text, wallet, signature, tx_signature, credit_token }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -105,6 +110,42 @@ export async function fetchMetadata(job_id: string): Promise<JobMetadata | null>
 
 export function imageUrl(job_id: string): string {
   return `${BASE}/jobs/${job_id}/image`;
+}
+
+export function handmadeImageUrl(job_id: string): string {
+  return `${BASE}/handmade/${job_id}/image`;
+}
+
+export async function publishHandmade(params: {
+  imageDataUrl: string;
+  characters: string[];
+  titles?: string[];
+  labels?: string[];
+  labelLinks?: { text: string; charKey: string | null }[];
+  wallet: string;
+  signature?: string;
+}): Promise<{ job_id: string }> {
+  const res = await fetch(`${BASE}/publish/handmade`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Publish failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchMemesByCharacter(charKey: string): Promise<Meme[]> {
+  try {
+    const res = await fetch(`${BASE}/memes?character=${encodeURIComponent(charKey)}&status=done&limit=50`);
+    if (!res.ok) return [];
+    const data: MemesResponse = await res.json();
+    return data.items;
+  } catch {
+    return [];
+  }
 }
 
 export async function parse(text: string): Promise<{
@@ -180,6 +221,67 @@ export async function fetchLeaderboard(limit = 15): Promise<LeaderboardResponse>
   if (!res.ok) throw new Error('Failed to fetch leaderboard');
   return res.json();
 }
+
+// ─── Draft API ───────────────────────────────────────────────────────────────
+
+export interface DraftMeta {
+  id: string
+  wallet: string
+  title: string
+  thumbnail: string   // base64 JPEG data URL
+  updatedAt: string
+  canvasW: number
+  canvasH: number
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface DraftPayload extends DraftMeta {
+  layers: any[]
+  transforms: Record<string, any>
+  bboxes: Record<string, any>
+  textLayers: Record<string, any>
+  charLayers: Record<string, any>
+  polyLayers: Record<string, any>
+  canvasData: Record<string, string>
+  inActionSnapshots: Record<string, string>
+  inActionHasSnapshot: Record<string, boolean>
+}
+
+export async function saveDraft(payload: DraftPayload): Promise<{ id: string }> {
+  const res = await fetch(`${BASE}/drafts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Save draft failed: ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function listDrafts(wallet: string): Promise<DraftMeta[]> {
+  const res = await fetch(`${BASE}/drafts?wallet=${encodeURIComponent(wallet)}`)
+  if (!res.ok) throw new Error(`List drafts failed: ${res.status}`)
+  return res.json()
+}
+
+export async function fetchDraft(id: string, wallet: string): Promise<DraftPayload> {
+  const res = await fetch(`${BASE}/drafts/${encodeURIComponent(id)}?wallet=${encodeURIComponent(wallet)}`)
+  if (!res.ok) throw new Error(`Load draft failed: ${res.status}`)
+  return res.json()
+}
+
+export async function deleteDraftById(id: string, wallet: string): Promise<void> {
+  const res = await fetch(`${BASE}/drafts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wallet }),
+  })
+  if (!res.ok) throw new Error(`Delete draft failed: ${res.status}`)
+}
+
+// ─── parseMemeId ─────────────────────────────────────────────────────────────
 
 export function parseMemeId(id: string | null): { virgin: string; chad: string } {
   if (!id) return { virgin: 'Virgin', chad: 'Chad' };

@@ -10,6 +10,9 @@ import {
   type JobMetadata,
 } from '../api/memes'
 import { getActiveProvider, getActiveType, detectWallets, connectWalletByType } from '../wallet'
+import { fetchCreditBalance, issueMemeToken } from '../api/credits'
+
+const MEME_CREDIT_COST = 10
 
 const _env = (import.meta as unknown as { env: Record<string, string> }).env
 const SOLANA_RPC   = _env.VITE_SOLANA_RPC_URL ?? 'https://mainnet.helius-rpc.com'
@@ -66,6 +69,8 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
     const [finalImage, setFinalImage] = useState<string | null>(null)
     const [errorMsg, setErrorMsg] = useState<string | null>(null)
     const [connectingInline, setConnectingInline] = useState(false)
+    const [creditBalance, setCreditBalance] = useState<number | null>(null)
+    const [paymentMode, setPaymentMode] = useState<'usdc' | 'credits'>('usdc')
 
     const pollTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
     const metaTimerRef    = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -82,6 +87,14 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
     }
 
     useEffect(() => () => clearAllTimers(), [])
+
+    useEffect(() => {
+      if (!address) return
+      fetchCreditBalance(address).then(d => {
+        setCreditBalance(d.balance)
+        if (d.balance >= MEME_CREDIT_COST) setPaymentMode('credits')
+      }).catch(() => {})
+    }, [address])
 
     // Seed labels once when parent provides them (handles async metadata arrival)
     useEffect(() => {
@@ -182,81 +195,96 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
       try {
         setErrorMsg(null); setMetadata(null); setFinalImage(null)
 
-        // ── 1. Build USDC payment transaction ──────────────────────────────
-        setPhase('building')
-        const [{ Connection, PublicKey, Transaction, SendTransactionError }, { getAssociatedTokenAddressSync, createTransferInstruction, createAssociatedTokenAccountIdempotentInstruction }] = await Promise.all([
-          import('@solana/web3.js'),
-          import('@solana/spl-token'),
-        ])
-        const connection   = new Connection(SOLANA_RPC, 'confirmed')
-        const walletPubkey = new PublicKey(address)
-        const USDC_MINT    = new PublicKey(USDC_MINT_PK)
-        const TREASURY     = new PublicKey(TREASURY_PK)
-        const senderATA    = getAssociatedTokenAddressSync(USDC_MINT, walletPubkey)
-        const treasuryATA  = getAssociatedTokenAddressSync(USDC_MINT, TREASURY)
+        let result: { job_id: string }
 
-        const [senderAcct, treasuryAcct, solBalance] = await Promise.all([
-          connection.getAccountInfo(senderATA),
-          connection.getAccountInfo(treasuryATA),
-          connection.getBalance(walletPubkey),
-        ])
+        if (paymentMode === 'credits') {
+          // ── Credits path: deduct from Studio backend, get signed token ────
+          setPhase('building')
+          const token = await issueMemeToken(address)
+          setCreditBalance(b => b !== null ? b - MEME_CREDIT_COST : null)
+          window.dispatchEvent(new CustomEvent('vvc:credits-changed'))
 
-        if (!senderAcct) throw new Error('No USDC token account found. Add USDC to your wallet first.')
+          setPhase('submitting')
+          result = isFreestyle
+            ? await generateFreestyle(ft, address, undefined, undefined, token)
+            : (hasLabels || !context.trim())
+              ? await generateRaw(v, c, address, undefined, filteredVL, filteredCL, undefined, token)
+              : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, address, undefined, undefined, token)
 
-        const needsAta    = !treasuryAcct
-        const minLamports = needsAta ? 2_100_000 : 15_000
-        if (solBalance < minLamports) {
-          const min = (minLamports / 1e9).toFixed(6).replace(/0+$/, '')
-          throw new Error(`Need at least ${min} SOL for fees` + (needsAta ? ' (one-time treasury setup)' : '') + '.')
-        }
+        } else {
+          // ── USDC path: on-chain $1 payment ────────────────────────────────
+          setPhase('building')
+          const [{ Connection, PublicKey, Transaction, SendTransactionError }, { getAssociatedTokenAddressSync, createTransferInstruction, createAssociatedTokenAccountIdempotentInstruction }] = await Promise.all([
+            import('@solana/web3.js'),
+            import('@solana/spl-token'),
+          ])
+          const connection   = new Connection(SOLANA_RPC, 'confirmed')
+          const walletPubkey = new PublicKey(address)
+          const USDC_MINT    = new PublicKey(USDC_MINT_PK)
+          const TREASURY     = new PublicKey(TREASURY_PK)
+          const senderATA    = getAssociatedTokenAddressSync(USDC_MINT, walletPubkey)
+          const treasuryATA  = getAssociatedTokenAddressSync(USDC_MINT, TREASURY)
 
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
-        const tx = new Transaction({ recentBlockhash: blockhash, feePayer: walletPubkey })
-          .add(createAssociatedTokenAccountIdempotentInstruction(walletPubkey, treasuryATA, TREASURY, USDC_MINT))
-          .add(createTransferInstruction(senderATA, treasuryATA, walletPubkey, USDC_AMOUNT))
+          const [senderAcct, treasuryAcct, solBalance] = await Promise.all([
+            connection.getAccountInfo(senderATA),
+            connection.getAccountInfo(treasuryATA),
+            connection.getBalance(walletPubkey),
+          ])
 
-        // ── 2. User approves in wallet ─────────────────────────────────────
-        const walletName = getActiveType() ?? 'wallet'
-        setPhase('approving')
-        const provider = getActiveProvider()
-        if (!provider) throw new Error('No Solana wallet connected. Only Phantom, Solflare, and Backpack can sign transactions.')
-        const signedTx = await provider.signTransaction(tx)
+          if (!senderAcct) throw new Error('No USDC token account found. Add USDC to your wallet first.')
 
-        // ── 3. Broadcast + wait for confirmation ───────────────────────────
-        setPhase('confirming')
-        let txSig: string
-        try {
-          txSig = await connection.sendRawTransaction(signedTx.serialize(), {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-          })
-        } catch (sendErr) {
-          if (sendErr instanceof SendTransactionError) {
-            let detail = sendErr.message
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const logs: string[] | null = await (sendErr as any).getLogs?.(connection) ?? null
-              const hit = logs?.find(l => l.includes('Error') || l.includes('failed'))
-              if (hit) detail = hit
-            } catch {}
-            if (detail.includes('no record of a prior credit') || detail.includes('insufficient lamports')) {
-              throw new Error('Insufficient SOL for fees. Add SOL to your wallet.')
-            }
-            throw new Error(`Transaction failed: ${detail}`)
+          const needsAta    = !treasuryAcct
+          const minLamports = needsAta ? 2_100_000 : 15_000
+          if (solBalance < minLamports) {
+            const min = (minLamports / 1e9).toFixed(6).replace(/0+$/, '')
+            throw new Error(`Need at least ${min} SOL for fees` + (needsAta ? ' (one-time treasury setup)' : '') + '.')
           }
-          throw sendErr
+
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+          const tx = new Transaction({ recentBlockhash: blockhash, feePayer: walletPubkey })
+            .add(createAssociatedTokenAccountIdempotentInstruction(walletPubkey, treasuryATA, TREASURY, USDC_MINT))
+            .add(createTransferInstruction(senderATA, treasuryATA, walletPubkey, USDC_AMOUNT))
+
+          const walletName = getActiveType() ?? 'wallet'
+          setPhase('approving')
+          const provider = getActiveProvider()
+          if (!provider) throw new Error('No Solana wallet connected. Only Phantom, Solflare, and Backpack can sign transactions.')
+          const signedTx = await provider.signTransaction(tx)
+
+          setPhase('confirming')
+          let txSig: string
+          try {
+            txSig = await connection.sendRawTransaction(signedTx.serialize(), {
+              skipPreflight: false,
+              preflightCommitment: 'confirmed',
+            })
+          } catch (sendErr) {
+            if (sendErr instanceof SendTransactionError) {
+              let detail = sendErr.message
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const logs: string[] | null = await (sendErr as any).getLogs?.(connection) ?? null
+                const hit = logs?.find(l => l.includes('Error') || l.includes('failed'))
+                if (hit) detail = hit
+              } catch {}
+              if (detail.includes('no record of a prior credit') || detail.includes('insufficient lamports')) {
+                throw new Error('Insufficient SOL for fees. Add SOL to your wallet.')
+              }
+              throw new Error(`Transaction failed: ${detail}`)
+            }
+            throw sendErr
+          }
+
+          await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, 'confirmed')
+
+          setPhase('submitting')
+          void walletName
+          result = isFreestyle
+            ? await generateFreestyle(ft, address, undefined, txSig)
+            : (hasLabels || !context.trim())
+              ? await generateRaw(v, c, address, undefined, filteredVL, filteredCL, txSig)
+              : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, address, undefined, txSig)
         }
-
-        await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, 'confirmed')
-
-        // ── 4. Submit to backend with tx proof ─────────────────────────────
-        setPhase('submitting')
-        void walletName // used in approving label above
-        const result: { job_id: string } = isFreestyle
-          ? await generateFreestyle(ft, address, undefined, txSig)
-          : (hasLabels || !context.trim())
-            ? await generateRaw(v, c, address, undefined, filteredVL, filteredCL, txSig)
-            : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, address, undefined, txSig)
 
         setJobId(result.job_id)
         setPhase('polling')
@@ -522,23 +550,44 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
               <button className="btn-create btn-create-own" onClick={onCreateOwn}>
                 CREATE MY OWN →
               </button>
-            ) : address ? (
+            ) : address ? (<>
+              {/* Payment mode toggle — only when idle and user has credits */}
+              {phase === 'idle' && creditBalance !== null && (
+                <div className="creator-payment-toggle">
+                  <button
+                    className={`creator-pay-btn ${paymentMode === 'credits' ? 'active' : ''}`}
+                    onClick={() => setPaymentMode('credits')}
+                    disabled={creditBalance < MEME_CREDIT_COST}
+                    title={creditBalance < MEME_CREDIT_COST ? `Need ${MEME_CREDIT_COST} credits (you have ${creditBalance})` : undefined}
+                  >
+                    ⚡ {MEME_CREDIT_COST} Credits
+                    {creditBalance < MEME_CREDIT_COST && <span className="creator-pay-low"> (low)</span>}
+                  </button>
+                  <button
+                    className={`creator-pay-btn ${paymentMode === 'usdc' ? 'active' : ''}`}
+                    onClick={() => setPaymentMode('usdc')}
+                  >
+                    $ 1 USDC
+                  </button>
+                </div>
+              )}
               <button
                 className="btn-create"
                 onClick={phase === 'done' ? handleReset : handleSubmit}
                 disabled={phase === 'done' ? false : !canSubmit}
               >
-                {phase === 'idle'       ? 'CREATE — 1 USDC →'
-                : phase === 'building'  ? 'Building transaction…'
-                : phase === 'approving' ? 'Approve in wallet…'
-                : phase === 'confirming'? 'Confirming on-chain…'
-                : phase === 'submitting'? 'Submitting…'
-                : phase === 'polling'   ? `Generating… ${elapsed}s`
-                : phase === 'resolving' ? 'Done!'
-                : phase === 'done'      ? '← Create another'
+                {phase === 'idle' && paymentMode === 'credits' ? `CREATE — ⚡ ${MEME_CREDIT_COST} Credits →`
+                : phase === 'idle'       ? 'CREATE — 1 USDC →'
+                : phase === 'building'   ? (paymentMode === 'credits' ? 'Deducting credits…' : 'Building transaction…')
+                : phase === 'approving'  ? 'Approve in wallet…'
+                : phase === 'confirming' ? 'Confirming on-chain…'
+                : phase === 'submitting' ? 'Submitting…'
+                : phase === 'polling'    ? `Generating… ${elapsed}s`
+                : phase === 'resolving'  ? 'Done!'
+                : phase === 'done'       ? '← Create another'
                 : 'TRY AGAIN →'}
               </button>
-            ) : (
+            </>) : (
               <div className="connect-prompt">
                 <strong onClick={handleConnectInline}>
                   {connectingInline ? 'Connecting…' : 'Connect Phantom'}

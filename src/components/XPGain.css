@@ -1,0 +1,21 @@
+.xp-gain {
+  position: absolute;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0);
+  z-index: 100;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+
+.xp-gain--animate {
+  animation: xp-float 1s ease-out forwards;
+}
+
+@keyframes xp-float {
+  0%   { opacity: 1;   transform: translateY(0); }
+  60%  { opacity: 1;   transform: translateY(-28px); }
+  100% { opacity: 0;   transform: translateY(-44px); }
+}

@@ -37,7 +37,13 @@ function generateFreestylePrompt(
   }
 }
 
-export function Memes({ address }: { address: string }) {
+export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, onClearCharacterFilter }: {
+  address: string
+  onOpenDetail?: (m: Meme) => void
+  onOpenProfile?: (wallet: string) => void
+  characterFilter?: string | null
+  onClearCharacterFilter?: () => void
+}) {
   const [creatorOpen, setCreatorOpen] = useState(false)
   const [heroCreatorOpen, setHeroCreatorOpen] = useState(false)
   const [selectedMeme, setSelectedMeme] = useState<Meme | null>(null)
@@ -170,7 +176,15 @@ export function Memes({ address }: { address: string }) {
       })()}
 
       {/* ── Gallery ── */}
-      <MemeGallery address={address} onSelectMeme={(m) => { setSelectedMeme(m); setHeroCreatorOpen(false) }} />
+      <MemeGallery
+        address={address}
+        onAutoSelect={(m) => { setSelectedMeme(m) }}
+        onSelectMeme={(m) => { setSelectedMeme(m); setHeroCreatorOpen(false) }}
+        onOpenDetail={onOpenDetail}
+        onOpenProfile={onOpenProfile}
+        characterFilter={characterFilter}
+        onClearCharacterFilter={onClearCharacterFilter}
+      />
 
       {/* ── Floating modal ── */}
       <div className={`creator-modal-float ${creatorOpen ? 'creator-modal-float--open' : ''}`}>

@@ -1,0 +1,366 @@
+.smd-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+  color: #e0e0e0;
+  overflow-y: auto;
+}
+
+/* ── Topbar ── */
+
+.smd-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 14px 28px;
+  border-bottom: 1px solid #151515;
+  background: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(8px);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.smd-back {
+  background: none;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #888;
+  font-size: 13px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.smd-back:hover { color: #fff; border-color: #555; }
+
+.smd-breadcrumb {
+  font-size: 12px;
+  color: #444;
+  letter-spacing: 0.04em;
+}
+.smd-breadcrumb span { color: #666; }
+
+/* ── State fills ── */
+
+.smd-state-fill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #444;
+  font-size: 14px;
+}
+
+/* ── Page container ── */
+
+.smd-page {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding-bottom: 80px;
+}
+
+/* ── Hero image ── */
+
+.smd-hero {
+  width: 100%;
+  background: #050505;
+  border-top: 1px solid #111;
+  border-bottom: 1px solid #111;
+  margin-top: 24px;
+  overflow: hidden;
+}
+
+.smd-hero-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  transition: transform 0.15s ease;
+  cursor: zoom-in;
+  transform-origin: 50% 50%;
+}
+
+.smd-hero:hover .smd-hero-img {
+  transform: scale(2.4);
+  cursor: crosshair;
+}
+
+.smd-hero-loading {
+  width: 100%;
+  aspect-ratio: 3/2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  font-size: 13px;
+}
+
+/* ── Content column ── */
+
+.smd-content {
+  padding: 40px 32px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ── Header ── */
+
+.smd-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.smd-token-id {
+  font-size: 11px;
+  color: #444;
+  font-family: monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.smd-title {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+  line-height: 1.15;
+  margin: 0;
+}
+
+/* ── Creator row ── */
+
+.smd-creator-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #111;
+  border: 1px solid #1e1e1e;
+  border-radius: 10px;
+}
+
+.smd-creator-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1e1e1e;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.smd-creator-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.smd-creator-avatar-placeholder {
+  font-size: 14px;
+  font-weight: 700;
+  color: #555;
+}
+
+.smd-creator-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.smd-creator-label {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.smd-creator-addr {
+  font-size: 14px;
+  color: #ccc;
+  font-family: monospace;
+}
+
+/* ── Divider ── */
+
+.smd-divider {
+  height: 1px;
+  background: #1a1a1a;
+  margin: 0;
+}
+
+/* ── Sections ── */
+
+.smd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.smd-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #555;
+}
+
+.smd-traits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.smd-trait {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.smd-trait-type {
+  font-size: 10px;
+  color: #F0A020;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.smd-trait-value {
+  font-size: 13px;
+  color: #ddd;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* ── Character cards ── */
+
+.smd-char-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.smd-char-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 10px 16px 10px 10px;
+  min-width: 160px;
+}
+
+.smd-char-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  object-position: bottom center;
+  border-radius: 6px;
+  background: #0d0d0d;
+  flex-shrink: 0;
+}
+
+.smd-char-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.smd-char-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ddd;
+  text-transform: capitalize;
+}
+
+/* ── Label groups ── */
+
+.smd-label-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.smd-label-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.smd-label-group-header {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: capitalize;
+  color: #c88030;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.smd-label-group-header--unlinked {
+  color: #555;
+}
+
+/* ── Details ── */
+
+.smd-details {}
+
+.smd-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 0;
+  border-bottom: 1px solid #141414;
+  font-size: 13px;
+  gap: 16px;
+}
+.smd-detail-row:last-child { border-bottom: none; }
+
+.smd-detail-key { color: #555; flex-shrink: 0; }
+.smd-detail-val { color: #aaa; text-align: right; }
+.smd-detail-val--mono { font-family: monospace; font-size: 11px; word-break: break-all; }
+
+.topbar-badge {
+  position: static;
+  vertical-align: middle;
+  font-size: 9px;
+}
+
+.smd-reddit-topic {
+  font-size: 13px;
+  color: #777;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.smd-detail-link {
+  color: #ff7040;
+  text-decoration: none;
+  font-size: 13px;
+}
+.smd-detail-link:hover { text-decoration: underline; }
+
+.smd-reddit-thread-link {
+  display: inline-block;
+  color: #ff7040;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 0 24px;
+}
+.smd-reddit-thread-link:hover { text-decoration: underline; }
+
+/* ── Responsive ── */
+
+@media (max-width: 600px) {
+  .smd-content { padding: 28px 20px 0; }
+  .smd-title { font-size: 24px; }
+}

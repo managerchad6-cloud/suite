@@ -53,7 +53,7 @@ export async function saveProfile(profile: UserProfile): Promise<void> {
   try { localStorage.setItem(localKey(profile.walletAddress), JSON.stringify(profile)) } catch {}
   // Then sync to backend
   try {
-    await fetch('/api/profile', {
+    await fetch('/profiles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profile),
@@ -66,18 +66,22 @@ export async function saveProfile(profile: UserProfile): Promise<void> {
 export async function loadProfile(walletAddress: string): Promise<UserProfile | null> {
   // Try backend first
   try {
-    const res = await fetch(`/api/profile/${encodeURIComponent(walletAddress)}`)
+    const res = await fetch(`/profiles/${encodeURIComponent(walletAddress)}`)
     if (res.ok) {
       const data: UserProfile = await res.json()
-      // Keep local copy in sync
       try { localStorage.setItem(localKey(walletAddress), JSON.stringify(data)) } catch {}
       return data
     }
   } catch {}
-  // Fall back to localStorage
+  // Fall back to localStorage and re-sync to backend
   try {
     const raw = localStorage.getItem(localKey(walletAddress))
-    if (raw) return JSON.parse(raw) as UserProfile
+    if (raw) {
+      const profile = JSON.parse(raw) as UserProfile
+      // Re-push to backend so gallery avatars resolve next time
+      saveProfile(profile).catch(() => {})
+      return profile
+    }
   } catch {}
   return null
 }

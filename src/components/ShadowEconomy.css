@@ -1,0 +1,49 @@
+.shadow-loading { font-size: 12px; color: #444; padding: 12px 0; }
+
+.shadow-panel {
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.shadow-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-bottom: 1px solid #1a1a1a;
+  background: #111;
+}
+.shadow-title {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #F0A020;
+}
+.shadow-season  { font-size: 10px; color: #555; }
+.shadow-coming-soon {
+  margin-left: auto; font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #333;
+  padding: 3px 7px; border: 1px solid #222; border-radius: 4px;
+}
+
+.shadow-rows { padding: 4px 0; }
+.shadow-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 16px; border-bottom: 1px solid #141414; font-size: 13px;
+}
+.shadow-row:last-child { border-bottom: none; }
+.shadow-row-label { color: #666; }
+.shadow-row-value { color: #aaa; font-family: monospace; }
+
+.shadow-total {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; border-top: 1px solid #2a2a2a; background: #111;
+}
+.shadow-total-label { font-size: 12px; font-weight: 700; color: #888; }
+.shadow-total-value {
+  font-size: 16px; font-weight: 800; color: #F0A020; font-family: monospace;
+  letter-spacing: 0.04em;
+}
+
+.shadow-config {
+  display: flex; gap: 12px; padding: 8px 16px;
+  border-top: 1px solid #141414; background: #0a0a0a;
+  font-size: 9px; color: #333; letter-spacing: 0.04em;
+}

@@ -3,7 +3,4 @@ dist/
 *.zip
 tsconfig.tsbuildinfo
 public/assets/gallery/
-public/assets/chars/*_pfp*
-public/assets/chars/gadpfp*
-public/assets/chars/zadpfp*
-public/assets/chars/lacy_pfp*
+public/assets/chars/

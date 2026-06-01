@@ -1,0 +1,192 @@
+/* ── Snap slide wrapper ─────────────────────────────────────────── */
+/* (the .feed-snap-slide div is the full-height snap unit)          */
+
+/* fc-root is a flex child in the slide's row.
+   Width shrinks to the card's natural aspect-ratio width.
+   Height fills the slide. */
+.fc-root {
+  height: 100%;
+  /* don't stretch full width — let the card's aspect-ratio determine width */
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── The card itself ──
+   Width is NOT locked — it is set via an inline aspect-ratio style
+   derived from the image's natural dimensions after load.
+   Height is always 100% of the slide.
+   max-width keeps wide landscapes from overflowing. */
+.fc-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 100%;
+  min-width: 240px;
+  background: #151515;
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  overflow: hidden;
+  /* shadow transitions with the slide state */
+  box-shadow: none;
+  transition: box-shadow 0.42s ease;
+}
+
+/* Shadow lives on the card element so it respects the card's actual width */
+.feed-slide--current .fc-card {
+  box-shadow: 0 12px 60px rgba(0,0,0,0.8), 0 2px 12px rgba(0,0,0,0.5);
+}
+
+/* ── Image area — grows to fill card, no aspect-ratio lock ── */
+.fc-img-wrap {
+  background: #fff;
+  cursor: pointer;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fc-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* ── Card footer ── */
+.fc-footer {
+  flex-shrink: 0;
+  padding: 12px 14px;
+  border-top: 1px solid #1e1e1e;
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fc-source-badge { position: static !important; font-size: 8px; }
+
+.fc-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fc-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ddd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.fc-creator {
+  font-size: 10px;
+  color: #555;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.fc-date {
+  font-size: 10px;
+  color: #444;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* ── Action row ── */
+.fc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fc-vote-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #252525;
+  background: #0d0d0d;
+  color: #666;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.fc-vote-btn:disabled { cursor: default; opacity: 0.35; }
+.fc-vote-btn--up:not(:disabled):hover   { color: #F0A020; border-color: #F0A020; }
+.fc-vote-btn--down:not(:disabled):hover { color: #c060ff; border-color: #c060ff; }
+.fc-vote-btn--up.active   { color: #F0A020; border-color: #F0A020; background: #1a0f00; }
+.fc-vote-btn--down.active { color: #c060ff; border-color: #c060ff; background: #120a1a; }
+.fc-vote-btn span { font-size: 11px; font-weight: 400; }
+
+.fc-score {
+  font-size: 12px;
+  color: #444;
+  min-width: 28px;
+}
+
+.fc-spacer { flex: 1; }
+
+.fc-tier-chip {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.fc-tier-rising    { color: #F0D020; background: #1a1400; border: 1px solid #4a3a00; }
+.fc-tier-hot       { color: #F07020; background: #1a0a00; border: 1px solid #4a2000; }
+.fc-tier-legendary { color: #FFD700; background: #1a1200; border: 1px solid #6a4a00; }
+.fc-tier-pantheon  { color: #fff;    background: #1a1a1a; border: 1px solid #555; }
+
+.fc-share-btn {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #252525;
+  background: #0d0d0d;
+  color: #555;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.fc-share-btn:hover { color: #aaa; border-color: #444; }
+
+/* ── Reveal strip ── */
+.fc-reveal {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: #0d0d0d;
+  border: 1px solid #222;
+  font-size: 11px;
+  font-weight: 700;
+  animation: fc-reveal-pop 0.15s ease;
+}
+.fc-reveal--rankup { background: #1a1000; border-color: #F0A020; color: #FFD700; }
+.fc-reveal-pct { color: #F0A020; }
+.fc-reveal-xp  { color: #4acc7a; }
+.fc-xp-gain-wrap { position: relative; }
+
+@keyframes fc-reveal-pop {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Mobile ── */
+@media (max-width: 480px) {
+  .fc-card { border-radius: 10px; }
+}
