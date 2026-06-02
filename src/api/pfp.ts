@@ -1,5 +1,25 @@
-const API_KEY = 'AIzaSyCN8_Q5nh2UJeX5r1RnK7XTJse7RJfQtSA'
-const MODEL   = 'nano-banana-pro-preview'
+const VVC_API_KEY = 'AIzaSyCN8_Q5nh2UJeX5r1RnK7XTJse7RJfQtSA'
+const MODEL       = 'nano-banana-pro-preview'
+
+const GEMINI_KEY_STORAGE = 'vvc_gemini_key'
+
+export function getUserGeminiKey(): string | null {
+  return localStorage.getItem(GEMINI_KEY_STORAGE)
+}
+export function setUserGeminiKey(key: string) {
+  localStorage.setItem(GEMINI_KEY_STORAGE, key.trim())
+}
+export function clearUserGeminiKey() {
+  localStorage.removeItem(GEMINI_KEY_STORAGE)
+}
+export function hasUserGeminiKey(): boolean {
+  const k = localStorage.getItem(GEMINI_KEY_STORAGE)
+  return !!k && k.length > 0
+}
+
+function getActiveKey(): string {
+  return getUserGeminiKey() ?? VVC_API_KEY
+}
 
 export const LEGENDARY_CHARS = new Set(['gad', 'zad', 'bad', 'gizzard', 'wizard'])
 
@@ -85,7 +105,7 @@ async function callGeminiImage(base64: string, mimeType: string, prompt: string)
   })
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${getActiveKey()}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
   )
 

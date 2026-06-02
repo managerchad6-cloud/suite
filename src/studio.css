@@ -583,6 +583,25 @@
 }
 .msl-add-btn:hover { background: #162b44; }
 
+.msl-key-btn {
+  position: relative;
+  padding: 5px 7px;
+  background: none;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+  line-height: 1;
+}
+.msl-key-btn:hover { border-color: #444; background: #1a1a1a; }
+.msl-key-btn.active { border-color: #4acc7a; background: rgba(74,204,122,0.08); }
+.msl-key-dot {
+  position: absolute; top: 2px; right: 2px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #4acc7a;
+}
+
 .msl-list {
   flex: 1;
   min-height: 0;
@@ -1283,6 +1302,9 @@
 
 .mst-char-action-icon  { font-size: 18px; line-height: 1; }
 .mst-char-action-label { font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; }
+.mst-char-action-float--own-key .mst-action-cost,
+.mst-char-action-float--own-key .mst-reskin-btn-cost { display: none; }
+
 .mst-action-cost {
   font-size: 8px; font-weight: 800; color: #F0A020;
   background: rgba(240,160,32,0.12); border-radius: 6px;

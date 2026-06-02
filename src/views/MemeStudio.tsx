@@ -6,7 +6,9 @@ import { signAction, truncateAddress } from '../wallet'
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from '../lib/studioDb'
 import { StudioHome } from './StudioHome'
 import { deductCredits, claimSignupBonus, type CreditAction } from '../api/credits'
+import { hasUserGeminiKey } from '../api/pfp'
 import { BuyCreditsModal } from '../components/BuyCreditsModal'
+import { GeminiKeyModal } from '../components/GeminiKeyModal'
 import '../studio.css'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -750,9 +752,13 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   function setLayerLoading(id: string, on: boolean) {
     setLoadingLayerIds(prev => { const n = new Set(prev); on ? n.add(id) : n.delete(id); return n })
   }
-  const [showBuyModal, setShowBuyModal] = useState<{ required: number; balance?: number } | null>(null)
+  const [showBuyModal,    setShowBuyModal]    = useState<{ required: number; balance?: number } | null>(null)
+  const [showKeyModal,    setShowKeyModal]    = useState(false)
+  const [ownKeyActive,    setOwnKeyActive]    = useState(() => hasUserGeminiKey())
   const creditBalanceRefreshRef = useRef<(() => void) | null>(null)
   async function withCredits(action: CreditAction, fn: () => Promise<void>): Promise<void> {
+    // If user has their own Gemini key, skip credit deduction entirely
+    if (hasUserGeminiKey()) { await fn(); return }
     try {
       await deductCredits(address, action)
     } catch (e: any) {
@@ -4290,7 +4296,16 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         <aside className="mstudio-layers">
           <div className="msl-header">
             <span>LAYERS</span>
-            <button className="msl-add-btn" onClick={addLayer}>+ New</button>
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+              <button
+                className={`msl-key-btn ${ownKeyActive ? 'active' : ''}`}
+                onClick={() => setShowKeyModal(true)}
+                title={ownKeyActive ? 'Own Gemini key active — credits bypassed' : 'Use own Gemini API key'}
+              >
+                🔑{ownKeyActive && <span className="msl-key-dot" />}
+              </button>
+              <button className="msl-add-btn" onClick={addLayer}>+ New</button>
+            </div>
           </div>
 
           <div className="msl-list">
@@ -4554,7 +4569,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         const scy = Math.min(rawScy, window.innerHeight - 430)
         const busy = loadingLayerIds.has(activeId)
         return (
-          <div className="mst-char-action-float" style={{ left: scx, top: scy }}>
+          <div className={`mst-char-action-float ${ownKeyActive ? 'mst-char-action-float--own-key' : ''}`} style={{ left: scx, top: scy }}>
             <div className="mst-char-action-btns">
               {activeCharMeta && (() => {
                 const inActionCost = inActionCount === 1 ? 3 : inActionCount === 2 ? 5 : 8
@@ -4867,6 +4882,13 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       ))}
 
     </div>
+
+    {showKeyModal && (
+      <GeminiKeyModal
+        onClose={() => setShowKeyModal(false)}
+        onChanged={() => setOwnKeyActive(hasUserGeminiKey())}
+      />
+    )}
 
     {showBuyModal && (
       <BuyCreditsModal

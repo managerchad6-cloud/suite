@@ -1,0 +1,64 @@
+.gkm-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9100;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.gkm-modal {
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  padding: 22px;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.8);
+}
+
+.gkm-header { display: flex; align-items: center; justify-content: space-between; }
+.gkm-title  { font-size: 15px; font-weight: 800; color: #eee; }
+.gkm-close  { background: none; border: none; color: #555; font-size: 15px; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.gkm-close:hover { color: #ccc; }
+
+.gkm-desc {
+  font-size: 12px; color: #888; line-height: 1.6; margin: 0;
+}
+.gkm-desc a { color: #F0A020; text-decoration: none; }
+.gkm-desc a:hover { text-decoration: underline; }
+
+.gkm-input {
+  width: 100%; padding: 10px 12px;
+  background: #0e0e0e; border: 1px solid #2a2a2a;
+  border-radius: 6px; color: #eee; font-size: 13px;
+  font-family: monospace;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.gkm-input:focus { border-color: #F0A020; }
+
+.gkm-ok  { font-size: 12px; color: #4acc7a; }
+.gkm-err { font-size: 12px; color: #e05050; }
+
+.gkm-actions { display: flex; flex-direction: column; gap: 8px; }
+
+.gkm-btn-primary {
+  width: 100%; padding: 11px;
+  background: #F0A020; color: #000;
+  font-size: 13px; font-weight: 800; font-family: inherit;
+  border: none; border-radius: 8px; cursor: pointer;
+  transition: background 0.12s;
+}
+.gkm-btn-primary:hover:not(:disabled) { background: #ffb830; }
+.gkm-btn-primary:disabled { opacity: 0.35; cursor: default; }
+
+.gkm-btn-remove {
+  width: 100%; padding: 9px;
+  background: none; color: #666;
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  border: 1px solid #252525; border-radius: 8px; cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.gkm-btn-remove:hover { color: #e05050; border-color: #e05050; }

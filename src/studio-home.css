@@ -88,6 +88,49 @@
   font-weight: 400;
 }
 
+/* ── Gemini API Key card ── */
+
+.sh-apikey-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #161616;
+  border: 1px solid #252525;
+  border-radius: 10px;
+  transition: border-color 0.15s;
+}
+.sh-apikey-card--active {
+  border-color: rgba(74,204,122,0.4);
+  background: rgba(74,204,122,0.04);
+}
+
+.sh-apikey-left { display: flex; align-items: center; gap: 14px; }
+.sh-apikey-icon { font-size: 22px; line-height: 1; flex-shrink: 0; }
+.sh-apikey-text { display: flex; flex-direction: column; gap: 2px; }
+.sh-apikey-label { font-size: 13px; font-weight: 700; color: #ccc; }
+.sh-apikey-label--on { color: #4acc7a; }
+.sh-apikey-sub { font-size: 11px; color: #555; }
+
+.sh-apikey-btn {
+  flex-shrink: 0;
+  padding: 8px 18px;
+  background: none;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #888;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.sh-apikey-btn:hover { border-color: #F0A020; color: #F0A020; }
+.sh-apikey-card--active .sh-apikey-btn { border-color: rgba(74,204,122,0.4); color: #4acc7a; }
+.sh-apikey-card--active .sh-apikey-btn:hover { border-color: #e05050; color: #e05050; }
+
 /* ── Sections ── */
 
 .sh-section {

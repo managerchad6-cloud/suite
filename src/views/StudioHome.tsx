@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { listDrafts, deleteDraftById, fetchDraft, type DraftMeta, type DraftPayload } from '../api/memes'
 import { fetchStudioMemesByWallet, studioMemeImageUrl, deleteStudioMeme, type StudioMeme } from '../api/studio'
 import { truncateAddress } from '../wallet'
+import { hasUserGeminiKey } from '../api/pfp'
+import { GeminiKeyModal } from '../components/GeminiKeyModal'
 import '../studio-home.css'
 
 interface Props {
@@ -19,6 +21,8 @@ export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) 
   const [openingId,      setOpeningId]      = useState<string | null>(null)
   const [deletingId,     setDeletingId]     = useState<string | null>(null)
   const [deletingPubId,  setDeletingPubId]  = useState<string | null>(null)
+  const [showKeyModal,   setShowKeyModal]   = useState(false)
+  const [ownKeyActive,   setOwnKeyActive]   = useState(() => hasUserGeminiKey())
 
   useEffect(() => {
     listDrafts(address)
@@ -107,6 +111,36 @@ export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) 
           </label>
         </div>
       </div>
+
+      {/* ── Gemini API Key ── */}
+      <div className={`sh-apikey-card ${ownKeyActive ? 'sh-apikey-card--active' : ''}`}>
+        <div className="sh-apikey-left">
+          <span className="sh-apikey-icon">{ownKeyActive ? '🔑' : '🔒'}</span>
+          <div className="sh-apikey-text">
+            {ownKeyActive ? (
+              <>
+                <span className="sh-apikey-label sh-apikey-label--on">Your Gemini key is active</span>
+                <span className="sh-apikey-sub">AI actions use your key — VVC credits are not deducted</span>
+              </>
+            ) : (
+              <>
+                <span className="sh-apikey-label">Use your own Gemini API key</span>
+                <span className="sh-apikey-sub">Bypass VVC credits — your key stays in the browser only</span>
+              </>
+            )}
+          </div>
+        </div>
+        <button className="sh-apikey-btn" onClick={() => setShowKeyModal(true)}>
+          {ownKeyActive ? 'Manage' : 'Add Key'}
+        </button>
+      </div>
+
+      {showKeyModal && (
+        <GeminiKeyModal
+          onClose={() => setShowKeyModal(false)}
+          onChanged={() => setOwnKeyActive(hasUserGeminiKey())}
+        />
+      )}
 
       {/* ── Drafts ── */}
       <section className="sh-section">
