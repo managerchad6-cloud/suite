@@ -1,3 +1,12 @@
+/* ─── Global scrollbar override for the entire studio ───────────────────── */
+
+.mstudio *::-webkit-scrollbar        { width: 4px; height: 4px; }
+.mstudio *::-webkit-scrollbar-track  { background: transparent; }
+.mstudio *::-webkit-scrollbar-thumb  { background: #2e2e2e; border-radius: 4px; }
+.mstudio *::-webkit-scrollbar-thumb:hover { background: #484848; }
+.mstudio *::-webkit-scrollbar-corner { background: transparent; }
+.mstudio * { scrollbar-width: thin; scrollbar-color: #2e2e2e transparent; }
+
 /* ─── Meme Studio layout ─────────────────────────────────────────────────── */
 
 .mstudio {
@@ -88,6 +97,18 @@
   gap: 6px;
 }
 
+.mst-remix-banner {
+  font-size: 11px;
+  font-weight: 600;
+  color: #20b48c;
+  background: rgba(32,180,140,0.08);
+  border: 1px solid rgba(32,180,140,0.25);
+  border-radius: 6px;
+  padding: 6px 10px;
+  text-align: center;
+}
+.mst-remix-hint { color: #888; font-weight: 400; }
+
 .mst-corner-actions .mst-publish-btn {
   width: 100%;
   padding: 14px 16px;
@@ -124,7 +145,7 @@
   word-break: break-word;
 }
 
-/* ─── Left Toolbar (floating panel) ─────────────────────────────────────── */
+/* ─── Left Toolbar (tools only) ─────────────────────────────────────────── */
 
 .mstudio-toolbar {
   position: absolute;
@@ -146,6 +167,40 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+.mstudio-toolbar { scrollbar-width: thin; scrollbar-color: #2a2a2a transparent; }
+.mstudio-toolbar::-webkit-scrollbar { width: 3px; }
+.mstudio-toolbar::-webkit-scrollbar-track { background: transparent; }
+.mstudio-toolbar::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+.mstudio-toolbar::-webkit-scrollbar-thumb:hover { background: #444; }
+
+/* ─── Right Options Panel (context-sensitive) ────────────────────────────── */
+
+.mst-options-panel {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  width: 172px;
+  height: auto;
+  max-height: calc(100% - 172px - 130px);
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04) inset;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 8px;
+  gap: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+.mst-options-panel::-webkit-scrollbar { width: 3px; }
+.mst-options-panel::-webkit-scrollbar-track { background: transparent; }
+.mst-options-panel::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+.mst-options-panel::-webkit-scrollbar-thumb:hover { background: #444; }
 
 .mst-group {
   display: flex;
@@ -402,6 +457,22 @@
 .mst-align-btn:hover { background: #222; color: #ccc; border-color: #555; }
 .mst-align-btn.active { background: rgba(240,160,32,0.12); border-color: #B07018; color: #F0A020; }
 
+/* Flip panel buttons (right options panel) */
+.mst-flip-btns { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+.mst-flip-btn {
+  width: 100%;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 5px;
+  color: #aaa;
+  font-size: 11px;
+  padding: 8px 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.mst-flip-btn:hover { background: #222; color: #eee; border-color: #555; }
+
 /* Action buttons */
 .mst-action {
   width: 100%;
@@ -609,6 +680,8 @@
   padding: 6px;
   display: flex;
   flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
   gap: 4px;
 }
 
@@ -1155,6 +1228,68 @@
 }
 .mst-link-handle:active { cursor: grabbing; }
 
+/* ─── Magic label picker popup ──────────────────────────────────────────── */
+
+.mst-magic-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 599;
+}
+
+.mst-magic-picker {
+  position: fixed;
+  z-index: 600;
+  transform: translateY(-50%);
+  background: #111;
+  border: 1px solid rgba(147, 90, 255, 0.35);
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 200px;
+  max-width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(147,90,255,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  animation: mst-picker-in 0.12s cubic-bezier(0.22,1,0.36,1);
+}
+
+@keyframes mst-picker-in {
+  from { opacity: 0; transform: translateY(-50%) scale(0.92); }
+  to   { opacity: 1; transform: translateY(-50%) scale(1); }
+}
+
+.mst-magic-picker-header {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: #935aff;
+  text-transform: uppercase;
+  padding: 2px 6px 6px;
+  border-bottom: 1px solid #222;
+  margin-bottom: 2px;
+}
+
+.mst-magic-picker-item {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #ccc;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: all 0.1s;
+  line-height: 1.3;
+}
+
+.mst-magic-picker-item:hover {
+  background: rgba(147, 90, 255, 0.12);
+  border-color: rgba(147, 90, 255, 0.3);
+  color: #fff;
+}
+
 /* ─── Grab radial menu ───────────────────────────────────────────────────── */
 
 .mst-radial-backdrop {
@@ -1256,7 +1391,16 @@
   overflow-y: auto;
   padding: 8px;
   flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
 }
+.mst-char-picker-scroll::-webkit-scrollbar { width: 3px; }
+.mst-char-picker-scroll::-webkit-scrollbar-track { background: transparent; }
+.mst-char-picker-scroll::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+.msl-list::-webkit-scrollbar { width: 3px; }
+.msl-list::-webkit-scrollbar-track { background: transparent; }
+.msl-list::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
 .mst-char-picker-scroll::-webkit-scrollbar { width: 4px; }
 .mst-char-picker-scroll::-webkit-scrollbar-track { background: transparent; }
 .mst-char-picker-scroll::-webkit-scrollbar-thumb { background: rgba(240,160,32,0.3); border-radius: 2px; }
@@ -1277,7 +1421,7 @@
 
 .mst-char-action-btns {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   justify-content: center;
 }
 
@@ -1285,9 +1429,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  width: 80px;
-  padding: 7px 6px;
+  gap: 4px;
+  min-width: 90px;
+  padding: 12px 16px;
   border-radius: 10px;
   border: 1px solid rgba(240,160,32,0.2);
   background: rgba(10,7,0,0.88);
@@ -1301,7 +1445,7 @@
 .mst-char-action-btn.active { background: rgba(240,160,32,0.15); color: #F0A020; border-color: #F0A020; }
 
 .mst-char-action-icon  { font-size: 18px; line-height: 1; }
-.mst-char-action-label { font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; }
+.mst-char-action-label { font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
 .mst-char-action-float--own-key .mst-action-cost,
 .mst-char-action-float--own-key .mst-reskin-btn-cost { display: none; }
 
@@ -1311,6 +1455,7 @@
   padding: 1px 5px; line-height: 1.4; letter-spacing: 0;
 }
 .mst-char-action-btn--inaction .mst-action-cost { color: #20b48c; background: rgba(32,180,140,0.12); }
+.mst-action-cost--free { color: #4caf7d; background: rgba(76,175,125,0.12); font-size: 7px; letter-spacing: 0.08em; }
 
 .mst-char-action-panel {
   margin-top: 6px;
@@ -1373,6 +1518,33 @@
 }
 .mst-inaction-level:hover { border-color: #20b48c; color: #20b48c; }
 .mst-inaction-level.active { background: rgba(32,180,140,0.15); border-color: #20b48c; color: #20b48c; font-weight: 600; }
+
+.mst-level-tooltip {
+  position: fixed;
+  z-index: 99999;
+  pointer-events: none;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+  border: 1px solid #333;
+  background: #111;
+  transform: translateY(-100%);
+}
+.mst-level-tooltip img {
+  display: block;
+  width: 220px;
+  height: auto;
+  max-height: 200px;
+  object-fit: cover;
+}
+.mst-level-tooltip-desc {
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.4;
+  background: #111;
+}
 
 /* Count selector */
 .mst-inaction-count-row {
@@ -1442,6 +1614,80 @@
 }
 .mst-reskin-btn--inaction:hover { background: #133d32; }
 .mst-reskin-btn--inaction:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Skins panel ────────────────────────────────────────────────────────── */
+.mst-char-action-panel--skins { border-color: rgba(160,120,255,0.25); }
+
+.mst-skin-search {
+  width: 100%;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #ccc;
+  font-size: 11px;
+  padding: 5px 8px;
+  outline: none;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+.mst-skin-search:focus { border-color: #a078ff; }
+
+.mst-skin-loading {
+  font-size: 10px;
+  color: #555;
+  text-align: center;
+  padding: 10px 0;
+}
+
+.mst-skin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  max-height: 210px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+.mst-skin-grid::-webkit-scrollbar { width: 4px; }
+.mst-skin-grid::-webkit-scrollbar-track { background: transparent; }
+.mst-skin-grid::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+.mst-skin-card {
+  position: relative;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mst-skin-card:hover { border-color: #a078ff; }
+
+.mst-skin-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mst-skin-type {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.65);
+  color: #aaa;
+  font-size: 8px;
+  text-align: center;
+  padding: 2px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 /* ─── Mode switcher bar ──────────────────────────────────────────────────── */
 
@@ -1637,11 +1883,15 @@
 .mst-char-text-btns {
   position: absolute;
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   transform: translate(-50%, -50%);
   pointer-events: all;
   z-index: 50;
 }
+.mst-char-text-btns-row { display: flex; gap: 8px; }
+.mst-char-text-btns-magic-row { display: flex; justify-content: center; }
 
 .mst-char-text-btn {
   width: 44px;
@@ -1687,6 +1937,40 @@
   color: #0d1a0d;
   box-shadow: 0 0 14px rgba(74,170,74,0.5);
 }
+
+/* Indigo magic label button */
+.mst-char-text-btn--magic {
+  background: #0e0620;
+  border-color: #7c5af0;
+  color: #a88fff;
+  box-shadow: 0 0 8px rgba(124,90,240,0.3);
+}
+.mst-char-text-btn--magic:hover {
+  background: #7c5af0;
+  color: #fff;
+  box-shadow: 0 0 16px rgba(124,90,240,0.7);
+}
+/* Loading state: desaturated pulse, no interaction */
+.mst-char-text-btn--magic-loading {
+  border-color: #4a3a70 !important;
+  color: #6a5a90 !important;
+  box-shadow: none !important;
+  animation: mst-magic-loading 2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes mst-magic-loading {
+  0%, 100% { opacity: 0.35; background: #0a0416; }
+  50%       { opacity: 0.65; background: #150c28; }
+}
+.mst-magic-star { font-size: 13px; line-height: 1; }
+.mst-char-text-btn--magic:not(.mst-char-text-btn--magic-loading) .mst-magic-star {
+  animation: mst-star-ready 3s ease-in-out infinite;
+}
+@keyframes mst-star-ready {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%       { transform: scale(1.2) rotate(20deg); }
+}
+
 
 /* ─── Selection mode buttons ─────────────────────────────────────────────── */
 

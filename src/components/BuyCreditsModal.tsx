@@ -291,14 +291,26 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
           </div>
         )}
 
-        {/* Done */}
+        {/* Done — confetti celebration */}
         {step === 'done' && (
-          <div className="bcm-done">
-            <span className="bcm-done-icon">✓</span>
-            <span><strong>{added} credits</strong> added to your account</span>
-            <span className="bcm-done-balance">New balance: {currentBalance + added} credits</span>
-            <button className="bcm-btn-primary" onClick={onClose}>Done</button>
-          </div>
+          <>
+            {Array.from({ length: 36 }).map((_, i) => (
+              <span key={i} className="bcm-confetti" style={{
+                '--x':        `${Math.random() * 100}%`,
+                '--delay':    `${(Math.random() * 0.6).toFixed(2)}s`,
+                '--duration': `${(0.8 + Math.random() * 0.9).toFixed(2)}s`,
+                '--color':    ['#ff4d4d','#ffd700','#4dff91','#4dc8ff','#ff4dce','#fff','#F0A020'][Math.floor(Math.random() * 7)],
+                '--rot':      `${Math.floor(Math.random() * 360)}deg`,
+              } as React.CSSProperties} />
+            ))}
+            <div className="bcm-done">
+              <div className="bcm-done-burst">⚡</div>
+              <div className="bcm-done-amount">+{added}</div>
+              <div className="bcm-done-label">CREDITS LOADED</div>
+              <div className="bcm-done-balance">Balance: {currentBalance + added} credits</div>
+              <button className="bcm-btn-primary" onClick={onClose}>Let's go 🔥</button>
+            </div>
+          </>
         )}
 
         {/* Error */}

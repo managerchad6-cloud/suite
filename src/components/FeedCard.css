@@ -71,6 +71,14 @@
 
 .fc-source-badge { position: static !important; font-size: 8px; }
 
+.fc-remix-tag {
+  font-size: 9px;
+  color: #20b48c;
+  opacity: 0.7;
+  letter-spacing: 0.04em;
+  padding-bottom: 2px;
+}
+
 .fc-info-row {
   display: flex;
   align-items: center;

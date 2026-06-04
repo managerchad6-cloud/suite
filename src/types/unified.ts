@@ -12,6 +12,9 @@ export interface UnifiedMemeItem {
 
   // available at list time — show without a fetch
   wallet?: string
+  characters?: string[]   // character keys for filtering (studio memes)
+  has_draft?: boolean     // studio memes: draft saved for remixing
+  remixed_from?: string   // id of the meme this was remixed from
   redditPermalink?: string
   redditScore?: number
   redditTopic?: string | null

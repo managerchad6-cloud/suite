@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { fetchMemesByWallet, imageUrl, parseMemeId, type Meme } from '../api/memes'
 import type { UserProfile } from '../lib/quizLog'
 import { fetchPlayer, type PlayerState } from '../api/player'
-import { RankBadge } from '../components/RankBadge'
-import { SpectrumMeter } from '../components/SpectrumMeter'
+import { BadgeGrid } from '../components/BadgeGrid'
 import { ShadowEconomy } from '../components/ShadowEconomy'
 
 
@@ -46,48 +45,50 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props)
     </div>
   )
 
-  const name    = CHAR_NAME[profile.character] ?? profile.character
-  const avatar  = profile.portraitDataUrl ?? `/assets/chars/${profile.character}.png`
-  const updated = profile.updatedAt ? new Date(profile.updatedAt).toLocaleDateString() : null
+  const name       = CHAR_NAME[profile.character] ?? profile.character
+  const heroImage  = profile.characterImageDataUrl ?? profile.portraitDataUrl ?? `/assets/chars/${profile.character}.png`
+  const updated    = profile.updatedAt ? new Date(profile.updatedAt).toLocaleDateString() : null
 
   return (
     <div className="profile-page">
       <div className="profile-hero">
-        <img src={avatar} alt={name} className="profile-hero-avatar" />
+        <img src={heroImage} alt={name} className="profile-hero-avatar" />
         <div className="profile-hero-info">
           <p className="quiz-oracle-label">YOUR ARCHETYPE</p>
           <h1 className="profile-hero-name">{name}</h1>
           <p className="profile-hero-desc">{profile.description}</p>
           {updated && <p className="profile-hero-date">Last updated {updated}</p>}
-          {profile.portraitDataUrl && (
-            <a
-              href={profile.portraitDataUrl}
-              download={`${profile.character}_portrait.jpg`}
-              className="pfp-modal-download"
-            >
-              Download PFP
-            </a>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {profile.characterImageDataUrl && (
+              <a
+                href={profile.characterImageDataUrl}
+                download={`${profile.character}_full.jpg`}
+                className="pfp-modal-download"
+              >
+                Download Character
+              </a>
+            )}
+            {profile.portraitDataUrl && (
+              <a
+                href={profile.portraitDataUrl}
+                download={`${profile.character}_pfp.jpg`}
+                className="pfp-modal-download"
+              >
+                Download PFP
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
       {player && (
         <div className="profile-section">
-          <h3 className="profile-section-title">Progression</h3>
+          <h3 className="profile-section-title">Stats</h3>
           <div className="profile-progression">
-            <div className="profile-rank-row">
-              <RankBadge rank={player.current_rank} size="md" />
-              <div className="profile-xp-info">
-                <span className="profile-xp-label">Total XP</span>
-                <span className="profile-xp-val">{player.total_xp.toLocaleString()}</span>
-              </div>
+            <div className="profile-xp-row">
+              <span className="profile-xp-label">Total XP</span>
+              <span className="profile-xp-val">⚡ {player.total_xp.toLocaleString()}</span>
             </div>
-            <SpectrumMeter
-              position={player.spectrum_position}
-              rank={player.current_rank}
-              progress={player.rank_progress}
-              size="md"
-            />
             <div className="profile-streaks">
               {[
                 { label: 'Login', count: player.login_streak },
@@ -104,6 +105,11 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props)
           </div>
         </div>
       )}
+
+      <div className="profile-section">
+        <h3 className="profile-section-title">Badges</h3>
+        <BadgeGrid wallet={address} />
+      </div>
 
       <div className="profile-section">
         <h3 className="profile-section-title">Traits</h3>

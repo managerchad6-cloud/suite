@@ -6,6 +6,8 @@ export interface VoteState {
   your_vote: 1 | -1 | null
 }
 
+import { dispatchBadges } from './player'
+
 export interface CastVoteResult extends VoteState {
   meme_id: string
   meme_source: string
@@ -29,7 +31,9 @@ export async function castVote(
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || `Vote failed: ${res.status}`)
   }
-  return res.json()
+  const data = await res.json()
+  dispatchBadges(data.new_badges)
+  return data
 }
 
 export async function getVoteState(

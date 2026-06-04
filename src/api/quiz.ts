@@ -1,4 +1,4 @@
-const API_KEY    = 'AIzaSyCN8_Q5nh2UJeX5r1RnK7XTJse7RJfQtSA'
+const API_KEY    = ''
 const CHAT_MODEL = 'gemini-2.5-flash'
 
 export type QuestionType = 'single' | 'multi' | 'open'

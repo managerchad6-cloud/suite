@@ -116,6 +116,17 @@ export function handmadeImageUrl(job_id: string): string {
   return `${BASE}/handmade/${job_id}/image`;
 }
 
+export interface StudioMemeByChar {
+  id: string; wallet: string; created_at: string; characters: string[]; titles: string[]
+}
+
+export async function fetchStudioMemesByCharacter(charKey: string): Promise<StudioMemeByChar[]> {
+  const res = await fetch(`/api/handmade/by-character/${encodeURIComponent(charKey)}`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.items ?? [];
+}
+
 export async function publishHandmade(params: {
   imageDataUrl: string;
   characters: string[];
@@ -124,6 +135,9 @@ export async function publishHandmade(params: {
   labelLinks?: { text: string; charKey: string | null }[];
   wallet: string;
   signature?: string;
+  draftId?: string;
+  remixedFrom?: string;
+  draftPayloadInline?: unknown;
 }): Promise<{ job_id: string }> {
   const res = await fetch(`${BASE}/publish/handmade`, {
     method: 'POST',
@@ -134,7 +148,12 @@ export async function publishHandmade(params: {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Publish failed: ${res.status}`);
   }
-  return res.json();
+  const data = await res.json();
+  if (data.new_badges?.length) {
+    const { dispatchBadges } = await import('./player');
+    dispatchBadges(data.new_badges);
+  }
+  return data;
 }
 
 export async function fetchMemesByCharacter(charKey: string): Promise<Meme[]> {

@@ -17,16 +17,16 @@ import { Brackets } from './views/Brackets'
 import { UnifiedMemeDetail } from './views/UnifiedMemeDetail'
 import { MemeDetail } from './views/MemeDetail'
 import { PublicProfile } from './views/PublicProfile'
-import { RankBadge } from './components/RankBadge'
-import { RankUpModal } from './components/RankUpModal'
+import { BadgeUnlockedToast } from './components/BadgeUnlockedToast'
 import { NotificationBell } from './components/NotificationPanel'
 import { CreditBalance } from './components/CreditBalance'
 import { loadProfile, type UserProfile } from './lib/quizLog'
-import { fetchPlayer, recordLogin, type PlayerState } from './api/player'
+import { fetchPlayer, recordLogin, type PlayerState, type BadgeDef } from './api/player'
+import { claimSignupBonus } from './api/credits'
 import type { Meme } from './api/memes'
 import type { UnifiedMemeItem } from './types/unified'
 
-type View = 'live' | 'memes' | 'factory' | 'vote' | 'characters' | 'quiz' | 'profile' | 'prizes' | 'studio' | 'brackets'
+type View = 'live' | 'onboarding' | 'memes' | 'factory' | 'vote' | 'characters' | 'quiz' | 'profile' | 'studio' | 'brackets'
 
 const REEL_L = [
   'gizzard','bad','wraith','grandwizard','witch','wizard',
@@ -118,19 +118,26 @@ export default function App() {
   const [view,          setView]          = useState<View>('live')
   const [profile,       setProfile]       = useState<UserProfile | null | undefined>(undefined)
   const [playerState,   setPlayerState]   = useState<PlayerState | null>(null)
-  const [rankUp,        setRankUp]        = useState<{ from: string; to: string; direction: string } | null>(null)
+  const [newBadges,     setNewBadges]     = useState<BadgeDef[]>([])
   const [unifiedDetail, setUnifiedDetail] = useState<UnifiedMemeItem | null>(null)
   const [detailMeme,    setDetailMeme]    = useState<Meme | null>(null)
   const [charTarget,    setCharTarget]    = useState<string | null>(null)
   const [profileTarget, setProfileTarget] = useState<string | null>(null)
+  const [remixSourceId, setRemixSourceId] = useState<string | null>(null)
 
   const refreshPlayer = useCallback(async (addr: string) => {
     try { setPlayerState(await fetchPlayer(addr)) } catch {}
   }, [])
 
-  const handleRankUp = useCallback((from: string, to: string, direction: string) => {
-    setRankUp({ from, to, direction })
+  const pushBadges = useCallback((badges: BadgeDef[] | undefined) => {
+    if (badges?.length) setNewBadges(prev => [...prev, ...badges])
   }, [])
+
+  useEffect(() => {
+    const handler = (e: Event) => pushBadges((e as CustomEvent<BadgeDef[]>).detail)
+    window.addEventListener('vvc:badges-unlocked', handler)
+    return () => window.removeEventListener('vvc:badges-unlocked', handler)
+  }, [pushBadges])
 
   useEffect(() => {
     tryAutoConnect().then((addr) => { if (addr) setAddress(addr) })
@@ -141,24 +148,19 @@ export default function App() {
     setProfile(undefined)
     loadProfile(address).then(p => setProfile(p ?? null))
     refreshPlayer(address)
-    // Record daily login and handle rank-up
+    // Claim signup bonus on every connect — server is idempotent (grants once only)
+    claimSignupBonus(address).then(r => {
+      if (r.granted > 0) window.dispatchEvent(new CustomEvent('vvc:credits-changed'))
+    }).catch(() => {})
+    // Record daily login and show any badge unlocks
     recordLogin(address).then(r => {
-      if (r.ranked_up && r.rank) {
-        const prev = playerState?.current_rank ?? 'basic'
-        handleRankUp(prev, r.rank, playerState?.rank_direction ?? 'neutral')
-      }
+      pushBadges(r.new_badges)
       refreshPlayer(address)
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address])
+  }, [address, pushBadges, refreshPlayer])
 
   if (!address) return <WalletGate onConnect={setAddress} />
   if (profile === undefined) return null
-  if (profile === null) return (
-    <div style={{ height: '100vh', overflow: 'auto' }}>
-      <Quiz address={address} onProfileUpdate={p => setProfile(p)} />
-    </div>
-  )
 
   const handleDisconnect = async () => {
     await disconnectWallet()
@@ -166,8 +168,8 @@ export default function App() {
     setProfile(null)
   }
 
-  const userProfile = profile as NonNullable<typeof profile>
-  const avatar = userProfile.portraitDataUrl ?? `/assets/chars/${userProfile.character}.png`
+  const userProfile = profile
+  const avatar = userProfile?.portraitDataUrl ?? (userProfile?.character ? `/assets/chars/${userProfile.character}.png` : null)
 
   // When Studio publishes, open the new meme in unified detail
   function handlePublished(id: string) {
@@ -182,26 +184,22 @@ export default function App() {
 
   return (
     <div className="suite-shell">
-      {rankUp && (
-        <RankUpModal
-          from={rankUp.from}
-          to={rankUp.to}
-          direction={rankUp.direction}
-          onClose={() => setRankUp(null)}
-        />
-      )}
+      <BadgeUnlockedToast
+        badges={newBadges}
+        onDismiss={id => setNewBadges(prev => prev.filter(b => b.id !== id))}
+      />
       <nav className="suite-nav">
         <img src="/assets/logo.png" alt="Virgin VS Chad" className="suite-nav-brand" />
         <div className="suite-nav-links">
           {([
-            { id: 'live',       icon: '◉', label: 'LIVE'      },
-            { id: 'memes',      icon: '🖼', label: 'MEMES'     },
-            { id: 'vote',       icon: '🗳', label: 'VOTE'      },
-            { id: 'characters', icon: '⚡', label: 'ROSTER'    },
-            { id: 'prizes',     icon: '🏆', label: 'PRIZES'    },
-            { id: 'studio',     icon: '🖌', label: 'STUDIO'    },
-            { id: 'factory',    icon: '🎭', label: 'FACTORY'   },
-            { id: 'brackets',   icon: '🏆', label: 'BRACKETS'  },
+            { id: 'live',       icon: '◉', label: 'LIVE'       },
+            { id: 'onboarding', icon: '🎯', label: 'PFP'         },
+            { id: 'memes',      icon: '🖼', label: 'MEMES'      },
+            { id: 'vote',       icon: '🗳', label: 'VOTE'       },
+            { id: 'characters', icon: '⚡', label: 'CAST'        },
+            { id: 'brackets',   icon: '🏆', label: 'PRIZES'     },
+            { id: 'studio',     icon: '🖌', label: 'STUDIO'     },
+            { id: 'factory',    icon: '🎭', label: 'FACTORY'    },
           ] as { id: View; icon: string; label: string }[]).map(({ id, icon, label }) => (
             <button
               key={id}
@@ -217,6 +215,15 @@ export default function App() {
             </button>
           ))}
         </div>
+        <a
+          className="suite-nav-website"
+          href="https://virginvschad.vip"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span className="nav-icon">🌐</span>
+          <span>WEBSITE</span>
+        </a>
         <div className="suite-nav-footer">
           <button
             className={`suite-nav-profile-btn ${view === 'profile' ? 'active' : ''}`}
@@ -230,7 +237,7 @@ export default function App() {
             <div className="suite-nav-profile-info">
               <span className="suite-nav-wallet-label">{truncateAddress(address)}</span>
               {playerState && (
-                <RankBadge rank={playerState.current_rank} size="xs" />
+                <span className="suite-nav-xp">⚡ {(playerState.total_xp ?? 0).toLocaleString()} XP</span>
               )}
             </div>
           </button>
@@ -245,6 +252,13 @@ export default function App() {
             item={unifiedDetail}
             address={address}
             onBack={() => setUnifiedDetail(null)}
+            onOpenCharacter={name => { setUnifiedDetail(null); setView('characters'); setCharTarget(name) }}
+            onRemix={id => { setUnifiedDetail(null); setRemixSourceId(id); setView('studio') }}
+            onOpenSourceMeme={id => setUnifiedDetail({
+              key: `studio:${id}`, type: 'studio', sourceId: id,
+              imageUrl: `/handmade/${id}/image`,
+              title: '', meta: '', dateIso: '',
+            })}
           />
         ) : detailMeme ? (
           <MemeDetail
@@ -266,15 +280,16 @@ export default function App() {
         ) : (
           <>
             {view === 'live'       && <Live address={address} />}
-            {view === 'memes'      && <Feed address={address} onOpenItem={setUnifiedDetail} onOpenProfile={w => setProfileTarget(w)} />}
+            {view === 'onboarding' && <div style={{ height: '100%', overflow: 'auto' }}><Quiz address={address} onProfileUpdate={p => setProfile(p)} onComplete={() => setView('live')} /></div>}
+            {view === 'memes'      && <Feed address={address} onOpenItem={setUnifiedDetail} onOpenProfile={w => setProfileTarget(w)} onRemix={id => { setRemixSourceId(id); setView('studio') }} onOpenStudio={() => setView('studio')} onOpenFactory={() => setView('factory')} />}
             {view === 'factory'    && <Memes address={address} onOpenDetail={setDetailMeme} onOpenProfile={(w) => setProfileTarget(w)} />}
             {view === 'vote'       && <Vote address={address} />}
-            {view === 'characters' && <Characters onOpenDetail={setDetailMeme} initialChar={charTarget} address={address} />}
-            {view === 'quiz'       && <Quiz address={address} onProfileUpdate={p => { setProfile(p) }} />}
+            {view === 'characters' && <Characters onOpenDetail={setDetailMeme} onOpenUnifiedItem={setUnifiedDetail} initialChar={charTarget} address={address} />}
+            {view === 'quiz'       && <div style={{ height: '100%', overflow: 'auto' }}><Quiz address={address} onProfileUpdate={p => setProfile(p)} /></div>}
             {view === 'brackets'   && <Brackets address={address} />}
-            {view === 'prizes'     && <div className="placeholder-view"><span>Prizes</span><p>Coming soon.</p></div>}
-            {view === 'studio'     && <MemeStudio address={address} onPublished={handlePublished} />}
-            {view === 'profile'    && <Profile address={address} profile={userProfile} onGoToOracle={() => setView('quiz')} onOpenDetail={setDetailMeme} />}
+            {view === 'studio'     && <MemeStudio address={address} onPublished={id => { setRemixSourceId(null); handlePublished(id) }} remixSourceId={remixSourceId ?? undefined} />}
+            {view === 'profile'    && userProfile && <Profile address={address} profile={userProfile} onGoToOracle={() => setView('onboarding')} onOpenDetail={setDetailMeme} />}
+            {view === 'profile'    && !userProfile && <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}><p style={{ color: '#888', fontSize: 14 }}>No archetype yet. Complete the onboarding to get started.</p><button className="sh-new-btn" onClick={() => setView('onboarding')}>Go to Onboarding</button></div>}
           </>
         )}
       </main>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchStudioMeme, type StudioMeme } from '../api/studio'
+import { fetchStudioMeme, studioMemeImageUrl, type StudioMeme } from '../api/studio'
 import { fetchMetadata, type JobMetadata } from '../api/memes'
 import { truncateAddress } from '../wallet'
 import { CommentSection } from '../components/CommentSection'
@@ -45,26 +45,33 @@ function CreatorRow({ wallet }: { wallet: string }) {
 
 // ── Character chips ───────────────────────────────────────────────────────────
 
-function CharGrid({ chars }: { chars: string[] }) {
+function CharGrid({ chars, onOpenCharacter }: { chars: string[]; onOpenCharacter?: (name: string) => void }) {
   if (!chars.length) return null
   return (
     <div className="smd-section">
       <div className="smd-section-label">Characters</div>
       <div className="smd-char-grid">
-        {chars.map((c, i) => (
-          <div key={i} className="smd-char-card">
-            <img
-              className="smd-char-thumb"
-              src={`/assets/chars/${c}.png`}
-              alt={c}
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-            />
-            <div className="smd-char-info">
-              <span className="smd-trait-type">Character</span>
-              <span className="smd-char-name">{c.replace(/_/g, ' ')}</span>
+        {chars.map((c, i) => {
+          const displayName = c.replace(/_/g, ' ')
+          return (
+            <div
+              key={i}
+              className={`smd-char-card${onOpenCharacter ? ' smd-char-card--clickable' : ''}`}
+              onClick={() => onOpenCharacter?.(displayName)}
+            >
+              <img
+                className="smd-char-thumb"
+                src={`/assets/chars/${c}.png`}
+                alt={displayName}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+              />
+              <div className="smd-char-info">
+                <span className="smd-trait-type">Character</span>
+                <span className="smd-char-name">{displayName}</span>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -106,9 +113,12 @@ interface Props {
   item: UnifiedMemeItem
   address: string | null
   onBack: () => void
+  onOpenCharacter?: (name: string) => void
+  onRemix?: (sourceId: string) => void
+  onOpenSourceMeme?: (sourceId: string) => void
 }
 
-export function UnifiedMemeDetail({ item, address, onBack }: Props) {
+export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRemix, onOpenSourceMeme }: Props) {
   const [studioMeta,  setStudioMeta]  = useState<StudioMeme | null>(null)
   const [factoryMeta, setFactoryMeta] = useState<JobMetadata | null>(null)
   const [imgLoaded,   setImgLoaded]   = useState(false)
@@ -203,6 +213,33 @@ export function UnifiedMemeDetail({ item, address, onBack }: Props) {
 
           {wallet && <CreatorRow wallet={wallet} />}
 
+          {/* Remix attribution — shows original meme thumbnail + ID */}
+          {studioMeta?.remixed_from && (
+            <div
+              className="smd-remix-of"
+              onClick={() => onOpenSourceMeme?.(studioMeta.remixed_from!)}
+              title="View original meme"
+            >
+              <img
+                className="smd-remix-of-thumb"
+                src={studioMemeImageUrl(studioMeta.remixed_from)}
+                alt="Original"
+              />
+              <div className="smd-remix-of-info">
+                <span className="smd-remix-of-label">🎨 Remix of</span>
+                <span className="smd-remix-of-id">#{studioMeta.remixed_from.slice(0, 8).toUpperCase()}</span>
+              </div>
+              <span className="smd-remix-of-arrow">→</span>
+            </div>
+          )}
+
+          {/* Remix button — only shown when this meme has its own draft saved */}
+          {(studioMeta?.has_draft || item.has_draft) && onRemix && (
+            <button className="smd-remix-btn" onClick={() => onRemix(item.sourceId)}>
+              🎨 Remix in Studio
+            </button>
+          )}
+
           {/* Reddit topic */}
           {item.redditTopic && (
             <div className="smd-reddit-topic">{item.redditTopic}</div>
@@ -211,7 +248,7 @@ export function UnifiedMemeDetail({ item, address, onBack }: Props) {
           {chars.length > 0 && (
             <>
               <div className="smd-divider" />
-              <CharGrid chars={chars} />
+              <CharGrid chars={chars} onOpenCharacter={onOpenCharacter} />
             </>
           )}
 

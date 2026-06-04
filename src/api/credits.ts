@@ -49,7 +49,12 @@ export async function deductCredits(
     const err = await res.json().catch(() => ({}))
     throw Object.assign(new Error(err.detail ?? 'Credit deduction failed'), { status: res.status, ...err })
   }
-  return res.json()
+  const data = await res.json()
+  if (data.new_badges?.length) {
+    const { dispatchBadges } = await import('./player')
+    dispatchBadges(data.new_badges)
+  }
+  return data
 }
 
 export async function refundCredits(wallet: string, action: CreditAction): Promise<void> {
@@ -76,7 +81,12 @@ export async function verifyPurchase(
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail ?? 'Purchase verification failed')
   }
-  return res.json()
+  const data = await res.json()
+  if (data.new_badges?.length) {
+    const { dispatchBadges } = await import('./player')
+    dispatchBadges(data.new_badges)
+  }
+  return data
 }
 
 export async function issueMemeToken(wallet: string): Promise<MemeToken & { credits_deducted: number }> {

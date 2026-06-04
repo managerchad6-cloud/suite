@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CHARACTERS, type CharData } from '../data/characterLore'
-import { editCharacter, inActionCharacter, reskinCharacterInScene } from '../api/pfp'
+import { editCharacter, editLayer, inActionCharacter, reskinCharacterInScene } from '../api/pfp'
 import { publishHandmade, saveDraft, deleteDraftById, type DraftPayload } from '../api/memes'
+import { fetchRemixDraft } from '../api/studio'
+import { saveSkin, fetchCharSkins, skinImageUrl, type SkinRecord } from '../api/skins'
 import { signAction, truncateAddress } from '../wallet'
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from '../lib/studioDb'
 import { StudioHome } from './StudioHome'
@@ -13,7 +16,7 @@ import '../studio.css'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tool       = 'brush' | 'eraser' | 'fill' | 'eyedropper' | 'grab' | 'text' | 'line' | 'polygon' | 'crop' | 'wand' | 'lasso' | 'marquee'
+type Tool       = 'brush' | 'eraser' | 'fill' | 'eyedropper' | 'grab' | 'text' | 'line' | 'polygon' | 'crop' | 'wand' | 'lasso' | 'marquee' | 'flip'
 type BrushShape = 'circle' | 'square' | 'soft'
 type GrabHandle = 'move' | 'tl' | 'tr' | 'br' | 'bl' | 'n' | 's' | 'e' | 'w' | 'rotate'
 type Mode       = 'art' | 'text'
@@ -58,6 +61,7 @@ interface TextMeta {
   textAlign?: TextAlign
   subtype?: 'title' | 'label'
   linkedCharId?: string
+  bgColor?: string
 }
 
 interface TextInput {
@@ -72,6 +76,12 @@ interface TextInput {
   subtype?: 'title' | 'label'
   editingLayerId?: string
   linkedCharId?: string
+  autoCommitText?: string                    // magic label: skip input overlay, commit directly
+}
+
+interface MagicLabelSet {
+  labels: string[]
+  used: number
 }
 
 interface TextDrag { x: number; y: number; x2: number; y2: number }
@@ -79,6 +89,7 @@ interface TextDrag { x: number; y: number; x2: number; y2: number }
 const IDENTITY_TF: LayerTransform = { tx: 0, ty: 0, scaleX: 1, scaleY: 1, rotation: 0 }
 const DEFAULT_W = 1200
 const DEFAULT_H = 800
+const VVC_API_KEY_TEXT = ''
 const DROP_SIZE  = 400
 
 const TEXT_FONTS = [
@@ -332,6 +343,19 @@ function renderTextLayer(ctx: CanvasRenderingContext2D, meta: TextMeta) {
   const lines = meta.w ? wrapText(ctx, meta.text, meta.w) : [meta.text]
   const align = meta.textAlign ?? 'left'
   const maxW  = meta.w ?? 0
+  const pad   = meta.fontSize * 0.15
+
+  if (meta.bgColor) {
+    ctx.fillStyle = meta.bgColor
+    lines.forEach((line, i) => {
+      const lw = ctx.measureText(line).width
+      const xAnchor = align === 'center' ? meta.x + maxW / 2 - lw / 2
+                    : align === 'right'  ? meta.x + maxW - lw
+                    : meta.x
+      ctx.fillRect(xAnchor - pad, meta.y + i * lineH - pad, lw + pad * 2, lineH + pad * 2)
+    })
+    ctx.fillStyle = meta.color
+  }
 
   function drawLine(line: string, y: number, isLast: boolean) {
     if (align === 'justify' && meta.w && !isLast) {
@@ -454,7 +478,7 @@ function StudioJoysticks({ onZoomDelta, onPanDelta }: { onZoomDelta: (d: number)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MemeStudio({ address, onPublished }: { address: string; onPublished?: (id: string) => void }) {
+export function MemeStudio({ address, onPublished, remixSourceId }: { address: string; onPublished?: (id: string) => void; remixSourceId?: string }) {
   const displayRef = useRef<HTMLCanvasElement>(null)
   const offscreen  = useRef<Record<string, HTMLCanvasElement>>({})
   const maskCanvas = useRef<Record<string, HTMLCanvasElement>>({})
@@ -585,6 +609,9 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   const [fontFamily,     setFontFamily]     = useState('Impact')
   const [textInput,      setTextInput]      = useState<TextInput | null>(null)
   const [textDragPreview, setTextDragPreview] = useState<TextDrag | null>(null)
+  const [magicLabelSets,       setMagicLabelSets]       = useState<Record<string, MagicLabelSet>>({})
+  const [magicLabelGenerating, setMagicLabelGenerating] = useState<Set<string>>(new Set())
+  const [magicLabelPicker, setMagicLabelPicker] = useState<{ cx: number; cy: number; canvasX: number; canvasY: number; charId: string; labels: string[] } | null>(null)
   const fontSizeRef      = useRef(72)
   const fontFamilyRef    = useRef('Impact')
   // Default style for newly created titles (persists across creations)
@@ -592,21 +619,26 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   const [titleDefFontSize,   setTitleDefFontSize]   = useState(56)
   const [titleDefColor,      setTitleDefColor]      = useState('#000000')
   const [titleDefTextAlign,  setTitleDefTextAlign]  = useState<TextAlign>('left')
+  const [titleDefBgColor,    setTitleDefBgColor]    = useState('')
   const titleDefFontFamilyRef = useRef('Impact')
   const titleDefFontSizeRef   = useRef(56)
   const titleDefColorRef      = useRef('#000000')
   const titleDefTextAlignRef  = useRef<TextAlign>('left')
+  const titleDefBgColorRef    = useRef('')
   // Default style for newly created labels (persists across creations)
   const [labelDefFontFamily, setLabelDefFontFamily] = useState('Arial')
   const [labelDefFontSize,   setLabelDefFontSize]   = useState(22)
   const [labelDefColor,      setLabelDefColor]      = useState('#000000')
   const [labelDefTextAlign,  setLabelDefTextAlign]  = useState<TextAlign>('left')
+  const [labelDefBgColor,    setLabelDefBgColor]    = useState('')
   const labelDefFontFamilyRef = useRef('Arial')
   const labelDefFontSizeRef   = useRef(22)
   const labelDefColorRef      = useRef('#000000')
   const labelDefTextAlignRef  = useRef<TextAlign>('left')
+  const labelDefBgColorRef    = useRef('')
   // Active text alignment
-  const [textAlign, setTextAlign] = useState<TextAlign>('left')
+  const [textAlign,    setTextAlign]    = useState<TextAlign>('left')
+  const [textBgColor,  setTextBgColor]  = useState('')
   const textAlignRef = useRef<TextAlign>('left')
   const textInputRef     = useRef<HTMLInputElement>(null)
   const textDragStartRef = useRef<{ startX: number; startY: number; startClientX: number; startClientY: number } | null>(null)
@@ -739,9 +771,23 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   const zoomRef = useRef(1)
   useEffect(() => { zoomRef.current = zoom }, [zoom])
 
+  // Re-render on scroll so getBoundingClientRect() stays fresh for action-bar positioning
+  useEffect(() => {
+    const el = scrollRef.current; if (!el) return
+    let raf = 0
+    const onScroll = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => setScrollTick(t => t + 1))
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => { el.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
+  }, [])
+
   const [spaceDown, setSpaceDown] = useState(false)
   const spaceDownRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Tick incremented on every scroll frame so action-bar position recomputes
+  const [scrollTick, setScrollTick] = useState(0)
   const pendingScrollAdj = useRef<{ pixelX: number; pixelY: number; cursorX: number; cursorY: number } | null>(null)
 
   // Inline re-skin / edit state
@@ -771,7 +817,8 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   }
   const [editPrompt,    setEditPrompt]    = useState('')
   const editPromptRef = useRef('')
-  const [charAction,      setCharAction]      = useState<null | 'reskin' | 'edit' | 'ai-edit' | 'in-action'>(null)
+  const [charAction,      setCharAction]      = useState<null | 'reskin' | 'edit' | 'ai-edit' | 'in-action' | 'skins'>(null)
+  useEffect(() => { charActionRef.current = charAction }, [charAction])
   const [artAiPrompt,     setArtAiPrompt]     = useState('')
   const artAiPromptRef = useRef('')
   const [inActionPrompt,      setInActionPrompt]      = useState('')
@@ -797,6 +844,8 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   // Hover preview state for in-action result picker
   const [hoveredInActionUrl, setHoveredInActionUrl] = useState<string | null>(null)
   const hoverPreSnapshotRef = useRef<HTMLCanvasElement | null>(null)
+  // Level tooltip (cursor-following gif)
+  const [levelTooltip, setLevelTooltip] = useState<{ gif: string; desc: string; x: number; y: number } | null>(null)
 
   // Per-layer: previous accepted images (max 2) for going back
   const [inActionPrevImages, setInActionPrevImages] = useState<Record<string, string[]>>({})
@@ -824,6 +873,9 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
   // Draft state
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
+  const currentDraftIdRef = useRef<string | null>(null)
+  // Keep ref in sync so autosave closures always read the latest ID
+  useEffect(() => { currentDraftIdRef.current = currentDraftId }, [currentDraftId])
   const [savingDraft, setSavingDraft] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [vvcMenuOpen, setVvcMenuOpen] = useState(false)
@@ -841,6 +893,60 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   const [publishing,      setPublishing]      = useState(false)
   const [publishMsg,      setPublishMsg]      = useState<{ ok: boolean; text: string } | null>(null)
   const [publishedMemeId, setPublishedMemeId] = useState<string | null>(null)
+  // Remix state
+  const [remixChanged,    setRemixChanged]    = useState(false)
+  const remixChangedRef = useRef(false)
+
+  // Skin databank state
+  const [skins,        setSkins]        = useState<SkinRecord[]>([])
+  const [skinsLoading, setSkinsLoading] = useState(false)
+  const [skinsHasMore, setSkinsHasMore] = useState(false)
+  const [skinsOffset,  setSkinsOffset]  = useState(0)
+  const [skinSearch,   setSkinSearch]   = useState('')
+  const skinSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const charActionRef   = useRef<string | null>(null)
+
+  function markRemixChanged() {
+    if (remixSourceId && !remixChangedRef.current) {
+      remixChangedRef.current = true
+      setRemixChanged(true)
+    }
+  }
+
+  function saveSkinToDatabank(blobUrl: string, charKey: string, charName: string, prompt: string, skinType: SkinRecord['skin_type']) {
+    void (async () => {
+      try {
+        console.log('[skin] saving', { charKey, skinType, prompt, wallet: address || 'anonymous' })
+        const blob = await fetch(blobUrl).then(r => r.blob())
+        console.log('[skin] blob ok, size:', blob.size, 'type:', blob.type)
+        const dataUrl: string = await new Promise(res => {
+          const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(blob)
+        })
+        console.log('[skin] dataUrl length:', dataUrl.length, 'prefix:', dataUrl.slice(0, 30))
+        const id = await saveSkin({ wallet: address || 'anonymous', char_key: charKey, char_name: charName, prompt, skin_type: skinType, imageDataUrl: dataUrl })
+        console.log('[skin] server returned id:', id)
+        if (id && charActionRef.current === 'skins') {
+          const currentMeta = charLayersRef.current[activeIdRef.current]
+          if (currentMeta?.charKey === charKey) {
+            const newSkin: SkinRecord = { id, wallet: address || 'anonymous', char_key: charKey, char_name: charName, prompt, skin_type: skinType, created_at: new Date().toISOString() }
+            setSkins(prev => [newSkin, ...prev])
+          }
+        }
+      } catch (e) { console.warn('[skin databank]', e) }
+    })()
+  }
+
+  async function loadSkins(charKey: string, search: string, offset: number) {
+    setSkinsLoading(true)
+    try {
+      const data = await fetchCharSkins(charKey, search, offset, 40)
+      setSkins(prev => offset === 0 ? data.items : [...prev, ...data.items])
+      setSkinsHasMore(data.has_more)
+      setSkinsOffset(offset + data.items.length)
+    } finally {
+      setSkinsLoading(false)
+    }
+  }
 
   // ─── Init ──────────────────────────────────────────────────────────────────
 
@@ -863,12 +969,38 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   // ─── Auto-restore from IndexedDB on mount ──────────────────────────────────
   useEffect(() => {
     if (!address) return
+    // Remix mode: load source meme draft instead of personal session
+    if (remixSourceId) {
+      fetchRemixDraft(remixSourceId).then(data => {
+        if (data?.payload) {
+          void handleLoadDraft(data.payload as DraftPayload)
+          setStudioView('editor')
+          setCurrentDraftId(null)  // fresh — not the original draft
+          currentDraftIdRef.current = null
+          remixChangedRef.current = false
+          setRemixChanged(false)
+        }
+      }).catch(() => {})
+      return
+    }
     void claimSignupBonus(address)
     loadSession(address).then(snapshot => {
       if (snapshot) void handleLoadDraft(snapshot)
     }).catch(() => { /* no stored session */ })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address])
+  }, [address, remixSourceId])
+
+  // Load skins when Skins panel opens
+  useEffect(() => {
+    if (charAction !== 'skins') return
+    const meta = charLayersRef.current[activeId]
+    if (!meta) return
+    setSkins([])
+    setSkinsOffset(0)
+    setSkinSearch('')
+    void loadSkins(meta.charKey, '', 0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [charAction, activeId])
 
   // ─── Marching ants animation ────────────────────────────────────────────────
   useEffect(() => {
@@ -1345,6 +1477,78 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [textInput?.screenW, textInput?.value])
 
+  // Auto-commit magic label text without user typing
+  useEffect(() => {
+    if (textInput?.autoCommitText !== undefined) {
+      // Sync value into ref then commit on next tick so canvas state is ready
+      const t = setTimeout(() => commitText(), 0)
+      return () => clearTimeout(t)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [textInput?.autoCommitText])
+
+  // ─── Magic Labels ────────────────────────────────────────────────────────────
+
+  async function generateMagicLabels(charKey: string, title: string): Promise<string[]> {
+    const lore: CharData | undefined = CHARACTERS.find(c => c.key === charKey)
+    const charName = lore?.name ?? charKey
+    const prompt = `You are writing annotation labels for a "Virgin vs Chad" style internet meme.
+
+Character: ${charName}
+Archetype: ${lore?.tagline ?? ''}
+Description: ${lore?.lore ?? ''}
+Traits: ${lore?.traits?.join(', ') ?? ''}
+
+This character is shown as/doing: "${title}"
+
+Generate exactly 12 short, punchy meme labels that would appear as handwritten annotations pointing at details of this character in this specific scenario. Each label should be funny, observational, and specific to this character + situation combo.
+
+Mix of lengths:
+- 5 labels: very short (2–4 words)
+- 5 labels: medium (5–8 words)
+- 2 labels: longer (9–14 words)
+
+Return ONLY a valid JSON array of exactly 12 strings. No keys, no explanation, no markdown.
+Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
+
+    const key = (localStorage.getItem('vvc_gemini_key') ?? null) ?? VVC_API_KEY_TEXT
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.95 } }),
+      }
+    )
+    if (!res.ok) throw new Error(`Gemini error ${res.status}`)
+    const json = await res.json()
+    const raw = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]'
+    const cleaned = raw.replace(/```json|```/g, '').trim()
+    const arr = JSON.parse(cleaned) as string[]
+    if (!Array.isArray(arr) || arr.length === 0) throw new Error('Invalid response')
+    return arr.slice(0, 12)
+  }
+
+  function triggerMagicLabels(charId: string, charKey: string, title: string) {
+    // Don't re-generate if already in progress for this exact title
+    if (magicLabelGenerating.has(charId)) return
+    setMagicLabelGenerating(prev => new Set([...prev, charId]))
+    // Reset any previous set so the button shows loading state
+    setMagicLabelSets(prev => { const n = { ...prev }; delete n[charId]; return n })
+    generateMagicLabels(charKey, title)
+      .then(labels => setMagicLabelSets(prev => ({ ...prev, [charId]: { labels, used: 0 } })))
+      .catch(() => {/* silent — button just won't appear */})
+      .finally(() => setMagicLabelGenerating(prev => { const n = new Set(prev); n.delete(charId); return n }))
+  }
+
+  function handleMagicLabelDragStart(e: React.DragEvent, charId: string) {
+    const set = magicLabelSets[charId]
+    if (!set || set.used >= set.labels.length) return
+    const remaining = set.labels.slice(set.used)
+    e.dataTransfer.setData('application/vvc-magic-label', JSON.stringify({ labels: remaining, linkedCharId: charId }))
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
   // ─── Text tool ─────────────────────────────────────────────────────────────
 
   function openTextEdit(layerId: string) {
@@ -1354,6 +1558,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     setColor(meta.color);           colorRef.current      = meta.color
     const ta = meta.textAlign ?? 'left'
     setTextAlign(ta);               textAlignRef.current  = ta
+    setTextBgColor(meta.bgColor ?? '')
     setActiveId(layerId);           activeIdRef.current   = layerId
     editingTextLayerRef.current = layerId
     composite() // hide text while the overlay is open
@@ -1477,6 +1682,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
   function commitText() {
     if (!textInput) return
+    markRemixChanged()
     const text   = textInput.value.trim()
     const editId = textInput.editingLayerId
     editingTextLayerRef.current = null
@@ -1505,6 +1711,8 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       activeIdRef.current = targetId
     }
 
+    const _sub = textInput.subtype ?? textLayersRef.current[targetId ?? '']?.subtype
+    const _defBg = _sub === 'title' ? titleDefBgColorRef.current : _sub === 'label' ? labelDefBgColorRef.current : textBgColor
     const meta: TextMeta = {
       text, x: textInput.x, y: textInput.y,
       fontFamily: fontFamilyRef.current,
@@ -1512,8 +1720,9 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       color:      colorRef.current,
       w: textInput.w,
       textAlign: textAlignRef.current,
-      subtype: textInput.subtype ?? textLayersRef.current[targetId ?? '']?.subtype,
+      subtype: _sub,
       linkedCharId: textInput.linkedCharId ?? textLayersRef.current[targetId ?? '']?.linkedCharId,
+      bgColor: _defBg || undefined,
     }
     setTextLayers(prev => ({ ...prev, [targetId]: meta }))
     textLayersRef.current = { ...textLayersRef.current, [targetId]: meta }
@@ -1526,6 +1735,12 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       setActiveId(meta.linkedCharId)
       activeIdRef.current = meta.linkedCharId
     }
+
+    // Auto-generate magic labels when a title is committed for a character
+    if (meta.subtype === 'title' && meta.linkedCharId && text) {
+      const charMeta = charLayersRef.current[meta.linkedCharId]
+      if (charMeta) triggerMagicLabels(meta.linkedCharId, charMeta.charKey, text)
+    }
   }
 
   // Sync toolbar controls to a text layer's stored meta (called on selection)
@@ -1536,10 +1751,11 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     setColor(meta.color);           colorRef.current      = meta.color
     const ta = meta.textAlign ?? 'left'
     setTextAlign(ta);               textAlignRef.current  = ta
+    setTextBgColor(meta.bgColor ?? '')
   }
 
   // Live-update a text layer's style from the toolbar without opening the edit overlay
-  function updateTextStyle(patch: Partial<Pick<TextMeta, 'fontFamily' | 'fontSize' | 'color' | 'textAlign'>>) {
+  function updateTextStyle(patch: Partial<Pick<TextMeta, 'fontFamily' | 'fontSize' | 'color' | 'textAlign' | 'bgColor'>>) {
     const id = activeIdRef.current
     const meta = textLayersRef.current[id]; if (!meta) return
     saveStructure()
@@ -1552,12 +1768,13 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     const isTitleOrLabel = meta.subtype === 'title' || meta.subtype === 'label'
     if (isTitleOrLabel) {
       const setter = meta.subtype === 'title'
-        ? { ff: setTitleDefFontFamily, ffr: titleDefFontFamilyRef, fs: setTitleDefFontSize, fsr: titleDefFontSizeRef, fc: setTitleDefColor, fcr: titleDefColorRef, fa: setTitleDefTextAlign, far: titleDefTextAlignRef }
-        : { ff: setLabelDefFontFamily, ffr: labelDefFontFamilyRef, fs: setLabelDefFontSize, fsr: labelDefFontSizeRef, fc: setLabelDefColor, fcr: labelDefColorRef, fa: setLabelDefTextAlign, far: labelDefTextAlignRef }
+        ? { ff: setTitleDefFontFamily, ffr: titleDefFontFamilyRef, fs: setTitleDefFontSize, fsr: titleDefFontSizeRef, fc: setTitleDefColor, fcr: titleDefColorRef, fa: setTitleDefTextAlign, far: titleDefTextAlignRef, fb: setTitleDefBgColor, fbr: titleDefBgColorRef }
+        : { ff: setLabelDefFontFamily, ffr: labelDefFontFamilyRef, fs: setLabelDefFontSize, fsr: labelDefFontSizeRef, fc: setLabelDefColor, fcr: labelDefColorRef, fa: setLabelDefTextAlign, far: labelDefTextAlignRef, fb: setLabelDefBgColor, fbr: labelDefBgColorRef }
       if (patch.fontFamily  !== undefined) { setter.ff(patch.fontFamily);  setter.ffr.current = patch.fontFamily }
       if (patch.fontSize    !== undefined) { setter.fs(patch.fontSize);    setter.fsr.current = patch.fontSize }
       if (patch.color       !== undefined) { setter.fc(patch.color);       setter.fcr.current = patch.color }
       if (patch.textAlign   !== undefined) { setter.fa(patch.textAlign);   setter.far.current = patch.textAlign }
+      if (patch.bgColor     !== undefined) { setter.fb(patch.bgColor);     setter.fbr.current = patch.bgColor }
     }
   }
 
@@ -1569,16 +1786,22 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     refreshTextLayer(id, newMeta)
     composite()
     setInlineEditingTextId(null)
+    // Re-generate magic labels when a title is edited
+    if (newMeta.subtype === 'title' && newMeta.linkedCharId && val.trim()) {
+      const charMeta = charLayersRef.current[newMeta.linkedCharId]
+      if (charMeta) triggerMagicLabels(newMeta.linkedCharId, charMeta.charKey, val.trim())
+    }
   }
 
-  function addTextAt(cx: number, cy: number, subtype: 'title' | 'label', linkedCharId?: string) {
+  function addTextAt(cx: number, cy: number, subtype: 'title' | 'label', linkedCharId?: string, prefillText?: string) {
     setGrabMenu(null)
     const ff = subtype === 'title' ? titleDefFontFamilyRef.current : labelDefFontFamilyRef.current
     const fs = subtype === 'title' ? titleDefFontSizeRef.current   : labelDefFontSizeRef.current
     const fc = subtype === 'title' ? titleDefColorRef.current      : labelDefColorRef.current
     const fa = subtype === 'title' ? titleDefTextAlignRef.current  : labelDefTextAlignRef.current
+    const fb = subtype === 'title' ? titleDefBgColorRef.current    : labelDefBgColorRef.current
     fontFamilyRef.current = ff; fontSizeRef.current = fs; colorRef.current = fc; textAlignRef.current = fa
-    setFontFamily(ff); setFontSize(fs); setColor(fc); setTextAlign(fa)
+    setFontFamily(ff); setFontSize(fs); setColor(fc); setTextAlign(fa); setTextBgColor(fb)
     const el = displayRef.current!
     const rect = el.getBoundingClientRect()
     const ratio = rect.width / el.width
@@ -1587,13 +1810,14 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       x: cx, y: cy,
       screenX: rect.left + cx * ratio,
       screenY: rect.top  + cy * ratio,
-      value: '',
+      value: prefillText ?? '',
       w: defaultW,
       screenW: defaultW * ratio,
       screenFontSize: fs * ratio,
       textAlign: fa,
       subtype,
       linkedCharId,
+      ...(prefillText !== undefined ? { autoCommitText: prefillText } : {}),
     })
   }
 
@@ -1726,21 +1950,19 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
     // Smart serialization: skip text layers (reconstructed from textMeta),
     // skip clean char layers (re-drawn from /assets/chars/ on load),
-    // use JPEG for dirty char layers, PNG for everything else.
+    // always PNG — JPEG drops alpha channel, transparent areas go black on reload.
     const canvasData: Record<string, string> = {}
     const dirty = dirtyLayerIdsRef.current
     for (const [id, c] of Object.entries(offscreen.current)) {
       if (textLayersRef.current[id]) continue          // text: skip entirely
       const isChar = !!charLayersRef.current[id]
       if (isChar && !dirty.has(id)) continue           // clean char: skip, re-draw on load
-      canvasData[id] = isChar
-        ? c.toDataURL('image/jpeg', 0.85)              // dirty char: JPEG ~5× smaller
-        : c.toDataURL('image/png')                     // bg/art/poly: lossless PNG
+      canvasData[id] = c.toDataURL('image/png')
     }
 
     const title = `Draft – ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
     const payload: DraftPayload = {
-      id: currentDraftId ?? '',
+      id: currentDraftIdRef.current ?? '',
       wallet: address,
       title,
       thumbnail,
@@ -1759,6 +1981,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     }
 
     const { id } = await saveDraft(payload)
+    currentDraftIdRef.current = id
     setCurrentDraftId(id)
     // Server draft saved — clear the pending IDB session
     if (address) void clearSession(address)
@@ -1866,13 +2089,14 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     composite()
     try {
       const isScene = !!inActionCharSnapshotRef.current[id]
+      const capturedPrompt = reskinPromptRef.current
       if (isScene) {
         // Scene-aware path: reskin the scene + base snapshot in parallel
         const sceneDataUrl = extractCharacterCrop(id)
         const oldSnap = inActionCharSnapshotRef.current[id]
         const [sceneBlobUrl, snapBlobUrl] = await Promise.all([
-          reskinCharacterInScene(sceneDataUrl, meta.charName, reskinPrompt),
-          editCharacter(oldSnap, reskinPrompt),
+          reskinCharacterInScene(sceneDataUrl, meta.charName, capturedPrompt),
+          editCharacter(oldSnap, capturedPrompt),
         ])
         const c = offscreen.current[id]
         if (c) {
@@ -1886,6 +2110,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
           refreshLayer(id)
           composite()
         }
+        saveSkinToDatabank(sceneBlobUrl, meta.charKey, meta.charName, capturedPrompt, 'reskin')
         // Convert blob URL to data URL so the snapshot stays compatible with inActionCharacter
         const snapBlob = await fetch(snapBlobUrl).then(r => r.blob())
         const snapDataUrl = await new Promise<string>((resolve, reject) => {
@@ -1899,7 +2124,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       } else {
         // Base character path: reskin the cropped character
         const imageDataUrl = extractCharacterCrop(id)
-        const blobUrl = await editCharacter(imageDataUrl, reskinPrompt)
+        const blobUrl = await editCharacter(imageDataUrl, capturedPrompt)
         const c = offscreen.current[id]
         if (c) {
           const ctx = c.getContext('2d')!
@@ -1914,6 +2139,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
           markLayerDirty(id)
           refreshLayer(id)
         }
+        saveSkinToDatabank(blobUrl, meta.charKey, meta.charName, capturedPrompt, 'reskin')
         const newSnap = extractCharacterCrop(id)
         if (newSnap) {
           inActionCharSnapshotRef.current[id] = newSnap
@@ -1921,6 +2147,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         }
       }
       setReskinPrompt('')
+      markRemixChanged()
     } catch (err) {
       console.error('Re-skin failed:', err)
     } finally {
@@ -1955,8 +2182,9 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     setLayerLoading(id, true)
     composite()
     try {
+      const capturedPrompt = editPromptRef.current
       const imageDataUrl = extractCharacterCrop(id)
-      const blobUrl = await editCharacter(imageDataUrl, editPrompt)
+      const blobUrl = await editCharacter(imageDataUrl, capturedPrompt)
       const c = offscreen.current[id]
       if (c) {
         const ctx = c.getContext('2d')!
@@ -1971,6 +2199,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         markLayerDirty(id)
         refreshLayer(id)
       }
+      saveSkinToDatabank(blobUrl, meta.charKey, meta.charName, capturedPrompt, 'edit')
       // Update In Action base snapshot to this edited character state
       const newSnap = extractCharacterCrop(id)
       if (newSnap) {
@@ -2045,6 +2274,11 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
   // ─── In Action ─────────────────────────────────────────────────────────────
 
+  async function applySkin(skin: SkinRecord) {
+    await placeInActionResult(skinImageUrl(skin.id), activeId)
+    markRemixChanged()
+  }
+
   async function placeInActionResult(blobUrl: string, id: string) {
     const c = offscreen.current[id]
     if (!c) return
@@ -2062,6 +2296,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
   // Commit a chosen result: saves current canvas to history (max 2), applies new result, clears batch
   async function commitInActionResult(blobUrl: string, id: string) {
+    markRemixChanged()
     const c = offscreen.current[id]
     if (c && bboxesRef.current[id]) {
       const prev = inActionPrevImagesRef.current[id] ?? []
@@ -2103,10 +2338,20 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
   async function runInActionGenerate(charSnap: string, id: string) {
     const count = inActionCount
+    const capturedPrompt = inActionPromptRef.current
+    const capturedLevel  = inActionLevelRef.current
+    const meta = charLayersRef.current[id]
+    const skinType = capturedLevel === 1 ? 'inaction_prop' : capturedLevel === 2 ? 'inaction_context' : 'inaction_scene'
     const promises = Array.from({ length: count }, () =>
-      inActionCharacter(charSnap, inActionPrompt, inActionLevel)
+      inActionCharacter(charSnap, capturedPrompt, capturedLevel)
     )
     const blobUrls = await Promise.all(promises)
+    // Save every generated result to the public databank
+    if (meta) {
+      for (const url of blobUrls) {
+        saveSkinToDatabank(url, meta.charKey, meta.charName, capturedPrompt, skinType as SkinRecord['skin_type'])
+      }
+    }
     if (count === 1) {
       await commitInActionResult(blobUrls[0], id)
     } else {
@@ -2257,7 +2502,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     try {
       const imageDataUrl = layerToImageData(id)
       if (!imageDataUrl) throw new Error('Could not extract layer image')
-      const blobUrl = await editCharacter(imageDataUrl, artAiPrompt)
+      const blobUrl = await editLayer(imageDataUrl, artAiPrompt)
       const c = offscreen.current[id]
 
       // if it was a text layer, convert it to raster first
@@ -2387,6 +2632,27 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     composite()
   }
 
+  function flipLayer(dir: 'h' | 'v') {
+    const id = activeIdRef.current
+    const c = offscreen.current[id]
+    if (!c) return
+    saveStructure()
+    const tmp = makeCanvas(c.width, c.height)
+    const tc = tmp.getContext('2d')!
+    tc.save()
+    if (dir === 'h') { tc.scale(-1, 1);  tc.drawImage(c, -c.width, 0) }
+    else             { tc.scale(1, -1);  tc.drawImage(c, 0, -c.height) }
+    tc.restore()
+    const ctx = c.getContext('2d')!
+    ctx.clearRect(0, 0, c.width, c.height)
+    ctx.drawImage(tmp, 0, 0)
+    markLayerDirty(id)
+    refreshLayer(id)
+    composite()
+    scheduleAutoSave()
+    markRemixChanged()
+  }
+
   function rasterizePolygon(id: string) {
     const meta = polyLayersRef.current[id]; if (!meta) return
     saveStructure()
@@ -2462,7 +2728,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     const t = toolRef.current
 
     // ── Text mode + char active: drag text labels without changing selection ──
-    if (modeRef.current === 'text' && charLayersRef.current[activeIdRef.current]) {
+    if (toolRef.current === 'grab' && charLayersRef.current[activeIdRef.current]) {
       for (const layer of [...layersRef.current].reverse()) {
         if (!layer.visible || !textLayersRef.current[layer.id]) continue
         if (!grabHitTest(x, y, layer.id)) continue
@@ -2895,7 +3161,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         const { x, y } = canvasCoords(e)
         setGrabMenu({ x: e.clientX, y: e.clientY, canvasX: x, canvasY: y })
       }
-    } else if (modeRef.current === 'art') {
+    } else if (toolRef.current !== 'text') {
       setBrushMenu({ x: e.clientX, y: e.clientY })
     }
   }
@@ -2904,7 +3170,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     setCursorPos({ x: e.clientX, y: e.clientY, on: true })
 
     // Text mode + char active: detect which text layer the cursor is over (for glow)
-    if (modeRef.current === 'text' && charLayersRef.current[activeIdRef.current]) {
+    if (toolRef.current === 'grab' && charLayersRef.current[activeIdRef.current]) {
       const { x, y } = canvasCoords(e)
       let newHov: string | null = null
       for (const layer of [...layersRef.current].reverse()) {
@@ -2921,7 +3187,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     }
 
     // Text mode: detect hover over unlinked text labels for the link handle
-    if (modeRef.current === 'text' && !linkDragRef.current && !textInput) {
+    if (toolRef.current === 'grab' && !linkDragRef.current && !textInput) {
       const { x, y } = canvasCoords(e)
       let newHovUnlinked: string | null = null
       for (const layer of [...layersRef.current].reverse()) {
@@ -3053,13 +3319,21 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
   function onDragOver(e: React.DragEvent<HTMLElement>) {
     if (e.dataTransfer.types.includes('application/vvc-char') ||
-        e.dataTransfer.types.includes('application/vvc-text-btn')) {
+        e.dataTransfer.types.includes('application/vvc-text-btn') ||
+        e.dataTransfer.types.includes('application/vvc-magic-label')) {
       e.preventDefault(); e.dataTransfer.dropEffect = 'copy'
     }
   }
 
   function onDrop(e: React.DragEvent<HTMLElement>) {
     e.preventDefault()
+    const magicLabelRaw = e.dataTransfer.getData('application/vvc-magic-label')
+    if (magicLabelRaw) {
+      const { labels, linkedCharId } = JSON.parse(magicLabelRaw) as { labels: string[]; linkedCharId: string }
+      const { x, y } = canvasCoords(e)
+      setMagicLabelPicker({ cx: e.clientX, cy: e.clientY, canvasX: x, canvasY: y, charId: linkedCharId, labels })
+      return
+    }
     const textBtnRaw = e.dataTransfer.getData('application/vvc-text-btn')
     if (textBtnRaw) {
       const { subtype, linkedCharId } = JSON.parse(textBtnRaw) as { subtype: 'title' | 'label'; linkedCharId: string }
@@ -3203,8 +3477,6 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         if ((e.key === 'Delete' || e.key === 'Backspace') && activeIdRef.current !== 'bg') {
           e.preventDefault(); actionsRef.current.deleteLayer(activeIdRef.current); return
         }
-        if (e.key === '1') { actionsRef.current.switchMode('art'); return }
-        if (e.key === '2') { actionsRef.current.switchMode('text'); return }
         const m = modeRef.current
         if (m === 'art') {
           if (e.key === 'b') setTool('brush')
@@ -3239,6 +3511,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   // ─── Layers ────────────────────────────────────────────────────────────────
 
   function addLayer() {
+    markRemixChanged()
     saveStructure()
     const id = `layer_${Date.now()}`
     const c  = makeCanvas(dimsRef.current.w, dimsRef.current.h)
@@ -3249,6 +3522,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
   function deleteLayer(id: string) {
     if (layers.length <= 1) return
+    markRemixChanged()
     saveStructure()
     setLayers(prev => {
       const next = prev.filter(l => l.id !== id)
@@ -3431,13 +3705,11 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       const imgFiles: { name: string; data: Uint8Array }[] = []
       for (const [id, c] of Object.entries(offscreen.current)) {
         await yieldToIdle()
-        const isChar = !!charLayersRef.current[id]
-        const dataUrl = isChar ? c.toDataURL('image/jpeg', 0.92) : c.toDataURL('image/png')
+        const dataUrl = c.toDataURL('image/png')
         if (format === 'embedded') {
           canvasData[id] = dataUrl
         } else {
-          const ext = isChar ? 'jpg' : 'png'
-          const fname = `images/${id}.${ext}`
+          const fname = `images/${id}.png`
           canvasData[id] = fname
           const b64 = dataUrl.split(',')[1]
           const bin = atob(b64)
@@ -3473,6 +3745,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
   async function publishMeme() {
     if (publishing) return
+    if (remixSourceId && !remixChangedRef.current) return  // must make changes before remixing
     setPublishing(true); setPublishMsg(null)
     try {
       const imageDataUrl = flattenCanvas()
@@ -3486,8 +3759,40 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
           text:    m.text,
           charKey: m.linkedCharId ? (charLayersRef.current[m.linkedCharId]?.charKey ?? null) : null,
         }))
+
+      // Build draft payload inline — guaranteed to succeed since it uses in-memory state directly.
+      // Include ALL layer canvases (no smart-skip) so the remix source is pixel-perfect.
+      let draftPayloadInline: unknown = undefined
+      try {
+        const canvasData: Record<string, string> = {}
+        for (const [id, c] of Object.entries(offscreen.current)) {
+          if (textLayersRef.current[id]) continue  // text layers reconstructed from metadata
+          canvasData[id] = c.toDataURL('image/png')
+        }
+        draftPayloadInline = {
+          id: '', wallet: address,
+          title: titles[0] ?? 'Published meme',
+          thumbnail: '', updatedAt: new Date().toISOString(),
+          canvasW: dimsRef.current.w, canvasH: dimsRef.current.h,
+          layers: layersRef.current,
+          transforms: transformsRef.current,
+          bboxes: bboxesRef.current,
+          textLayers: textLayersRef.current,
+          charLayers: charLayersRef.current,
+          polyLayers: polyLayersRef.current,
+          canvasData,
+          inActionSnapshots: { ...inActionCharSnapshotRef.current },
+          inActionHasSnapshot: { ...inActionHasSnapshot },
+        }
+      } catch { /* draft save is best-effort */ }
+
       const signature = await signAction('publish-handmade-meme', address)
-      const result = await publishHandmade({ imageDataUrl, characters, titles, labels, labelLinks, wallet: address, signature })
+      const result = await publishHandmade({
+        imageDataUrl, characters, titles, labels, labelLinks, wallet: address, signature,
+        draftId:           currentDraftIdRef.current ?? undefined,
+        remixedFrom:       remixSourceId ?? undefined,
+        draftPayloadInline,
+      })
       if (currentDraftId) {
         deleteDraftById(currentDraftId, address).catch(() => {})
         setCurrentDraftId(null)
@@ -3518,7 +3823,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     n: 'n-resize', s: 's-resize', e: 'e-resize', w: 'w-resize',
   }
   const canvasCursor = spaceDown ? 'grab'
-    : (mode === 'text' && charLayers[activeId] && hoveredTextId) ? 'grab'
+    : (tool === 'grab' && charLayers[activeId] && hoveredTextId) ? 'grab'
     : tool === 'grab'
     ? (grabHover ? grabCursorMap[grabHover] : 'default')
     : tool === 'polygon' && hoveredVertIdxRef.current >= 0 ? 'grab'
@@ -3542,9 +3847,9 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     return { corners, rhPt, tcx, tcy, mids }
   })()
 
-  // Floating "Add Title / Add Label" buttons — shown in text mode over the active char layer
+  // Floating "Add Title / Add Label" buttons — shown in grab mode over the active char layer
   const charTextBtns = (() => {
-    if (mode !== 'text' || !charLayers[activeId]) return null
+    if (tool !== 'grab' || !charLayers[activeId]) return null
     const bbox = bboxes[activeId]; if (!bbox) return null
     const tf = transforms[activeId] ?? IDENTITY_TF
     const corners = bboxCorners(bbox, tf)
@@ -3553,13 +3858,17 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     const hasTitle = Object.values(textLayers).some(
       t => t.subtype === 'title' && t.linkedCharId === activeId
     )
-    return { x: cx * zoom, y: cy * zoom, hasTitle }
+    const magicSet = magicLabelSets[activeId] ?? null
+    const magicGenerating = magicLabelGenerating.has(activeId)
+    const magicRemaining = magicSet ? magicSet.labels.length - magicSet.used : 0
+    return { x: cx * zoom, y: cy * zoom, hasTitle, magicSet, magicGenerating, magicRemaining,
+      charKey: charLayers[activeId].charKey, charName: charLayers[activeId].charName }
   })()
 
-  // Link handle: right-center of an unlinked text label in text mode
+  // Link handle: right-center of an unlinked text label in grab mode
   const linkHandlePos = (() => {
     const id = hoveredUnlinkedId
-    if (mode !== 'text' || !id || linkDrag || textInput) return null
+    if (tool !== 'grab' || !id || linkDrag || textInput) return null
     const bbox = bboxes[id]; if (!bbox) return null
     const tf = transforms[id] ?? IDENTITY_TF
     const corners = bboxCorners(bbox, tf)  // [tl, tr, br, bl]
@@ -3614,24 +3923,27 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
     { id: 'wand'       as Tool, key: 'W', icon: '✦', label: 'Wand'    },
     { id: 'lasso'      as Tool, key: 'L', icon: '⟳', label: 'Lasso'   },
     { id: 'marquee'    as Tool, key: 'M', icon: '⬜', label: 'Marquee' },
+    { id: 'flip'       as Tool, key: 'F', icon: '⇄',  label: 'Flip'    },
   ]
   const TOOLS_BY_MODE: Record<Mode, typeof ALL_TOOLS> = {
     art:  ALL_TOOLS.filter(t => !['text'].includes(t.id)),
     text: ALL_TOOLS.filter(t => t.id === 'text' || t.id === 'grab'),
   }
+  const ALL_SIDEBAR_TOOLS = ALL_TOOLS // unified: all tools in one mode
   const QUICK_COLORS = [
     '#000000','#1a1a1a','#555555','#aaaaaa','#ffffff',
     '#cc2222','#dd6600','#ccaa00','#226622','#224488',
     '#7722aa','#885533','#ff8888','#ffcc88','#88ccff',
   ]
 
-  const showBrushControls  = mode === 'art' && (tool === 'brush' || tool === 'eraser')
-  const showFillControls   = mode === 'art' && tool === 'fill'
-  const showShapeControls  = mode === 'art' && (tool === 'line' || tool === 'polygon')
-  const showCropControls   = mode === 'art' && tool === 'crop'
-  const showWandControls   = mode === 'art' && (tool === 'wand' || tool === 'lasso' || tool === 'marquee')
-  const showTextControls  = mode === 'text'
+  const showBrushControls  = tool === 'brush' || tool === 'eraser'
+  const showFillControls   = tool === 'fill'
+  const showShapeControls  = tool === 'line' || tool === 'polygon'
+  const showCropControls   = tool === 'crop'
+  const showWandControls   = tool === 'wand' || tool === 'lasso' || tool === 'marquee'
+  const showTextControls   = tool === 'text' || (tool === 'grab' && !!textLayers[activeId])
   const isActiveTextLayer = !!textLayers[activeId]
+  const showFlipControls  = tool === 'flip'
   const activeCharMeta = charLayers[activeId]
   const MODE_BTNS: { id: Mode; icon: string; label: string }[] = [
     { id: 'art',  icon: '✏', label: 'Art'  },
@@ -3657,232 +3969,23 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         <aside className="mstudio-toolbar">
 
           <div className="mst-group">
-            {mode === 'art' ? (<>
-              {/* Grab: full-width primary button */}
-              <button className={`mst-tool mst-tool--grab ${tool === 'grab' ? 'active' : ''}`}
-                onClick={() => { setTool('grab'); toolRef.current = 'grab' }} title="Grab (V)">
-                <span className="mst-tool-icon">✥</span>
-                <span className="mst-tool-label">Grab</span>
-              </button>
-              {/* Other tools: 2-column grid */}
-              <div className="mst-tools-grid">
-                {TOOLS_BY_MODE['art'].filter(t => t.id !== 'grab').map(({ id, key, icon, label }) => (
-                  <button key={id} className={`mst-tool mst-tool--small ${tool === id ? 'active' : ''}`}
-                    onClick={() => { setTool(id); toolRef.current = id }} title={`${label} (${key})`}>
-                    <span className="mst-tool-icon">{icon}</span>
-                    <span className="mst-tool-label">{label}</span>
-                  </button>
-                ))}
-              </div>
-            </>) : (
-              TOOLS_BY_MODE[mode].map(({ id, key, icon, label }) => (
-                <button key={id} className={`mst-tool ${tool === id ? 'active' : ''}`}
+            {/* Grab: full-width primary button */}
+            <button className={`mst-tool mst-tool--grab ${tool === 'grab' ? 'active' : ''}`}
+              onClick={() => { setTool('grab'); toolRef.current = 'grab' }} title="Grab (V)">
+              <span className="mst-tool-icon">✥</span>
+              <span className="mst-tool-label">Grab</span>
+            </button>
+            {/* All other tools: 2-column grid */}
+            <div className="mst-tools-grid">
+              {ALL_SIDEBAR_TOOLS.filter(t => t.id !== 'grab').map(({ id, key, icon, label }) => (
+                <button key={id} className={`mst-tool mst-tool--small ${tool === id ? 'active' : ''}`}
                   onClick={() => { setTool(id); toolRef.current = id }} title={`${label} (${key})`}>
                   <span className="mst-tool-icon">{icon}</span>
                   <span className="mst-tool-label">{label}</span>
                 </button>
-              ))
-            )}
+              ))}
+            </div>
           </div>
-
-          <div className="mst-divider" />
-
-          {/* Art mode: brush controls */}
-          {showBrushControls && (
-            <div className="mst-group">
-              <div className="mst-label">Shape</div>
-              <div className="mst-shapes">
-                {(['circle','square','soft'] as BrushShape[]).map(s => (
-                  <button key={s} className={`mst-shape-btn ${brushShape === s ? 'active' : ''}`}
-                    onClick={() => setBrushShape(s)} title={s}>
-                    {s === 'circle' ? '○' : s === 'square' ? '□' : '◎'}
-                  </button>
-                ))}
-              </div>
-              <div className="mst-label">Size <span className="mst-val">{brushSize}px</span></div>
-              <input type="range" min={0} max={1000} value={Math.round(valueToLogSlider(brushSize, 1, 200) * 1000)}
-                onChange={e => { const v = logSliderToValue(+e.target.value / 1000, 1, 200); setBrushSize(v); brushSizeRef.current = v }} className="mst-slider" />
-              <div className="mst-label">Opacity <span className="mst-val">{paintOpacity}%</span></div>
-              <input type="range" min={1} max={100} value={paintOpacity}
-                onChange={e => setPaintOpacity(+e.target.value)} className="mst-slider" />
-              <div className="mst-label">Smooth <span className="mst-val">{smoothing}</span></div>
-              <input type="range" min={0} max={100} value={smoothing}
-                onChange={e => setSmoothing(+e.target.value)} className="mst-slider" />
-            </div>
-          )}
-
-          {/* Fill tool controls */}
-          {showFillControls && (
-            <div className="mst-group">
-              <div className="mst-label">Tolerance <span className="mst-val">{fillTolerance}</span></div>
-              <input type="range" min={0} max={255} value={fillTolerance}
-                onChange={e => setFillTolerance(+e.target.value)} className="mst-slider" />
-            </div>
-          )}
-
-          {/* Crop tool settings */}
-          {showCropControls && (
-            <div className="mst-group">
-              <div className="mst-label" style={{ lineHeight: 1.5 }}>Drag to select area. Release to crop active layer.</div>
-            </div>
-          )}
-
-          {/* Selection tools (wand / lasso / marquee) */}
-          {showWandControls && (
-            <div className="mst-group">
-              <div className="mst-label">Mode</div>
-              <div className="mst-sel-mode-row">
-                {(['replace','add','subtract'] as const).map(m => (
-                  <button key={m} className={`mst-sel-mode-btn ${selectionMode === m ? 'active' : ''}`}
-                    onClick={() => { setSelectionMode(m); selectionModeRef.current = m }}
-                    title={m === 'replace' ? 'Replace (click)' : m === 'add' ? 'Add (Shift+click)' : 'Subtract (Alt+click)'}>
-                    {m === 'replace' ? '⬜' : m === 'add' ? '⊕' : '⊖'}
-                  </button>
-                ))}
-              </div>
-              {tool === 'wand' && (<>
-                <div className="mst-label" style={{ marginTop: 6 }}>Tolerance <span className="mst-val">{wandTolerance}</span></div>
-                <input type="range" min={0} max={255} value={wandTolerance}
-                  onChange={e => { setWandTolerance(+e.target.value); wandToleranceRef.current = +e.target.value }} className="mst-slider" />
-              </>)}
-              {hasSelection && (<>
-                <div className="mst-wand-actions" style={{ marginTop: 6 }}>
-                  <button className="mst-wand-btn mst-wand-btn--erase" onClick={applyWandErase}>Erase sel.</button>
-                  <button className="mst-wand-btn mst-wand-btn--fill"  onClick={applyWandFill}>Fill sel.</button>
-                </div>
-                <button className="mst-wand-btn mst-wand-btn--clear" onClick={clearSelection}>✕ Deselect (Ctrl+D)</button>
-              </>)}
-            </div>
-          )}
-
-          {/* Text mode: always show font + size controls */}
-          {showTextControls && (
-            <div className="mst-group">
-              <div className="mst-label">Font</div>
-              <div className="mst-font-btns">
-                {TEXT_FONTS.map(f => (
-                  <button key={f.id}
-                    className={`mst-font-btn ${fontFamily === f.id ? 'active' : ''}`}
-                    style={{ fontFamily: f.id }}
-                    onClick={() => { setFontFamily(f.id); fontFamilyRef.current = f.id; updateTextStyle({ fontFamily: f.id }) }}>
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-              <div className="mst-label" style={{ marginTop: 6 }}>Size <span className="mst-val">{fontSize}px</span></div>
-              <input type="range" min={0} max={1000} value={Math.round(valueToLogSlider(fontSize, 12, 300) * 1000)}
-                onChange={e => { const v = logSliderToValue(+e.target.value / 1000, 12, 300); setFontSize(v); fontSizeRef.current = v; updateTextStyle({ fontSize: v }) }}
-                className="mst-slider" />
-              <div className="mst-label" style={{ marginTop: 6 }}>Align</div>
-              <div className="mst-align-btns">
-                {([
-                  { id: 'left'    , label: '≡L' },
-                  { id: 'center'  , label: '≡C' },
-                  { id: 'right'   , label: '≡R' },
-                  { id: 'justify' , label: '≡J' },
-                ] as { id: TextAlign; label: string }[]).map(({ id: a, label }) => (
-                  <button key={a}
-                    className={`mst-align-btn ${textAlign === a ? 'active' : ''}`}
-                    title={a.charAt(0).toUpperCase() + a.slice(1)}
-                    onClick={() => {
-                      setTextAlign(a); textAlignRef.current = a
-                      setTextInput(prev => prev ? { ...prev, textAlign: a } : null)
-                      updateTextStyle({ textAlign: a })
-                    }}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Grab + active polygon layer: editable style */}
-          {tool === 'grab' && !!polyLayers[activeId] && (<>
-            <div className="mst-group">
-              <div className="mst-label">Polygon</div>
-              <div className="mst-shape-toggle-row">
-                <label className="mst-shape-toggle">
-                  <input type="checkbox" checked={polyLayers[activeId].strokeOn}
-                    onChange={e => updatePolyStyle(activeId, { strokeOn: e.target.checked })} />
-                  <span>Stroke</span>
-                </label>
-                {polyLayers[activeId].strokeOn && (
-                  <input type="color" value={polyLayers[activeId].strokeColor}
-                    onChange={e => updatePolyStyle(activeId, { strokeColor: e.target.value })}
-                    className="mst-color-input mst-color-input--mini" />
-                )}
-              </div>
-              {polyLayers[activeId].strokeOn && (<>
-                <div className="mst-label">Width <span className="mst-val">{polyLayers[activeId].strokeWidth}px</span></div>
-                <input type="range" min={1} max={40} value={polyLayers[activeId].strokeWidth}
-                  onChange={e => updatePolyStyle(activeId, { strokeWidth: +e.target.value })} className="mst-slider" />
-              </>)}
-              <div className="mst-shape-toggle-row">
-                <label className="mst-shape-toggle">
-                  <input type="checkbox" checked={polyLayers[activeId].fillOn}
-                    onChange={e => updatePolyStyle(activeId, { fillOn: e.target.checked })} />
-                  <span>Fill</span>
-                </label>
-                {polyLayers[activeId].fillOn && (
-                  <input type="color" value={polyLayers[activeId].fillColor}
-                    onChange={e => updatePolyStyle(activeId, { fillColor: e.target.value })}
-                    className="mst-color-input mst-color-input--mini" />
-                )}
-              </div>
-            </div>
-            <div className="mst-divider" />
-          </>)}
-
-          {/* Shape tool controls */}
-          {showShapeControls && (<>
-            <div className="mst-group">
-              {tool === 'polygon' && (<>
-                <div className="mst-label">Shape</div>
-                <div className="mst-poly-presets">
-                  {POLY_PRESETS.map((p, i) => (
-                    <button key={i} className={`mst-poly-preset ${polyPresetIdx === i ? 'active' : ''}`}
-                      onClick={() => setPolyPresetIdx(i)} title={`${p.sides} sides`}>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </>)}
-
-              <div className="mst-shape-toggle-row">
-                <label className="mst-shape-toggle">
-                  <input type="checkbox" checked={shapeStrokeOn} onChange={e => { setShapeStrokeOn(e.target.checked); shapeStrokeOnRef.current = e.target.checked; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { strokeOn: e.target.checked }) }} />
-                  <span>Stroke</span>
-                </label>
-                {shapeStrokeOn && (<>
-                  <input type="color" value={shapeStrokeColor}
-                    onChange={e => { setShapeStrokeColor(e.target.value); shapeStrokeColorRef.current = e.target.value; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { strokeColor: e.target.value }) }}
-                    className="mst-color-input mst-color-input--mini" />
-                </>)}
-              </div>
-              {shapeStrokeOn && (<>
-                <div className="mst-label">Width <span className="mst-val">{shapeStrokeW}px</span></div>
-                <input type="range" min={1} max={40} value={shapeStrokeW}
-                  onChange={e => { const v = +e.target.value; setShapeStrokeW(v); shapeStrokeWRef.current = v; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { strokeWidth: v }) }} className="mst-slider" />
-              </>)}
-
-              {tool === 'polygon' && (
-                <div className="mst-shape-toggle-row">
-                  <label className="mst-shape-toggle">
-                    <input type="checkbox" checked={shapeFillOn} onChange={e => { setShapeFillOn(e.target.checked); shapeFillOnRef.current = e.target.checked; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { fillOn: e.target.checked }) }} />
-                    <span>Fill</span>
-                  </label>
-                  {shapeFillOn && (
-                    <input type="color" value={shapeFillColor}
-                      onChange={e => { setShapeFillColor(e.target.value); shapeFillColorRef.current = e.target.value; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { fillColor: e.target.value }) }}
-                      className="mst-color-input mst-color-input--mini" />
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="mst-divider" />
-          </>)}
-
-          {(showBrushControls || showTextControls) && <div className="mst-divider" />}
 
           {/* Color */}
           {(
@@ -3936,8 +4039,19 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
           {/* ── Top-right corner actions ── */}
           <div className="mst-corner-actions">
-            <button className="mst-publish-btn" onClick={publishMeme} disabled={publishing}>
-              {publishing ? '⟳ Publishing…' : '⬆ Publish Meme'}
+            {remixSourceId && (
+              <div className="mst-remix-banner">
+                🎨 Remixing a meme
+                {!remixChanged && <span className="mst-remix-hint"> — make at least one change</span>}
+              </div>
+            )}
+            <button
+              className="mst-publish-btn"
+              onClick={publishMeme}
+              disabled={publishing || (!!remixSourceId && !remixChanged)}
+              title={remixSourceId && !remixChanged ? 'Make at least one change to publish your remix' : undefined}
+            >
+              {publishing ? '⟳ Publishing…' : remixSourceId ? '⬆ Publish Remix' : '⬆ Publish Meme'}
             </button>
             <button className="mst-export-btn" onClick={exportCanvas}>↓ Export PNG</button>
             <div className="mst-vvc-wrap">
@@ -3968,16 +4082,6 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
           </div>
 
           {/* Mode switcher — floats at top center of canvas area */}
-          <div className="mst-mode-bar">
-            {MODE_BTNS.map(m => (
-              <button key={m.id} className={`mst-mode-btn ${mode === m.id ? 'active' : ''}`}
-                onClick={() => switchMode(m.id)} title={`${m.label} mode (${MODE_BTNS.indexOf(m) + 1})`}>
-                <span className="mst-mode-icon">{m.icon}</span>
-                <span className="mst-mode-label">{m.label}</span>
-              </button>
-            ))}
-          </div>
-
           <div className="mstudio-scroll" ref={scrollRef}>
             <div className="mstudio-scroll-inner"
               onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => {
@@ -3989,7 +4093,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
             >
               <div className="mstudio-canvas-wrap" style={{ width: canvasW * zoom, height: canvasH * zoom }}
                 onDragOver={e => {
-                  if (modeRef.current === 'text' && e.dataTransfer.types.includes('application/vvc-text-btn')) {
+                  if (toolRef.current === 'grab' && e.dataTransfer.types.includes('application/vvc-text-btn')) {
                     e.preventDefault(); e.dataTransfer.dropEffect = 'copy'
                   }
                 }}
@@ -4226,22 +4330,39 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
                 {charTextBtns && (
                   <div className="mst-char-text-btns"
                     style={{ left: charTextBtns.x, top: charTextBtns.y }}>
-                    {!charTextBtns.hasTitle && (
+                    <div className="mst-char-text-btns-row">
+                      {!charTextBtns.hasTitle && (
+                        <button
+                          className="mst-char-text-btn mst-char-text-btn--title"
+                          draggable
+                          onDragStart={e => handleTextBtnDragStart(e, 'title')}
+                          onClick={() => handleAddTextForChar('title')}
+                          title="Add title (click or drag to place)"
+                        ><span style={{fontSize:14}}>T</span><span>title</span></button>
+                      )}
                       <button
-                        className="mst-char-text-btn mst-char-text-btn--title"
+                        className="mst-char-text-btn mst-char-text-btn--label"
                         draggable
-                        onDragStart={e => handleTextBtnDragStart(e, 'title')}
-                        onClick={() => handleAddTextForChar('title')}
-                        title="Add title (click or drag to place)"
-                      ><span style={{fontSize:14}}>T</span><span>title</span></button>
+                        onDragStart={e => handleTextBtnDragStart(e, 'label')}
+                        onClick={() => handleAddTextForChar('label')}
+                        title="Add label (click or drag to place)"
+                      ><span style={{fontSize:14}}>+</span><span>label</span></button>
+                    </div>
+                    {/* Magic labels — shown while generating (pulsing) or ready (draggable) */}
+                    {(charTextBtns.magicGenerating || (charTextBtns.magicSet && charTextBtns.magicRemaining > 0)) && (
+                      <div className="mst-char-text-btns-magic-row">
+                        <button
+                          className={`mst-char-text-btn mst-char-text-btn--magic${charTextBtns.magicGenerating ? ' mst-char-text-btn--magic-loading' : ''}`}
+                          draggable={!charTextBtns.magicGenerating}
+                          onDragStart={charTextBtns.magicGenerating ? undefined : e => handleMagicLabelDragStart(e, activeId)}
+                          title={charTextBtns.magicGenerating ? 'Generating AI labels…' : `Drag to place AI label (${charTextBtns.magicRemaining} left)`}
+                          style={{ cursor: charTextBtns.magicGenerating ? 'default' : 'grab' }}
+                        >
+                          <span className="mst-magic-star">✦</span>
+                          <span>label</span>
+                        </button>
+                      </div>
                     )}
-                    <button
-                      className="mst-char-text-btn mst-char-text-btn--label"
-                      draggable
-                      onDragStart={e => handleTextBtnDragStart(e, 'label')}
-                      onClick={() => handleAddTextForChar('label')}
-                      title="Add label (click or drag to place)"
-                    ><span style={{fontSize:14}}>+</span><span>label</span></button>
                   </div>
                 )}
               </div>
@@ -4263,6 +4384,208 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
               if (el) { el.scrollLeft += dx; el.scrollTop += dy }
             }}
           />
+
+          {/* ── Right-side tool options panel — same column as publish buttons + joysticks ── */}
+          {(showBrushControls || showFillControls || showCropControls || showWandControls || showTextControls || showShapeControls || showFlipControls || (tool === 'grab' && !!polyLayers[activeId])) && (
+            <aside className="mst-options-panel">
+
+              {showBrushControls && (<>
+                <div className="mst-label">Shape</div>
+                <div className="mst-shapes">
+                  {(['circle','square','soft'] as BrushShape[]).map(s => (
+                    <button key={s} className={`mst-shape-btn ${brushShape === s ? 'active' : ''}`}
+                      onClick={() => setBrushShape(s)} title={s}>
+                      {s === 'circle' ? '○' : s === 'square' ? '□' : '◎'}
+                    </button>
+                  ))}
+                </div>
+                <div className="mst-label" style={{ marginTop: 8 }}>Size <span className="mst-val">{brushSize}px</span></div>
+                <input type="range" min={0} max={1000} value={Math.round(valueToLogSlider(brushSize, 1, 200) * 1000)}
+                  onChange={e => { const v = logSliderToValue(+e.target.value / 1000, 1, 200); setBrushSize(v); brushSizeRef.current = v }} className="mst-slider" />
+                <div className="mst-label" style={{ marginTop: 8 }}>Opacity <span className="mst-val">{paintOpacity}%</span></div>
+                <input type="range" min={1} max={100} value={paintOpacity}
+                  onChange={e => setPaintOpacity(+e.target.value)} className="mst-slider" />
+                <div className="mst-label" style={{ marginTop: 8 }}>Smooth <span className="mst-val">{smoothing}</span></div>
+                <input type="range" min={0} max={100} value={smoothing}
+                  onChange={e => setSmoothing(+e.target.value)} className="mst-slider" />
+              </>)}
+
+              {showFillControls && (<>
+                <div className="mst-label">Tolerance <span className="mst-val">{fillTolerance}</span></div>
+                <input type="range" min={0} max={255} value={fillTolerance}
+                  onChange={e => setFillTolerance(+e.target.value)} className="mst-slider" />
+              </>)}
+
+              {showCropControls && (
+                <div className="mst-label" style={{ lineHeight: 1.5 }}>Drag to select area. Release to crop.</div>
+              )}
+
+              {showWandControls && (<>
+                <div className="mst-label">Mode</div>
+                <div className="mst-sel-mode-row">
+                  {(['replace','add','subtract'] as const).map(m => (
+                    <button key={m} className={`mst-sel-mode-btn ${selectionMode === m ? 'active' : ''}`}
+                      onClick={() => { setSelectionMode(m); selectionModeRef.current = m }}
+                      title={m === 'replace' ? 'Replace' : m === 'add' ? 'Add (Shift)' : 'Subtract (Alt)'}>
+                      {m === 'replace' ? '⬜' : m === 'add' ? '⊕' : '⊖'}
+                    </button>
+                  ))}
+                </div>
+                {tool === 'wand' && (<>
+                  <div className="mst-label" style={{ marginTop: 8 }}>Tolerance <span className="mst-val">{wandTolerance}</span></div>
+                  <input type="range" min={0} max={255} value={wandTolerance}
+                    onChange={e => { setWandTolerance(+e.target.value); wandToleranceRef.current = +e.target.value }} className="mst-slider" />
+                </>)}
+                {hasSelection && (<>
+                  <div className="mst-wand-actions" style={{ marginTop: 8 }}>
+                    <button className="mst-wand-btn mst-wand-btn--erase" onClick={applyWandErase}>Erase sel.</button>
+                    <button className="mst-wand-btn mst-wand-btn--fill"  onClick={applyWandFill}>Fill sel.</button>
+                  </div>
+                  <button className="mst-wand-btn mst-wand-btn--clear" style={{ marginTop: 4 }} onClick={clearSelection}>✕ Deselect</button>
+                </>)}
+              </>)}
+
+              {showFlipControls && (<>
+                <div className="mst-label">Flip active layer</div>
+                <div className="mst-flip-btns">
+                  <button className="mst-flip-btn" onClick={() => flipLayer('h')}>⇄ Horizontal</button>
+                  <button className="mst-flip-btn" onClick={() => flipLayer('v')}>⇅ Vertical</button>
+                </div>
+              </>)}
+
+              {showTextControls && (<>
+                <div className="mst-label">Font</div>
+                <div className="mst-font-btns">
+                  {TEXT_FONTS.map(f => (
+                    <button key={f.id}
+                      className={`mst-font-btn ${fontFamily === f.id ? 'active' : ''}`}
+                      style={{ fontFamily: f.id }}
+                      onClick={() => { setFontFamily(f.id); fontFamilyRef.current = f.id; updateTextStyle({ fontFamily: f.id }) }}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mst-label" style={{ marginTop: 8 }}>Size <span className="mst-val">{fontSize}px</span></div>
+                <input type="range" min={0} max={1000} value={Math.round(valueToLogSlider(fontSize, 12, 300) * 1000)}
+                  onChange={e => { const v = logSliderToValue(+e.target.value / 1000, 12, 300); setFontSize(v); fontSizeRef.current = v; updateTextStyle({ fontSize: v }) }}
+                  className="mst-slider" />
+                <div className="mst-label" style={{ marginTop: 8 }}>Align</div>
+                <div className="mst-align-btns">
+                  {([
+                    { id: 'left'   , label: '≡L' },
+                    { id: 'center' , label: '≡C' },
+                    { id: 'right'  , label: '≡R' },
+                    { id: 'justify', label: '≡J' },
+                  ] as { id: TextAlign; label: string }[]).map(({ id: a, label }) => (
+                    <button key={a} className={`mst-align-btn ${textAlign === a ? 'active' : ''}`}
+                      title={a.charAt(0).toUpperCase() + a.slice(1)}
+                      onClick={() => {
+                        setTextAlign(a); textAlignRef.current = a
+                        setTextInput(prev => prev ? { ...prev, textAlign: a } : null)
+                        updateTextStyle({ textAlign: a })
+                      }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mst-label" style={{ marginTop: 8 }}>Highlight</div>
+                <div className="mst-shape-toggle-row">
+                  <label className="mst-shape-toggle">
+                    <input type="checkbox"
+                      checked={!!textBgColor}
+                      onChange={e => {
+                        const v = e.target.checked ? '#ffff00' : ''
+                        setTextBgColor(v)
+                        updateTextStyle({ bgColor: v })
+                      }} />
+                    <span>BG color</span>
+                  </label>
+                  {textBgColor && (
+                    <input type="color" value={textBgColor}
+                      onChange={e => { setTextBgColor(e.target.value); updateTextStyle({ bgColor: e.target.value }) }}
+                      className="mst-color-input mst-color-input--mini" />
+                  )}
+                </div>
+              </>)}
+
+              {tool === 'grab' && !!polyLayers[activeId] && (<>
+                <div className="mst-label">Polygon</div>
+                <div className="mst-shape-toggle-row">
+                  <label className="mst-shape-toggle">
+                    <input type="checkbox" checked={polyLayers[activeId].strokeOn}
+                      onChange={e => updatePolyStyle(activeId, { strokeOn: e.target.checked })} />
+                    <span>Stroke</span>
+                  </label>
+                  {polyLayers[activeId].strokeOn && (
+                    <input type="color" value={polyLayers[activeId].strokeColor}
+                      onChange={e => updatePolyStyle(activeId, { strokeColor: e.target.value })}
+                      className="mst-color-input mst-color-input--mini" />
+                  )}
+                </div>
+                {polyLayers[activeId].strokeOn && (<>
+                  <div className="mst-label">Width <span className="mst-val">{polyLayers[activeId].strokeWidth}px</span></div>
+                  <input type="range" min={1} max={40} value={polyLayers[activeId].strokeWidth}
+                    onChange={e => updatePolyStyle(activeId, { strokeWidth: +e.target.value })} className="mst-slider" />
+                </>)}
+                <div className="mst-shape-toggle-row" style={{ marginTop: 4 }}>
+                  <label className="mst-shape-toggle">
+                    <input type="checkbox" checked={polyLayers[activeId].fillOn}
+                      onChange={e => updatePolyStyle(activeId, { fillOn: e.target.checked })} />
+                    <span>Fill</span>
+                  </label>
+                  {polyLayers[activeId].fillOn && (
+                    <input type="color" value={polyLayers[activeId].fillColor}
+                      onChange={e => updatePolyStyle(activeId, { fillColor: e.target.value })}
+                      className="mst-color-input mst-color-input--mini" />
+                  )}
+                </div>
+              </>)}
+
+              {showShapeControls && (<>
+                {tool === 'polygon' && (<>
+                  <div className="mst-label">Shape</div>
+                  <div className="mst-poly-presets">
+                    {POLY_PRESETS.map((p, i) => (
+                      <button key={i} className={`mst-poly-preset ${polyPresetIdx === i ? 'active' : ''}`}
+                        onClick={() => setPolyPresetIdx(i)} title={`${p.sides} sides`}>
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </>)}
+                <div className="mst-shape-toggle-row" style={{ marginTop: 4 }}>
+                  <label className="mst-shape-toggle">
+                    <input type="checkbox" checked={shapeStrokeOn} onChange={e => { setShapeStrokeOn(e.target.checked); shapeStrokeOnRef.current = e.target.checked; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { strokeOn: e.target.checked }) }} />
+                    <span>Stroke</span>
+                  </label>
+                  {shapeStrokeOn && (
+                    <input type="color" value={shapeStrokeColor}
+                      onChange={e => { setShapeStrokeColor(e.target.value); shapeStrokeColorRef.current = e.target.value; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { strokeColor: e.target.value }) }}
+                      className="mst-color-input mst-color-input--mini" />
+                  )}
+                </div>
+                {shapeStrokeOn && (<>
+                  <div className="mst-label">Width <span className="mst-val">{shapeStrokeW}px</span></div>
+                  <input type="range" min={1} max={40} value={shapeStrokeW}
+                    onChange={e => { const v = +e.target.value; setShapeStrokeW(v); shapeStrokeWRef.current = v; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { strokeWidth: v }) }} className="mst-slider" />
+                </>)}
+                {tool === 'polygon' && (
+                  <div className="mst-shape-toggle-row" style={{ marginTop: 4 }}>
+                    <label className="mst-shape-toggle">
+                      <input type="checkbox" checked={shapeFillOn} onChange={e => { setShapeFillOn(e.target.checked); shapeFillOnRef.current = e.target.checked; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { fillOn: e.target.checked }) }} />
+                      <span>Fill</span>
+                    </label>
+                    {shapeFillOn && (
+                      <input type="color" value={shapeFillColor}
+                        onChange={e => { setShapeFillColor(e.target.value); shapeFillColorRef.current = e.target.value; if (polyLayersRef.current[activeIdRef.current]) updatePolyStyle(activeIdRef.current, { fillColor: e.target.value }) }}
+                        className="mst-color-input mst-color-input--mini" />
+                    )}
+                  </div>
+                )}
+              </>)}
+
+            </aside>
+          )}
         </div>
 
         {/* ── Right-click brush menu ── */}
@@ -4443,8 +4766,8 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
 
       </div>{/* end .mstudio-main */}
 
-      {/* ── Character Picker Panel — art mode ── */}
-      {mode === 'art' && <div className={`mstudio-picker ${pickerOpen ? 'mstudio-picker--open' : 'mstudio-picker--closed'}`}>
+      {/* ── Character Picker Panel ── */}
+      {<div className={`mstudio-picker ${pickerOpen ? 'mstudio-picker--open' : 'mstudio-picker--closed'}`}>
 
         {/* Toggle tab */}
         <button className="mstudio-picker-tab" onClick={() => setPickerOpen(o => !o)}>
@@ -4490,6 +4813,28 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         )}
       </div>}
 
+      {/* ── Magic label picker popup ── */}
+      {magicLabelPicker && (<>
+        <div className="mst-magic-picker-backdrop" onClick={() => setMagicLabelPicker(null)} />
+        <div className="mst-magic-picker" style={{ left: magicLabelPicker.cx, top: magicLabelPicker.cy }}>
+          <div className="mst-magic-picker-header">✦ Pick a label</div>
+          {magicLabelPicker.labels.map((label, i) => (
+            <button key={i} className="mst-magic-picker-item" onClick={() => {
+              addTextAt(magicLabelPicker.canvasX, magicLabelPicker.canvasY, 'label', magicLabelPicker.charId, label)
+              setMagicLabelSets(prev => {
+                const set = prev[magicLabelPicker.charId]; if (!set) return prev
+                const usedIdx = set.labels.indexOf(label)
+                const usedCount = usedIdx >= set.used ? set.used + 1 : set.used
+                return { ...prev, [magicLabelPicker.charId]: { ...set, used: usedCount } }
+              })
+              setMagicLabelPicker(null)
+            }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </>)}
+
       {/* ── Grab radial menu ── */}
       {(grabMenu || charPicker) && (
         <div className="mst-radial-backdrop" onClick={() => { setGrabMenu(null); setCharPicker(null) }} />
@@ -4497,11 +4842,11 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       {grabMenu && (() => {
         const R = 72
         const allItems = [
-          { label: 'Character', icon: '◉', dx: 0,           dy: -R,      modes: ['art']  as Mode[], action: () => { setCharPicker({ x: grabMenu.x, y: grabMenu.y, canvasX: grabMenu.canvasX, canvasY: grabMenu.canvasY }); setGrabMenu(null) } },
-          { label: 'Title',     icon: 'T', dx: -R * 0.866,  dy: R * 0.5, modes: ['text']      as Mode[], action: () => addTextAt(grabMenu.canvasX, grabMenu.canvasY, 'title') },
-          { label: 'Label',     icon: 'a', dx:  R * 0.866,  dy: R * 0.5, modes: ['text']      as Mode[], action: () => addTextAt(grabMenu.canvasX, grabMenu.canvasY, 'label') },
+          { label: 'Character', icon: '◉', dx: 0,           dy: -R,      action: () => { setCharPicker({ x: grabMenu.x, y: grabMenu.y, canvasX: grabMenu.canvasX, canvasY: grabMenu.canvasY }); setGrabMenu(null) } },
+          { label: 'Title',     icon: 'T', dx: -R * 0.866,  dy: R * 0.5, action: () => addTextAt(grabMenu.canvasX, grabMenu.canvasY, 'title') },
+          { label: 'Label',     icon: 'a', dx:  R * 0.866,  dy: R * 0.5, action: () => addTextAt(grabMenu.canvasX, grabMenu.canvasY, 'label') },
         ]
-        const items = allItems.filter(it => it.modes.includes(mode))
+        const items = allItems
         return <>
           <svg className="mst-radial-lines" style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', pointerEvents: 'none', zIndex: 499 }}>
             {items.map(it => (
@@ -4556,7 +4901,8 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       )}
 
       {/* ── Floating layer action panel — only visible in grab mode ── */}
-      {tool === 'grab' && (activeCharMeta || mode === 'art') && activeId && displayRef.current && (() => {
+      {tool === 'grab' && activeId && displayRef.current && (() => {
+        void scrollTick // consumed so scroll re-renders recompute rect
         const bbox = bboxesRef.current[activeId]
         const tf   = transformsRef.current[activeId] ?? IDENTITY_TF
         if (!bbox) return null
@@ -4566,7 +4912,9 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         const corners = bboxCorners(bbox, tf)
         const scx = ((corners[2][0] + corners[3][0]) / 2) * ratio + rect.left
         const rawScy = ((corners[2][1] + corners[3][1]) / 2) * ratio + rect.top + 10
-        const scy = Math.min(rawScy, window.innerHeight - 430)
+        // Only clamp when bar would overlap the character-strip panel at the bottom.
+        // 200 ≈ height of the character selection strip; let the bar use workspace space freely.
+        const scy = Math.min(rawScy, window.innerHeight - 200)
         const busy = loadingLayerIds.has(activeId)
         return (
           <div className={`mst-char-action-float ${ownKeyActive ? 'mst-char-action-float--own-key' : ''}`} style={{ left: scx, top: scy }}>
@@ -4601,9 +4949,18 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
                     <span className="mst-char-action-label">In Action</span>
                     <span className="mst-action-cost">⚡ {inActionCost}</span>
                   </button>
+                  <button
+                    className={`mst-char-action-btn ${charAction === 'skins' ? 'active' : ''}`}
+                    onClick={() => setCharAction(a => a === 'skins' ? null : 'skins')}
+                    title="Browse saved skins for this character"
+                  >
+                    <span className="mst-char-action-icon">🖼</span>
+                    <span className="mst-char-action-label">Skins</span>
+                    <span className="mst-action-cost mst-action-cost--free">FREE</span>
+                  </button>
                 </>)
               })()}
-              {mode === 'art' && !activeCharMeta && !polyLayers[activeId] && (
+              {!activeCharMeta && !polyLayers[activeId] && (
                 <button
                   className={`mst-char-action-btn ${charAction === 'ai-edit' ? 'active' : ''}`}
                   onClick={() => setCharAction(a => a === 'ai-edit' ? null : 'ai-edit')}
@@ -4720,12 +5077,18 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
                     <div className="mst-char-action-panel-hint">Describe a situation. The character will be placed into it.</div>
                     {/* Scene depth level */}
                     <div className="mst-inaction-levels">
-                      {([1, 2, 3] as const).map(lvl => (
+                      {([
+                        { lvl: 1 as const, label: '□ PROP',    gif: '/assets/prop.gif',    desc: 'Just adds a prop to the character' },
+                        { lvl: 2 as const, label: '⊞ CONTEXT', gif: '/assets/context.gif', desc: 'Extended surroundings without background' },
+                        { lvl: 3 as const, label: '▣ SCENE',   gif: '/assets/scene.gif',   desc: 'Full scene with background' },
+                      ]).map(({ lvl, label, gif, desc }) => (
                         <button key={lvl}
                           className={`mst-inaction-level ${inActionLevel === lvl ? 'active' : ''}`}
                           onClick={() => { setInActionLevel(lvl); inActionLevelRef.current = lvl }}
-                          title={lvl === 1 ? 'Character + one prop, white background' : lvl === 2 ? 'Character + surrounding elements, minimal background' : 'Full immersive scene'}>
-                          {lvl === 1 ? '◻ Prop' : lvl === 2 ? '◫ Context' : '▣ Scene'}
+                          onMouseEnter={e => setLevelTooltip({ gif, desc, x: e.clientX, y: e.clientY })}
+                          onMouseMove={e => setLevelTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                          onMouseLeave={() => setLevelTooltip(null)}>
+                          {label}
                         </button>
                       ))}
                     </div>
@@ -4819,6 +5182,49 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
                 </button>
               </div>
             )}
+
+            {charAction === 'skins' && (
+              <div className="mst-char-action-panel mst-char-action-panel--skins">
+                <input
+                  className="mst-skin-search"
+                  type="text"
+                  placeholder="Search prompts…"
+                  value={skinSearch}
+                  onChange={e => {
+                    const v = e.target.value
+                    setSkinSearch(v)
+                    if (skinSearchTimer.current) clearTimeout(skinSearchTimer.current)
+                    skinSearchTimer.current = setTimeout(() => {
+                      const meta = activeId ? charLayersRef.current[activeId] : null
+                      if (meta) { setSkinsOffset(0); setSkins([]); void loadSkins(meta.charKey, v, 0) }
+                    }, 300)
+                  }}
+                />
+                {skinsLoading && skins.length === 0 && (
+                  <div className="mst-skin-loading">Loading…</div>
+                )}
+                {!skinsLoading && skins.length === 0 && (
+                  <div className="mst-skin-loading">No skins yet — generate a RE-SKIN, EDIT, or IN ACTION to populate this library.</div>
+                )}
+                <div className="mst-skin-grid">
+                  {skins.map(skin => (
+                    <button key={skin.id} className="mst-skin-card" onClick={() => { void applySkin(skin) }} title={skin.prompt}>
+                      <img src={skinImageUrl(skin.id)} className="mst-skin-thumb" alt={skin.prompt} loading="lazy" />
+                      <span className="mst-skin-type">{skin.skin_type.replace('inaction_', '')}</span>
+                    </button>
+                  ))}
+                </div>
+                {skinsHasMore && (
+                  <button className="mst-wand-btn" style={{ marginTop: 4 }} disabled={skinsLoading}
+                    onClick={() => {
+                      const meta = activeId ? charLayersRef.current[activeId] : null
+                      if (meta) void loadSkins(meta.charKey, skinSearch, skinsOffset)
+                    }}>
+                    {skinsLoading ? '⟳ Loading…' : 'Load more'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )
       })()}
@@ -4890,13 +5296,14 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
       />
     )}
 
+
     {showBuyModal && (
       <BuyCreditsModal
         wallet={address}
         currentBalance={showBuyModal.balance ?? 0}
         requiredCredits={showBuyModal.required}
         onClose={() => setShowBuyModal(null)}
-        onPurchased={_newBal => { setShowBuyModal(null); creditBalanceRefreshRef.current?.() }}
+        onPurchased={_newBal => { creditBalanceRefreshRef.current?.(); window.dispatchEvent(new CustomEvent('vvc:credits-changed')) }}
       />
     )}
 
@@ -4924,6 +5331,15 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
         </div>
       </div>
     )}
+    <>
+      {levelTooltip && createPortal(
+        <div className="mst-level-tooltip" style={{ left: levelTooltip.x + 16, top: levelTooltip.y - 16 }}>
+          <img src={levelTooltip.gif} alt="" />
+          <div className="mst-level-tooltip-desc">{levelTooltip.desc}</div>
+        </div>,
+        document.body
+      )}
+    </>
     </>
   )
 }

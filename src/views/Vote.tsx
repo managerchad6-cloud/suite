@@ -157,13 +157,14 @@ function RoadmapVoting({ address }: { address: string }) {
 
   const handleVote = async (itemId: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (voting || myVotes.includes(itemId)) return
+    if (voting) return
+    const alreadyVoted = myVotes.includes(itemId)
     setVoting(itemId)
     try {
       const date = new Date().toISOString().split('T')[0]
       const sig = await signVote(`VVC Roadmap Vote: ${itemId} | ${date}`)
       await voteRoadmap(address, itemId, sig)
-      setMyVotes((prev) => [...prev, itemId])
+      setMyVotes(prev => alreadyVoted ? prev.filter(id => id !== itemId) : [...prev, itemId])
       await load()
     } catch { /* rejected */ } finally { setVoting(null) }
   }
@@ -171,11 +172,7 @@ function RoadmapVoting({ address }: { address: string }) {
   const toggle = (id: string) => setExpanded((prev) => (prev === id ? null : id))
 
   return (
-    <div className="vote-section">
-      <div className="vote-section-header">
-        <span className="vote-section-title">ROADMAP</span>
-        <span className="vote-section-sub">Multiple items · one vote each</span>
-      </div>
+    <div>
       {loading ? <div className="vote-spinner" /> : (
         <div className="roadmap-grid">
           {items.map((item, i) => {
@@ -194,7 +191,8 @@ function RoadmapVoting({ address }: { address: string }) {
                   <button
                     className={`btn-vote-item${voted ? ' voted' : ''}`}
                     onClick={(e) => handleVote(item.id, e)}
-                    disabled={!!voting || voted}
+                    disabled={!!voting}
+                    title={voted ? 'Click to unvote' : 'Upvote'}
                   >
                     {voting === item.id ? '…' : voted ? '✓' : '↑'}
                   </button>
@@ -265,11 +263,7 @@ function SuggestionsVoting({ address }: { address: string }) {
   }
 
   return (
-    <div className="vote-section">
-      <div className="vote-section-header">
-        <span className="vote-section-title">SUGGESTIONS</span>
-        <span className="vote-section-sub">Community ideas · vote to boost</span>
-      </div>
+    <div>
       <div className="suggestion-submit">
         <input
           className="suggestion-input"
@@ -329,18 +323,36 @@ function SuggestionsVoting({ address }: { address: string }) {
 }
 
 export function Vote({ address }: { address: string }) {
+  const [open, setOpen] = useState({ videos: true, roadmap: true, suggestions: true })
+  const toggle = (key: keyof typeof open) => setOpen(prev => ({ ...prev, [key]: !prev[key] }))
+
   return (
     <div className="vote-view">
       <div className="vote-gallery-section">
-        <div className="vote-section-header">
+        <div className="vote-section-header vote-section-header--toggle" onClick={() => toggle('videos')}>
           <span className="vote-section-title">VIDEO QUEUE</span>
           <span className="vote-section-sub">One vote · changeable</span>
+          <span className="vote-section-chevron">{open.videos ? '−' : '+'}</span>
         </div>
-        <VideoVoting address={address} />
+        {open.videos && <VideoVoting address={address} />}
       </div>
       <div className="vote-bottom-row">
-        <RoadmapVoting address={address} />
-        <SuggestionsVoting address={address} />
+        <div className="vote-section">
+          <div className="vote-section-header vote-section-header--toggle" onClick={() => toggle('roadmap')}>
+            <span className="vote-section-title">ROADMAP</span>
+            <span className="vote-section-sub">Multiple items · one vote each</span>
+            <span className="vote-section-chevron">{open.roadmap ? '−' : '+'}</span>
+          </div>
+          {open.roadmap && <RoadmapVoting address={address} />}
+        </div>
+        <div className="vote-section">
+          <div className="vote-section-header vote-section-header--toggle" onClick={() => toggle('suggestions')}>
+            <span className="vote-section-title">SUGGESTIONS</span>
+            <span className="vote-section-sub">Community ideas · vote to boost</span>
+            <span className="vote-section-chevron">{open.suggestions ? '−' : '+'}</span>
+          </div>
+          {open.suggestions && <SuggestionsVoting address={address} />}
+        </div>
       </div>
     </div>
   )

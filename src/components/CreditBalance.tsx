@@ -55,7 +55,7 @@ export function CreditBalance({ wallet, onReady }: Props) {
           wallet={wallet}
           currentBalance={balance}
           onClose={() => setShowModal(false)}
-          onPurchased={newBal => { setBalance(newBal); localStorage.setItem(cacheKey(wallet), String(newBal)); setShowModal(false) }}
+          onPurchased={newBal => { setBalance(newBal); localStorage.setItem(cacheKey(wallet), String(newBal)) }}
         />
       )}
     </>

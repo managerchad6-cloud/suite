@@ -67,6 +67,9 @@ export function FeedCard({ item, address, onOpen }: Props) {
             <span className={`fc-source-badge gallery-badge ${badge.cls}`}>{badge.label}</span>
             <span className="fc-title">{item.title}</span>
           </div>
+          {item.remixed_from && (
+            <div className="fc-remix-tag">🎨 remix · #{item.remixed_from.slice(0, 8).toUpperCase()}</div>
+          )}
           <div className="fc-actions">
             {tier !== 'fresh' && TIER_CHIP[tier] && (
               <span className={TIER_CHIP[tier]}>{TIER_LABEL[tier]}</span>

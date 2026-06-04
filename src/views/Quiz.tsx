@@ -84,13 +84,14 @@ interface RevealData {
 interface Props {
   address: string
   onProfileUpdate: (p: UserProfile) => void
+  onComplete?: () => void
 }
 
 export function Quiz(props: Props) {
   return <QuizErrorBoundary><QuizInner {...props} /></QuizErrorBoundary>
 }
 
-function QuizInner({ address, onProfileUpdate }: Props) {
+function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
   const [phase, setPhase]           = useState<Phase>('idle')
   const [history, setHistory]       = useState<Message[]>([])
   const [currentQ, setCurrentQ]     = useState<QuizQuestion | null>(null)
@@ -145,14 +146,35 @@ function QuizInner({ address, onProfileUpdate }: Props) {
     setCurrentQ(null)
     const template = CHAR_TEMPLATE[result.character] ?? 'basic_template'
     try {
-      const imageUrl = await generatePfp(template, buildPrompt(result))
+      const imageBlobUrl = await generatePfp(template, buildPrompt(result))
+      const imageDataUrl = await blobUrlToDataUrl(imageBlobUrl)
       const conversation = historyToConversation(hist)
       saveQuizEntry({ conversation, character: result.character, attributes: result.attributes })
-      const prof: UserProfile = { walletAddress: address, character: result.character, description: result.description, attributes: result.attributes }
+      const prof: UserProfile = {
+        walletAddress: address,
+        character: result.character,
+        description: result.description,
+        attributes: result.attributes,
+        characterImageDataUrl: imageDataUrl,
+      }
       saveProfile(prof)
       onProfileUpdate(prof)
-      setReveal({ character: result.character, description: result.description, attrs: result.attributes, imageUrl })
+      setReveal({ character: result.character, description: result.description, attrs: result.attributes, imageUrl: imageBlobUrl })
       setPhase('revealed')
+      // Auto-generate portrait PFP immediately — no manual click required
+      setPortraitLoading(true)
+      try {
+        const portraitBlobUrl = await generatePortraitPfp(imageBlobUrl, LEGENDARY_CHARS.has(result.character))
+        const portraitDataUrl = await blobUrlToDataUrl(portraitBlobUrl)
+        const profFull = { ...prof, portraitDataUrl }
+        saveProfile(profFull)
+        onProfileUpdate(profFull)
+        setPortraitUrl(portraitBlobUrl)
+      } catch (e: any) {
+        setError(`Portrait generation failed: ${e.message}`)
+      } finally {
+        setPortraitLoading(false)
+      }
     } catch (e: any) {
       setError(`Image generation failed: ${e.message}`)
       setPhase('questioning')
@@ -215,12 +237,33 @@ function QuizInner({ address, onProfileUpdate }: Props) {
         const result = response as QuizResult
         const template = CHAR_TEMPLATE[result.character] ?? 'basic_template'
         setPhase('generating')
-        const imageUrl = await generatePfp(template, buildPrompt(result))
-        const prof: UserProfile = { walletAddress: address, character: result.character, description: result.description, attributes: result.attributes }
+        setPortraitUrl(null)
+        const imageBlobUrl = await generatePfp(template, buildPrompt(result))
+        const imageDataUrl = await blobUrlToDataUrl(imageBlobUrl)
+        const prof: UserProfile = {
+          walletAddress: address,
+          character: result.character,
+          description: result.description,
+          attributes: result.attributes,
+          characterImageDataUrl: imageDataUrl,
+        }
         saveProfile(prof)
         onProfileUpdate(prof)
-        setReveal({ character: result.character, description: result.description, attrs: result.attributes, imageUrl })
+        setReveal({ character: result.character, description: result.description, attrs: result.attributes, imageUrl: imageBlobUrl })
         setPhase('revealed')
+        setPortraitLoading(true)
+        try {
+          const portraitBlobUrl = await generatePortraitPfp(imageBlobUrl, LEGENDARY_CHARS.has(result.character))
+          const portraitDataUrl = await blobUrlToDataUrl(portraitBlobUrl)
+          const profFull = { ...prof, portraitDataUrl }
+          saveProfile(profFull)
+          onProfileUpdate(profFull)
+          setPortraitUrl(portraitBlobUrl)
+        } catch (e: any) {
+          setError(`Portrait generation failed: ${e.message}`)
+        } finally {
+          setPortraitLoading(false)
+        }
       }
     } catch (e: any) {
       setError(`Regeneration failed: ${e.message}`)
@@ -310,19 +353,25 @@ function QuizInner({ address, onProfileUpdate }: Props) {
         </div>
 
         <div className="quiz-reveal-body">
-          {/* Left: images */}
+          {/* Left: full-body + portrait */}
           <div className="quiz-reveal-left">
             <img src={reveal.imageUrl} alt={name} className="quiz-reveal-img" />
-            {portraitLoading && <div className="quiz-gen-ring quiz-portrait-spinner" />}
-            {portraitUrl && (
-              <div className="quiz-portrait-result">
-                <p className="quiz-portrait-label">Profile Picture</p>
-                <img src={portraitUrl} alt="Profile picture" className="quiz-portrait-img" />
-                <a href={portraitUrl} download={`${reveal.character}_portrait.jpg`} className="pfp-modal-download">
-                  Download Portrait
-                </a>
-              </div>
-            )}
+            <div className="quiz-portrait-section">
+              {portraitLoading ? (
+                <div className="quiz-portrait-generating">
+                  <div className="quiz-gen-ring quiz-portrait-spinner" />
+                  <p className="quiz-portrait-gen-label">Generating profile picture…</p>
+                </div>
+              ) : portraitUrl ? (
+                <div className="quiz-portrait-result">
+                  <p className="quiz-portrait-label">Profile Picture</p>
+                  <img src={portraitUrl} alt="Profile picture" className="quiz-portrait-img" />
+                  <a href={portraitUrl} download={`${reveal.character}_portrait.jpg`} className="pfp-modal-download">
+                    Download PFP
+                  </a>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {/* Right: description + attrs + actions */}
@@ -337,17 +386,25 @@ function QuizInner({ address, onProfileUpdate }: Props) {
               ))}
             </div>
 
-            <div className="quiz-reveal-actions">
-              <button
-                className="quiz-portrait-btn"
-                onClick={handleGeneratePortrait}
-                disabled={portraitLoading}
-              >
-                {portraitLoading ? 'Generating…' : 'Generate PFP'}
+            {onComplete && (
+              <button className="quiz-continue-btn quiz-continue-btn--primary" onClick={onComplete}>
+                Continue to Suite →
               </button>
+            )}
+
+            <div className="quiz-reveal-actions">
               <a href={reveal.imageUrl} download={`${reveal.character}.jpg`} className="pfp-modal-download">
-                Download
+                Download Full Character
               </a>
+              {portraitUrl && (
+                <button
+                  className="quiz-portrait-btn"
+                  onClick={handleGeneratePortrait}
+                  disabled={portraitLoading}
+                >
+                  Regenerate PFP
+                </button>
+              )}
               <button className="quiz-retake-btn" onClick={reset}>New Interview</button>
             </div>
 

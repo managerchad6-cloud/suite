@@ -10,6 +10,7 @@ export interface UserProfile {
   character: string
   description: string
   attributes: Record<string, string>
+  characterImageDataUrl?: string
   portraitDataUrl?: string
   updatedAt?: string
 }

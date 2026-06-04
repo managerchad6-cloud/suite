@@ -28,6 +28,21 @@ export interface ActivityEvent {
   created_at: string
 }
 
+export interface BadgeDef {
+  id: string
+  name: string
+  description: string
+  icon: string
+  xp_reward: number
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
+  category: string
+}
+
+export interface PlayerBadge extends BadgeDef {
+  badge_id: string
+  unlocked_at: string
+}
+
 export async function fetchPlayer(wallet: string): Promise<PlayerState> {
   const res = await fetch(`/api/player/${encodeURIComponent(wallet)}`)
   if (!res.ok) throw new Error(`Player fetch failed: ${res.status}`)
@@ -40,32 +55,47 @@ export async function fetchPlayerTimeline(wallet: string, limit = 30): Promise<A
   return res.json()
 }
 
+export async function fetchBadges(): Promise<BadgeDef[]> {
+  const res = await fetch('/api/badges')
+  if (!res.ok) return []
+  const data = await res.json()
+  return data.badges ?? []
+}
+
+export async function fetchPlayerBadges(wallet: string): Promise<{ badges: PlayerBadge[]; total_xp: number }> {
+  const res = await fetch(`/api/badges/${encodeURIComponent(wallet)}`)
+  if (!res.ok) return { badges: [], total_xp: 0 }
+  return res.json()
+}
+
+export function dispatchBadges(badges: BadgeDef[] | undefined) {
+  if (badges?.length) {
+    window.dispatchEvent(new CustomEvent('vvc:badges-unlocked', { detail: badges }))
+  }
+}
+
+export async function trackBadgeCounter(wallet: string, counter: string, amount = 1): Promise<BadgeDef[]> {
+  const res = await fetch('/api/badges/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wallet, counter, amount }),
+  })
+  if (!res.ok) return []
+  const data = await res.json()
+  return data.new_badges ?? []
+}
+
 export async function recordLogin(wallet: string): Promise<{
   already_logged?: boolean
   streak?: number
   xp_awarded?: number
   rank?: string
   ranked_up?: boolean
+  new_badges?: BadgeDef[]
 }> {
   const res = await fetch(`/api/player/${encodeURIComponent(wallet)}/login`, { method: 'POST' })
   if (!res.ok) return {}
   return res.json()
-}
-
-export const RANK_DISPLAY: Record<string, { label: string; color: string; bg: string }> = {
-  basic:        { label: 'Basic',        color: '#888',    bg: '#1a1a1a' },
-  brad:         { label: 'Brad',         color: '#60b0ff', bg: '#080f1a' },
-  lad:          { label: 'Lad',          color: '#60b0ff', bg: '#080f1a' },
-  thad:         { label: 'Thad',         color: '#40d0ff', bg: '#051520' },
-  chad:         { label: 'Chad',         color: '#F0A020', bg: '#1a0f00' },
-  gigachad:     { label: 'Gigachad',     color: '#FFD700', bg: '#1a1200' },
-  gad:          { label: 'Gad',          color: '#fff',    bg: '#2a1a00' },
-  neckbeard:    { label: 'Neckbeard',    color: '#c060ff', bg: '#120a1a' },
-  incel:        { label: 'Incel',        color: '#c060ff', bg: '#120a1a' },
-  wizard:       { label: 'Wizard',       color: '#a040ff', bg: '#0f0820' },
-  virgin_rank:  { label: 'Virgin',       color: '#ff6060', bg: '#1a0808' },
-  transcendent: { label: 'Transcendent', color: '#ff40a0', bg: '#1a0510' },
-  gizzard:      { label: 'Gizzard',      color: '#fff',    bg: '#1a0010' },
 }
 
 export const TIER_DISPLAY: Record<string, { label: string; color: string }> = {

@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
 import { MALE, FEMALE, DEITIES, CHARACTERS, type CharData, type Rarity } from '../data/characterLore'
-import { fetchMemes, fetchMemesByCharacter, parseMemeId, imageUrl, handmadeImageUrl, type Meme } from '../api/memes'
+import { fetchMemes, fetchStudioMemesByCharacter, parseMemeId, imageUrl, handmadeImageUrl, type Meme } from '../api/memes'
+import { studioMemeImageUrl } from '../api/studio'
+import type { UnifiedMemeItem } from '../types/unified'
 import { fetchCharacters, unlockCharacter, setMainCharacter, MASTERY_LEVELS, RARITY_COLOR, type Character } from '../api/characters'
+import { fetchCharSkins, skinImageUrl, type SkinRecord } from '../api/skins'
 
 const RARITY_LABEL: Record<Rarity, string> = {
   common:    'Common',
@@ -29,79 +32,112 @@ function MasteryBar({ xp, level }: { xp: number; level: number }) {
   )
 }
 
+// ── Skin gallery ──────────────────────────────────────────────────────────────
+
+function SkinGallery({ charKey }: { charKey: string }) {
+  const [skins, setSkins] = useState<SkinRecord[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    fetchCharSkins(charKey, '', 0, 60).then(r => {
+      setSkins(r.items)
+      setLoading(false)
+    })
+  }, [charKey])
+
+  if (loading) return <div className="char-skins-empty">Loading…</div>
+  if (skins.length === 0) return <div className="char-skins-empty">No skins generated yet.</div>
+
+  return (
+    <div className="char-skins-grid">
+      {skins.map(skin => (
+        <div key={skin.id} className="char-skin-card" title={skin.prompt}>
+          <img src={skinImageUrl(skin.id)} className="char-skin-thumb" alt={skin.prompt} loading="lazy" />
+          <span className="char-skin-type">{skin.skin_type.replace('inaction_', '')}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Tagged memes grid ─────────────────────────────────────────────────────────
 
-function TaggedMemes({ charName, charKey, onOpenDetail }: {
+function TaggedMemes({ charName, charKey, onOpenDetail, onOpenUnifiedItem }: {
   charName: string
   charKey:  string
   onOpenDetail?: (m: Meme) => void
+  onOpenUnifiedItem?: (item: UnifiedMemeItem) => void
 }) {
-  const [memes, setMemes] = useState<Meme[]>([])
+  const [studioMemes, setStudioMemes] = useState<{ id: string; characters: string[]; titles: string[] }[]>([])
+  const [factoryMemes, setFactoryMemes] = useState<Meme[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
-      // AI-generated memes (match by meme_id naming convention)
-      fetchMemes(1, 100).then(data => {
-        const userMemes = data.items.filter(m => m.wallet !== null)
-        return userMemes.filter(m => {
-          if (!m.meme_id) return false
+      // Studio memes — keyed by exact character key stored at publish time
+      fetchStudioMemesByCharacter(charKey).catch(() => []),
+      // Factory AI memes — match by parsing the meme_id naming convention
+      // (only Virgin/Chad get all factory memes; other chars only match when
+      //  their name appears as the virgin/chad slot in the meme_id)
+      fetchMemes(1, 100).then(data =>
+        data.items.filter(m => {
+          if (!m.meme_id || !m.wallet) return false
           if (charName === 'Virgin') return m.meme_id.startsWith('virgin_')
           if (charName === 'Chad')   return m.meme_id.includes('_vs_chad_')
           const { virgin, chad } = parseMemeId(m.meme_id)
           return virgin === charName || chad === charName
         })
-      }).catch(() => [] as Meme[]),
-      // Hand-made memes tagged with this character key
-      fetchMemesByCharacter(charKey).catch(() => [] as Meme[]),
-    ]).then(([aiMemes, handmade]) => {
-      // Deduplicate by job_id, hand-made after AI
-      const seen = new Set<string>()
-      const all: Meme[] = []
-      for (const m of [...aiMemes, ...handmade]) {
-        if (!seen.has(m.job_id)) { seen.add(m.job_id); all.push(m) }
-      }
-      setMemes(all)
+      ).catch(() => [] as Meme[]),
+    ]).then(([studio, factory]) => {
+      setStudioMemes(studio)
+      setFactoryMemes(factory)
     }).finally(() => setLoading(false))
   }, [charName, charKey])
 
+  const total = studioMemes.length + factoryMemes.length
   if (loading) return <div className="gallery-spinner" style={{ margin: '24px auto' }} />
-  if (memes.length === 0) return (
+  if (total === 0) return (
     <p className="char-detail-no-memes">
-      No memes tagged with {charName} yet — be the first to create one.
+      No memes with {charName} yet — be the first to create one in the Studio.
     </p>
   )
 
   return (
     <div className="char-detail-memes-grid">
-      {memes.map(m => {
-        const isHandmade = m.type === 'handmade'
-        const { virgin, chad } = parseMemeId(m.meme_id)
-        const src = isHandmade ? handmadeImageUrl(m.job_id) : imageUrl(m.job_id)
-        const label = isHandmade
-          ? `Hand-made · ${(m.characters ?? []).join(', ') || charName}`
-          : `${virgin} vs ${chad}`
+      {studioMemes.map(m => {
+        const charNames = m.characters.map(k => k.replace(/_/g, ' ')).join(', ')
+        const title     = (m.titles[0] ?? '').trim() || charNames
         return (
-          <div
-            key={m.job_id}
-            className={`char-detail-meme-card ${onOpenDetail ? 'char-detail-meme-card--clickable' : ''}`}
-            onClick={() => onOpenDetail?.(m)}
-          >
-            <img src={src} alt={label} className="char-detail-meme-img" />
+          <div key={m.id} className="char-detail-meme-card char-detail-meme-card--clickable"
+            onClick={() => onOpenUnifiedItem?.({
+              key: `studio:${m.id}`, type: 'studio', sourceId: m.id,
+              imageUrl: studioMemeImageUrl(m.id),
+              title: (m.titles[0] ?? '').trim() || m.characters.map(k => k.replace(/_/g, ' ')).join(', '),
+              meta: '', dateIso: '',
+              characters: m.characters,
+            })
+          }>
+            <img src={studioMemeImageUrl(m.id)} alt={charNames} className="char-detail-meme-img" />
             <div className="char-detail-meme-label">
-              {isHandmade ? (
-                <>
-                  <span className="char-detail-meme-virgin" style={{ color: '#5aaeff' }}>Hand-made</span>
-                  <span className="char-detail-meme-vs">·</span>
-                  <span className="char-detail-meme-chad">{(m.characters ?? [charKey]).join(', ')}</span>
-                </>
-              ) : (
-                <>
-                  <span className="char-detail-meme-virgin">{virgin}</span>
-                  <span className="char-detail-meme-vs">vs</span>
-                  <span className="char-detail-meme-chad">{chad}</span>
-                </>
-              )}
+              <span className="char-detail-meme-virgin" style={{ color: '#5aaeff' }}>Studio</span>
+              <span className="char-detail-meme-vs">·</span>
+              <span className="char-detail-meme-chad">{title}</span>
+            </div>
+          </div>
+        )
+      })}
+      {factoryMemes.map(m => {
+        const { virgin, chad } = parseMemeId(m.meme_id)
+        const src = m.type === 'handmade' ? handmadeImageUrl(m.job_id) : imageUrl(m.job_id)
+        return (
+          <div key={m.job_id} className={`char-detail-meme-card ${onOpenDetail ? 'char-detail-meme-card--clickable' : ''}`}
+            onClick={() => onOpenDetail?.(m)}>
+            <img src={src} alt={`${virgin} vs ${chad}`} className="char-detail-meme-img" />
+            <div className="char-detail-meme-label">
+              <span className="char-detail-meme-virgin">{virgin}</span>
+              <span className="char-detail-meme-vs">vs</span>
+              <span className="char-detail-meme-chad">{chad}</span>
             </div>
           </div>
         )
@@ -112,10 +148,11 @@ function TaggedMemes({ charName, charKey, onOpenDetail }: {
 
 // ── Character detail ──────────────────────────────────────────────────────────
 
-function CharacterDetail({ char, onBack, onOpenDetail, colState, wallet, onCollectionChange }: {
+function CharacterDetail({ char, onBack, onOpenDetail, onOpenUnifiedItem, colState, wallet, onCollectionChange }: {
   char: CharData
   onBack: () => void
   onOpenDetail?: (m: Meme) => void
+  onOpenUnifiedItem?: (item: UnifiedMemeItem) => void
   colState?: Character
   wallet?: string
   onCollectionChange?: () => void
@@ -129,7 +166,7 @@ function CharacterDetail({ char, onBack, onOpenDetail, colState, wallet, onColle
   }, [onBack])
 
   const src      = `/assets/chars/${char.file}.${char.ext ?? 'png'}`
-  const unlocked = !colState || colState.unlocked
+  const unlocked = true
   const isMain   = colState?.is_main
 
   async function handleUnlock() {
@@ -220,7 +257,15 @@ function CharacterDetail({ char, onBack, onOpenDetail, colState, wallet, onColle
             Tagged Memes
             <span className="char-detail-block-sub"> — memes where {char.name} appears</span>
           </h4>
-          <TaggedMemes charName={char.name} charKey={char.key} onOpenDetail={onOpenDetail} />
+          <TaggedMemes charName={char.name} charKey={char.key} onOpenDetail={onOpenDetail} onOpenUnifiedItem={onOpenUnifiedItem} />
+        </div>
+
+        <div className="char-detail-block">
+          <h4 className="char-detail-block-title">
+            Generated Skins
+            <span className="char-detail-block-sub"> — all AI looks for {char.name}</span>
+          </h4>
+          <SkinGallery charKey={char.key} />
         </div>
 
       </div>
@@ -238,7 +283,7 @@ function CharCard({ char, onSelect, colState }: {
   const [hovered, setHovered] = useState(false)
   const [templateFailed, setTemplateFailed] = useState(false)
 
-  const unlocked   = !colState || colState.unlocked
+  const unlocked   = true
   const isMain     = colState?.is_main
   const masteryLvl = colState?.mastery_level ?? 0
 
@@ -306,15 +351,29 @@ function SpectrumRow({ chars, chadLabel, virginLabel, onSelect, stateMap }: {
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export function Characters({ onOpenDetail, initialChar, address }: {
+export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar, address }: {
   onOpenDetail?: (meme: Meme) => void
+  onOpenUnifiedItem?: (item: UnifiedMemeItem) => void
   initialChar?: string | null
   address?: string | null
 }) {
+  const findChar = (nameOrKey: string) =>
+    CHARACTERS.find(c => c.name === nameOrKey || c.key === nameOrKey ||
+      c.name.toLowerCase() === nameOrKey.toLowerCase() ||
+      c.key.toLowerCase() === nameOrKey.toLowerCase()) ?? null
+
   const [selected,  setSelected]  = useState<CharData | null>(() =>
-    initialChar ? (CHARACTERS.find(c => c.name === initialChar) ?? null) : null
+    initialChar ? findChar(initialChar) : null
   )
   const [stateMap,  setStateMap]  = useState<Record<string, Character>>({})
+
+  useEffect(() => {
+    if (initialChar) {
+      const char = findChar(initialChar)
+      if (char) setSelected(char)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialChar])
 
   const loadCollection = () => {
     if (!address) return
@@ -331,6 +390,7 @@ export function Characters({ onOpenDetail, initialChar, address }: {
         char={selected}
         onBack={() => setSelected(null)}
         onOpenDetail={onOpenDetail}
+        onOpenUnifiedItem={onOpenUnifiedItem}
         colState={stateMap[selected.key]}
         wallet={address ?? undefined}
         onCollectionChange={loadCollection}

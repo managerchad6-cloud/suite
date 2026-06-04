@@ -9,6 +9,15 @@ export interface StudioMeme {
   labelLinks?: { text: string; charKey: string | null }[]
   created_at: string
   type: 'handmade'
+  has_draft?: boolean
+  remixed_from?: string | null
+  remixed_from_meta?: { id: string; title: string | null } | null
+}
+
+export async function fetchRemixDraft(id: string): Promise<{ payload: unknown } | null> {
+  const res = await fetch(`/api/handmade/${encodeURIComponent(id)}/draft`)
+  if (!res.ok) return null
+  return res.json()
 }
 
 export interface StudioMemesResponse {

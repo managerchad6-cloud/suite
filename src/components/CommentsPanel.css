@@ -9,6 +9,8 @@
   flex-direction: column;
   overflow: hidden;
   animation: cp-slide-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  z-index: 40;
 }
 @keyframes cp-slide-in {
   from { width: 0; opacity: 0; }

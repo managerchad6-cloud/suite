@@ -1,4 +1,4 @@
-const VVC_API_KEY = 'AIzaSyCN8_Q5nh2UJeX5r1RnK7XTJse7RJfQtSA'
+const VVC_API_KEY = ''
 const MODEL       = 'nano-banana-pro-preview'
 
 const GEMINI_KEY_STORAGE = 'vvc_gemini_key'
@@ -161,6 +161,21 @@ export async function generatePfp(templateFile: string, prompt: string): Promise
   })
 
   return callGeminiImage(base64, 'image/png', prompt)
+}
+
+export async function editLayer(imageDataUrl: string, userPrompt: string): Promise<string> {
+  const base64   = imageDataUrl.split(',')[1]
+  const mimeType = imageDataUrl.match(/data:([^;]+)/)?.[1] ?? 'image/png'
+  const prompt = [
+    'You are given an image layer from a meme canvas.',
+    'Apply the visual modification described below.',
+    'Maintain the same VVC meme art style (bold flat colors, black outlines) if applicable.',
+    'Do NOT add any characters, people, or figures unless the modification explicitly requires one.',
+    'Only change what is described. Keep everything else identical.',
+    '',
+    userPrompt,
+  ].join('\n')
+  return callGeminiImage(base64, mimeType, prompt)
 }
 
 export async function editCharacter(imageDataUrl: string, userPrompt: string): Promise<string> {

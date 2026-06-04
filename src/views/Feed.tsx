@@ -5,6 +5,7 @@ import { truncateAddress } from '../wallet'
 import { FeedCard } from '../components/FeedCard'
 import { CommentsPanel } from '../components/CommentsPanel'
 import { castVote } from '../api/votes'
+import { CHARACTERS } from '../data/characterLore'
 import type { UnifiedMemeItem, MemeSourceType, MemeTier } from '../types/unified'
 import './Feed.css'
 
@@ -25,6 +26,14 @@ const SORT_LABELS: Record<SortMode, string> = {
   foryou: 'For You', hot: 'Hot', rising: 'Rising', fresh: 'Fresh', top: 'Top',
 }
 
+type TopPeriod = 'day' | 'week' | 'month' | 'year' | 'all'
+const TOP_PERIOD_LABELS: Record<TopPeriod, string> = {
+  day: 'Today', week: 'This Week', month: 'This Month', year: 'This Year', all: 'All Time',
+}
+const TOP_PERIOD_HOURS: Record<TopPeriod, number> = {
+  day: 24, week: 168, month: 720, year: 8760, all: Infinity,
+}
+
 function toIso(d: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d + 'T00:00:00Z' : d
 }
@@ -33,17 +42,20 @@ function ageHours(dateIso: string) {
   return (Date.now() - new Date(dateIso).getTime()) / 3_600_000
 }
 
-function sortItems(items: UnifiedMemeItem[], mode: SortMode): UnifiedMemeItem[] {
+function sortItems(items: UnifiedMemeItem[], mode: SortMode, topPeriod: TopPeriod = 'week'): UnifiedMemeItem[] {
   const copy = [...items]
   switch (mode) {
     case 'fresh':
       return copy.sort((a, b) => b.dateIso.localeCompare(a.dateIso))
-    case 'top':
-      return copy.sort((a, b) => {
+    case 'top': {
+      const maxHours = TOP_PERIOD_HOURS[topPeriod]
+      const filtered = maxHours === Infinity ? copy : copy.filter(i => ageHours(i.dateIso) <= maxHours)
+      return filtered.sort((a, b) => {
         const sa = (a.up_votes ?? 0) - (a.down_votes ?? 0) + (a.redditScore ?? 0)
         const sb = (b.up_votes ?? 0) - (b.down_votes ?? 0) + (b.redditScore ?? 0)
         return sb - sa
       })
+    }
     case 'hot':
       // Tier priority: pantheon > legendary > hot > rising > fresh, then score
       return copy.sort((a, b) => {
@@ -79,14 +91,23 @@ interface Props {
   address: string
   onOpenItem: (item: UnifiedMemeItem) => void
   onOpenProfile?: (wallet: string) => void
+  onRemix?: (sourceId: string) => void
+  onOpenStudio?: () => void
+  onOpenFactory?: () => void
 }
 
-export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
+export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenFactory }: Props) {
   const [items,       setItems]       = useState<UnifiedMemeItem[]>([])
   const [loading,     setLoading]     = useState(true)
   const [idx,         setIdx]         = useState(0)
+  const [heroActive,  setHeroActive]  = useState(true)
+  const [heroLeaving, setHeroLeaving] = useState(false)
+  const heroLeavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sort,        setSort]        = useState<SortMode>('foryou')
+  const [topPeriod,   setTopPeriod]   = useState<TopPeriod>('week')
   const [filter,      setFilter]      = useState<Set<MemeSourceType>>(new Set(['studio', 'factory', 'reddit']))
+  const [filterChars, setFilterChars] = useState<Set<string>>(new Set())
+  const [charPickerOpen, setCharPickerOpen] = useState(false)
   const [localVote,     setLocalVote]     = useState<{
     upVotes: number; downVotes: number; yourVote: 1|-1|null; tier: MemeTier; voting: boolean
   } | null>(null)
@@ -138,11 +159,14 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
     ])
     const next: UnifiedMemeItem[] = []
     if (sr.status === 'fulfilled' && sr.value) {
-      sr.value.items.forEach((m: { id: string; wallet: string; characters: string[]; created_at: string }) => next.push({
+      sr.value.items.forEach((m: { id: string; wallet: string; characters: string[]; created_at: string; has_draft?: boolean; remixed_from?: string | null }) => next.push({
         key: `studio:${m.id}`, type: 'studio', sourceId: m.id,
         imageUrl: studioMemeImageUrl(m.id),
         title: m.characters.map((c: string) => c.replace(/_/g, ' ')).join(', ') || '—',
         meta: truncateAddress(m.wallet), wallet: m.wallet, dateIso: toIso(m.created_at),
+        characters: m.characters,
+        has_draft: m.has_draft,
+        remixed_from: m.remixed_from ?? undefined,
       }))
       hasMore.current.studio = sr.value.has_next
       pages.current.studio = p.studio + 1
@@ -186,25 +210,55 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
   useEffect(() => {
     setLoading(true)
     setIdx(0)
+    setHeroActive(true)
+    setHeroLeaving(false)
     pages.current   = { studio: 1, factory: 1, reddit: 1 }
     hasMore.current = { studio: true, factory: true, reddit: true }
     Promise.all([
       fetchBatch({ studio: 1, factory: 1, reddit: 1 }, sort),
       loadTierData(),
     ]).then(([next]) => {
-      setItems(sortItems(next, sort))
+      setItems(sortItems(next, sort, topPeriod))
     }).finally(() => setLoading(false))
   }, [sort, fetchBatch, loadTierData])
 
+  function itemMatchesCharFilter(item: UnifiedMemeItem): boolean {
+    if (filterChars.size === 0) return true
+    if (item.type === 'studio' && item.characters?.length) {
+      return item.characters.some(c => filterChars.has(c))
+    }
+    if (item.type === 'factory' && item.title) {
+      const t = item.title.toLowerCase()
+      for (const ck of filterChars) if (t.includes(ck.replace(/_/g, ' ').toLowerCase())) return true
+    }
+    if (item.type === 'reddit') {
+      const names = [item.redditLeftTitle, item.redditRightTitle].filter(Boolean).map(s => s!.toLowerCase())
+      for (const ck of filterChars) if (names.some(n => n.includes(ck.replace(/_/g, ' ').toLowerCase()))) return true
+    }
+    return false
+  }
+
   const advance = useCallback((dir: 1 | -1) => {
+    if (heroActive) {
+      if (dir === 1) {
+        setHeroLeaving(true)
+        if (heroLeavingTimerRef.current) clearTimeout(heroLeavingTimerRef.current)
+        heroLeavingTimerRef.current = setTimeout(() => {
+          setHeroActive(false)
+          setHeroLeaving(false)
+        }, 280)
+      }
+      return
+    }
     setIdx(prev => {
-      const next = prev + dir
+      if (dir === -1 && prev === 0) { setHeroActive(true); return 0 }
       const filtered = items.filter(i => filter.has(i.type))
+      const next = prev + dir
       if (next < 0 || next >= filtered.length) return prev
       if (next >= filtered.length - 3) loadMore()
       return next
     })
-  }, [items, filter, loadMore])
+  }, [items, filter, loadMore, heroActive])
 
   // Wheel — exactly one card per gesture, regardless of scroll speed.
   // Accumulate deltaY; once the threshold is crossed fire once and lock
@@ -248,14 +302,20 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
 
   function toggleFilter(t: MemeSourceType) {
     setFilter(prev => {
-      const next = new Set(prev)
-      if (next.has(t)) { if (next.size > 1) next.delete(t) }
-      else next.add(t)
-      return next
+      if (prev.has(t) && prev.size === 1) return new Set(['studio', 'factory', 'reddit'])
+      return new Set([t])
     })
+    setIdx(0)
+    setHeroActive(true)
+    setHeroLeaving(false)
   }
 
-  const visible = sortItems(items.filter(i => filter.has(i.type)), sort)
+  const activeCategory: 'all' | 'studio' | 'factory' | 'reddit' =
+    filter.size === 1 && filter.has('studio')  ? 'studio'  :
+    filter.size === 1 && filter.has('factory') ? 'factory' :
+    filter.size === 1 && filter.has('reddit')  ? 'reddit'  : 'all'
+
+  const visible = sortItems(items.filter(i => filter.has(i.type) && itemMatchesCharFilter(i)), sort, topPeriod)
   const currentItem = visible[idx] ?? null
 
   // Sync local vote state whenever the card at idx changes
@@ -291,15 +351,15 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
   }, [currentItem, localVote, address])
 
   // Render one slide; vote buttons are co-rendered inside current slide as a flex sibling
-  function renderSlide(visIdx: number) {
+  function renderSlide(visIdx: number, forceClass?: 'prev' | 'current' | 'next', heropeek?: boolean) {
     const item = visible[visIdx]
     if (!item) return null
     const offset = visIdx - idx
-    if (offset < -1 || offset > 1) return null
-    const cls = offset < 0 ? 'prev' : offset > 0 ? 'next' : 'current'
+    if (!forceClass && (offset < -1 || offset > 1)) return null
+    const cls = forceClass ?? (offset < 0 ? 'prev' : offset > 0 ? 'next' : 'current')
     const isCurrent = cls === 'current'
     return (
-      <div key={item.key} className={`feed-slide feed-slide--${cls}`}>
+      <div key={item.key} className={`feed-slide feed-slide--${cls}${heropeek ? ' feed-slide--hero-peek' : ''}`}>
         <FeedCard item={item} address={address} onOpen={onOpenItem} />
         {isCurrent && localVote && (
           <div className="feed-actions">
@@ -382,6 +442,20 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
               </button>
             )}
 
+            {/* 🎨 Remix — studio memes with a saved draft */}
+            {item.type === 'studio' && item.has_draft && onRemix && (
+              <button
+                className="feed-action-btn feed-action-btn--remix"
+                onClick={() => onRemix(item.sourceId)}
+                title="Open in Studio as a remix"
+              >
+                <div className="feed-action-icon">
+                  <span className="feed-action-icon-glyph">🎨</span>
+                </div>
+                <span className="feed-action-label">Remix</span>
+              </button>
+            )}
+
           </div>
         )}
       </div>
@@ -397,18 +471,33 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
     >
       {/* Top bar */}
       <div className="feed-topbar">
-        <div className="feed-sort-tabs">
-          {(Object.keys(SORT_LABELS) as SortMode[]).map(s => (
-            <button key={s} className={`feed-sort-tab ${sort === s ? 'active' : ''}`} onClick={() => setSort(s)}>
-              {SORT_LABELS[s]}
-            </button>
-          ))}
+        <div className="feed-topbar-inner">
+          <div className="feed-sort-tabs">
+            {(Object.keys(SORT_LABELS) as SortMode[]).map(s => (
+              <button key={s} className={`feed-sort-tab ${sort === s ? 'active' : ''}`} onClick={() => setSort(s)}>
+                {SORT_LABELS[s]}
+              </button>
+            ))}
+          </div>
+          {sort === 'top' && (
+            <div className="feed-period-tabs">
+              {(Object.keys(TOP_PERIOD_LABELS) as TopPeriod[]).map(p => (
+                <button key={p} className={`feed-period-tab ${topPeriod === p ? 'active' : ''}`} onClick={() => setTopPeriod(p)}>
+                  {TOP_PERIOD_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="feed-filter-chips">
+          <button
+            className={`feed-filter-chip feed-filter-chip--all ${filter.size === 3 ? 'active' : ''}`}
+            onClick={() => { setFilter(new Set(['studio', 'factory', 'reddit'])); setIdx(0); setHeroActive(true) }}
+          >All</button>
           {(['studio', 'factory', 'reddit'] as MemeSourceType[]).map(t => (
             <button
               key={t}
-              className={`feed-filter-chip feed-filter-chip--${t} ${filter.has(t) ? 'active' : ''}`}
+              className={`feed-filter-chip feed-filter-chip--${t} ${filter.size === 1 && filter.has(t) ? 'active' : ''}`}
               onClick={() => toggleFilter(t)}
             >{t.charAt(0).toUpperCase() + t.slice(1)}</button>
           ))}
@@ -426,7 +515,63 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
           <div className="feed-state">Nothing to show.</div>
         ) : (
           <div className="feed-carousel">
-            {[idx - 1, idx, idx + 1].map(i => renderSlide(i))}
+            {/* ── Category hero ── */}
+            <div className={`feed-hero feed-hero--${activeCategory} ${(heroActive && !heroLeaving) ? 'feed-hero--visible' : 'feed-hero--hidden'}`}>
+              {activeCategory === 'all' && (<>
+                <div className="feed-hero-eyebrow">✦ Virgin vs Chad Universe</div>
+                <div className="feed-hero-title">🔥 All Memes 🔥</div>
+                <div className="feed-hero-subtitle">Everything from Studio artists, AI Factory drops & Reddit's finest. The full spectrum — scroll to find your next favourite.</div>
+                <div className="feed-hero-row">
+                  <button className="feed-hero-badge feed-hero-badge--btn" onClick={() => toggleFilter('studio')}>🎨 Studio</button>
+                  <button className="feed-hero-badge feed-hero-badge--btn" onClick={() => toggleFilter('factory')}>⚡ Factory</button>
+                  <button className="feed-hero-badge feed-hero-badge--btn" onClick={() => toggleFilter('reddit')}>👾 Reddit</button>
+                  {visible.length > 0 && <span className="feed-hero-badge">{visible.length} drops</span>}
+                </div>
+              </>)}
+              {activeCategory === 'studio' && (<>
+                <div className="feed-hero-eyebrow">🎨 Made in Studio</div>
+                <div className="feed-hero-title">Studio Memes</div>
+                <div className="feed-hero-subtitle">Hand-crafted by real creators in the VVC Studio — where creativity hits the hardest. Every layer, every label, every character placed with intent.</div>
+                <div className="feed-hero-row">
+                  {onOpenStudio && <button className="feed-hero-cta" onClick={onOpenStudio}>Open Studio →</button>}
+                  {visible.length > 0 && <span className="feed-hero-badge">{visible.length} studio memes</span>}
+                </div>
+              </>)}
+              {activeCategory === 'factory' && (<>
+                <div className="feed-hero-eyebrow">⚡ Meme Factory</div>
+                <div className="feed-hero-title">Factory Drops</div>
+                <div className="feed-hero-subtitle">AI-generated in seconds. Describe it, publish it — zero effort, maximum chaos. The fastest meme pipeline on the internet.</div>
+                <div className="feed-hero-row">
+                  {onOpenFactory && <button className="feed-hero-cta" onClick={onOpenFactory}>Open Factory →</button>}
+                  {visible.length > 0 && <span className="feed-hero-badge">{visible.length} factory drops</span>}
+                </div>
+              </>)}
+              {activeCategory === 'reddit' && (<>
+                <div className="feed-hero-eyebrow">👾 Reddit Imports</div>
+                <div className="feed-hero-title">r/VirginVsChad</div>
+                <div className="feed-hero-subtitle">Sourced daily from the official subreddit. The real internet, unfiltered and unhinged. Community-voted, culture-defining.</div>
+                <div className="feed-hero-row">
+                  <a className="feed-hero-cta" href="https://reddit.com/r/virginvschad" target="_blank" rel="noopener noreferrer">Visit Subreddit ↗</a>
+                  {visible.length > 0 && <span className="feed-hero-badge">{visible.length} reddit posts</span>}
+                </div>
+              </>)}
+            </div>
+
+            {/* Start scrolling cue — between hero and first meme */}
+            {(heroActive || heroLeaving) && (
+              <div
+                className={`feed-scroll-cue ${heroLeaving ? 'feed-scroll-cue--leaving' : ''}`}
+                onClick={() => advance(1)}
+              >
+                <span className="feed-scroll-cue-label">start scrolling</span>
+                <span className="feed-scroll-cue-arrow">↓</span>
+              </div>
+            )}
+
+            {(heroActive || heroLeaving)
+              ? renderSlide(0, 'next', true)
+              : [idx - 1, idx, idx + 1].map(i => renderSlide(i))
+            }
 
             {/* Scroll position hint */}
             {visible.length > 1 && (
@@ -455,6 +600,58 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
           />
         )}
       </div>
+
+      {/* ── Floating character filter button ── */}
+      <button
+        className={`feed-char-filter-btn ${filterChars.size > 0 ? 'feed-char-filter-btn--active' : ''}`}
+        onClick={() => setCharPickerOpen(o => !o)}
+        title="Filter by character"
+      >
+        {filterChars.size > 0 ? (
+          <span className="feed-char-filter-count">{filterChars.size}</span>
+        ) : '⚡'}
+        <span>CAST</span>
+      </button>
+
+      {/* ── Character picker panel ── */}
+      {charPickerOpen && (
+        <div className="feed-char-picker">
+          <div className="feed-char-picker-header">
+            <span>Filter by character</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {filterChars.size > 0 && (
+                <button className="feed-char-picker-clear" onClick={() => setFilterChars(new Set())}>
+                  Clear all
+                </button>
+              )}
+              <button className="feed-char-picker-close" onClick={() => setCharPickerOpen(false)}>✕</button>
+            </div>
+          </div>
+          <div className="feed-char-picker-grid">
+            {CHARACTERS.map(char => {
+              const active = filterChars.has(char.key)
+              return (
+                <button
+                  key={char.key}
+                  className={`feed-char-picker-item ${active ? 'feed-char-picker-item--active' : ''}`}
+                  onClick={() => {
+                    setFilterChars(prev => {
+                      const n = new Set(prev)
+                      active ? n.delete(char.key) : n.add(char.key)
+                      return n
+                    })
+                    setIdx(0)
+                  }}
+                >
+                  <img src={`/assets/chars/${char.file}.${char.ext ?? 'png'}`} alt={char.name} className="feed-char-picker-avatar" />
+                  <span className="feed-char-picker-name">{char.name}</span>
+                  {active && <span className="feed-char-picker-check">✓</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
