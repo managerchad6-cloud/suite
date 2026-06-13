@@ -150,6 +150,40 @@
 }
 .xtml-ms-progress-fill--next { background: #1d9bf0; }
 
+/* ── Timeline header + refresh ── */
+.xtml-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.xtml-refresh-btn {
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  color: #888;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.xtml-refresh-btn:hover:not(:disabled) { color: #e7e9ea; border-color: #444; }
+.xtml-refresh-btn:disabled             { opacity: 0.5; cursor: not-allowed; }
+.xtml-refresh-btn--spinning            { color: #1d9bf0; border-color: #1d3a5a; }
+@keyframes xtml-spin { to { transform: rotate(360deg); } }
+.xtml-refresh-btn--spinning::first-letter { display: inline-block; animation: xtml-spin 0.7s linear infinite; }
+
+.xtml-refresh-note {
+  font-size: 11px;
+  color: #3a3a3a;
+  margin: 0 0 4px;
+  line-height: 1.5;
+}
+
 /* ── Tweet timeline ── */
 .xtml-timeline {
   display: flex;

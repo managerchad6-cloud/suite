@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { fetchMyShares, fetchXStatus, type TweetShare, type XStatus } from '../api/twitter'
+import { fetchMyShares, fetchXStatus, refreshMetrics, type TweetShare, type XStatus } from '../api/twitter'
 import { useXMetrics } from '../hooks/useXMetrics'
 import './XTimeline.css'
 
@@ -117,9 +117,11 @@ function TweetCard({ share, xMetrics, fallbackHandle, profileImageUrl }: TweetCa
 interface Props { wallet: string }
 
 export function XTimeline({ wallet }: Props) {
-  const [shares,  setShares]  = useState<TweetShare[]>([])
-  const [xStatus, setXStatus] = useState<XStatus | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [shares,      setShares]      = useState<TweetShare[]>([])
+  const [xStatus,     setXStatus]     = useState<XStatus | null>(null)
+  const [loading,     setLoading]     = useState(true)
+  const [refreshing,  setRefreshing]  = useState(false)
+  const [lastRefresh, setLastRefresh] = useState<number | null>(null)
   const xMetrics = useXMetrics(wallet)
 
   const load = useCallback(async () => {
@@ -133,6 +135,14 @@ export function XTimeline({ wallet }: Props) {
   }, [wallet])
 
   useEffect(() => { load() }, [load])
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    await refreshMetrics(wallet).catch(() => {})
+    setLastRefresh(Date.now())
+    setRefreshing(false)
+  }, [wallet, refreshing])
 
   // Totals + best-single-tweet for milestone gates
   const stats = useMemo(() => {
@@ -224,7 +234,20 @@ export function XTimeline({ wallet }: Props) {
       </div>
 
       {/* ── Tweet timeline ── */}
-      <div className="xtml-section-label xtml-section-label--timeline">TIMELINE</div>
+      <div className="xtml-timeline-header">
+        <span className="xtml-section-label">TIMELINE</span>
+        <button
+          className={`xtml-refresh-btn${refreshing ? ' xtml-refresh-btn--spinning' : ''}`}
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Fetch latest stats from X"
+        >
+          ↻ {refreshing ? 'Refreshing…' : lastRefresh ? 'Refreshed' : 'Refresh'}
+        </button>
+      </div>
+      <p className="xtml-refresh-note">
+        Stats sync automatically — every 2 min for fresh tweets, 15 min after 1 hr, hourly after 24 hr.
+      </p>
       <div className="xtml-timeline">
         {sorted.map(s => (
           <TweetCard

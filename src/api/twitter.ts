@@ -87,6 +87,14 @@ export async function fetchTweetMetrics(wallet: string): Promise<TweetMetrics[]>
   } catch { return [] }
 }
 
+export async function refreshMetrics(wallet: string): Promise<void> {
+  await fetch('/api/x/metrics/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wallet }),
+  })
+}
+
 export function subscribeToMetrics(
   wallet: string,
   onUpdate: (m: TweetMetrics) => void,
