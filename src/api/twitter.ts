@@ -5,6 +5,8 @@ export interface TweetShare {
   meme_type: string
   tweet_id: string | null
   tweet_url: string | null
+  tweet_text?: string | null
+  x_handle?: string | null
   created_at: number
 }
 

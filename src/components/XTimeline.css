@@ -1,0 +1,265 @@
+.xtml-root { display: flex; flex-direction: column; gap: 20px; }
+
+.xtml-loading { color: #555; font-size: 13px; padding: 16px 0; }
+
+/* ── Empty state ── */
+.xtml-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+  text-align: center;
+}
+.xtml-empty-logo { font-family: monospace; font-size: 32px; font-weight: 800; color: #333; }
+.xtml-empty-text { font-size: 14px; color: #555; max-width: 320px; line-height: 1.6; margin: 0; }
+
+/* ── Dashboard ── */
+.xtml-dashboard {
+  display: flex;
+  gap: 0;
+  background: #0d0d0d;
+  border: 1px solid #1e1e1e;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.xtml-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 8px;
+  border-right: 1px solid #1e1e1e;
+  gap: 3px;
+}
+.xtml-stat:last-child { border-right: none; }
+.xtml-stat-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+}
+.xtml-stat-num--likes { color: #f4212e; }
+.xtml-stat-label {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ── Section labels ── */
+.xtml-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #444;
+  text-transform: uppercase;
+  padding-bottom: 2px;
+}
+.xtml-section-label--timeline { margin-top: 4px; }
+
+/* ── Milestones ── */
+.xtml-milestones-section { display: flex; flex-direction: column; gap: 10px; }
+.xtml-milestones-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.xtml-milestones-scroll::-webkit-scrollbar { display: none; }
+
+.xtml-ms-card {
+  flex-shrink: 0;
+  width: 108px;
+  background: #0d0d0d;
+  border: 1px solid #1e1e1e;
+  border-radius: 10px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+.xtml-ms-card--achieved {
+  background: linear-gradient(135deg, #0d1a0d, #0d1400);
+  border-color: #2a5a1a;
+  box-shadow: 0 0 12px rgba(74,222,60,0.08);
+}
+.xtml-ms-card--next {
+  background: linear-gradient(135deg, #0d0d18, #0d1020);
+  border-color: #1d9bf0;
+  box-shadow: 0 0 12px rgba(29,155,240,0.12);
+}
+
+.xtml-ms-icon {
+  font-size: 18px;
+  line-height: 1;
+  color: #333;
+}
+.xtml-ms-card--achieved .xtml-ms-icon { color: #4ade3c; font-size: 20px; }
+.xtml-ms-card--next     .xtml-ms-icon { color: #1d9bf0; }
+
+.xtml-ms-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #666;
+}
+.xtml-ms-card--achieved .xtml-ms-label { color: #e7e9ea; }
+.xtml-ms-card--next     .xtml-ms-label { color: #e7e9ea; }
+
+.xtml-ms-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.xtml-ms-xp {
+  font-size: 11px;
+  font-weight: 700;
+  color: #333;
+}
+.xtml-ms-credits {
+  font-size: 10px;
+  font-weight: 600;
+  color: #2a2a2a;
+}
+.xtml-ms-card--achieved .xtml-ms-xp     { color: #f5c518; }
+.xtml-ms-card--achieved .xtml-ms-credits { color: #4ade3c; }
+.xtml-ms-card--next     .xtml-ms-xp     { color: #aaa; }
+.xtml-ms-card--next     .xtml-ms-credits { color: #888; }
+
+/* Progress bar on "next" milestone */
+.xtml-ms-progress-bar {
+  width: 100%;
+  height: 3px;
+  background: #1a1a2a;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+.xtml-ms-progress-fill {
+  height: 100%;
+  background: #1d9bf0;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  min-width: 4px;
+}
+
+/* ── Tweet timeline ── */
+.xtml-timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+.xtml-tweet {
+  display: flex;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid #111;
+  position: relative;
+}
+.xtml-tweet:last-child { border-bottom: none; }
+
+/* Left column: avatar + thread line */
+.xtml-tweet-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 38px;
+}
+.xtml-tweet-avatar {
+  width: 38px;
+  height: 38px;
+  background: #1d9bf0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.xtml-tweet-thread-line {
+  width: 2px;
+  flex: 1;
+  background: #1a1a1a;
+  margin-top: 6px;
+  border-radius: 1px;
+  min-height: 10px;
+}
+.xtml-tweet:last-child .xtml-tweet-thread-line { display: none; }
+
+/* Right column: content */
+.xtml-tweet-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.xtml-tweet-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.xtml-tweet-handle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e7e9ea;
+}
+.xtml-tweet-dot   { color: #555; font-size: 12px; }
+.xtml-tweet-time  { font-size: 13px; color: #555; }
+.xtml-tweet-ext {
+  font-size: 12px;
+  color: #1d9bf0;
+  text-decoration: none;
+  margin-left: auto;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.xtml-tweet-ext:hover { opacity: 1; }
+
+.xtml-tweet-text {
+  font-size: 14px;
+  color: #e7e9ea;
+  line-height: 1.55;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Meme image */
+.xtml-tweet-img-wrap {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #1a1a1a;
+  max-height: 320px;
+}
+.xtml-tweet-img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  max-height: 320px;
+}
+
+/* Metric row */
+.xtml-tweet-metrics {
+  display: flex;
+  gap: 18px;
+  padding-top: 2px;
+}
+.xtml-tweet-metric {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #555;
+  transition: color 0.15s;
+}
+.xtml-tweet-metric:hover { color: #888; }
+.xtml-tweet-metric-icon { font-size: 14px; }
+.xtml-tweet-metric--likes { color: #555; }
+.xtml-tweet-metric--likes:hover { color: #f4212e; }
+.xtml-tweet-metric--views { color: #444; }

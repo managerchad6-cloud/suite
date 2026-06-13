@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { fetchMemesByWallet, imageUrl, parseMemeId, type Meme } from '../api/memes'
 import type { UserProfile } from '../lib/quizLog'
 import { fetchPlayer, type PlayerState } from '../api/player'
+import { fetchFollowStats, fetchFollowers } from '../api/follow'
 import { BadgeGrid } from '../components/BadgeGrid'
 import { ShadowEconomy } from '../components/ShadowEconomy'
-
+import { UserChip } from '../components/UserChip'
+import { XTimeline } from '../components/XTimeline'
 
 const CHAR_NAME: Record<string, string> = {
   gigachad: 'Gigachad', chad: 'Chad', thad: 'Thad', lad: 'Lad',
@@ -23,9 +25,14 @@ interface Props {
 }
 
 export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props) {
-  const [memes,        setMemes]        = useState<Meme[]>([])
-  const [memesLoading, setMemesLoading] = useState(true)
-  const [player,       setPlayer]       = useState<PlayerState | null>(null)
+  const [memes,          setMemes]          = useState<Meme[]>([])
+  const [memesLoading,   setMemesLoading]   = useState(true)
+  const [player,         setPlayer]         = useState<PlayerState | null>(null)
+  const [followersCount, setFollowersCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
+  const [followersList,  setFollowersList]  = useState<string[]>([])
+  const [showFollowers,  setShowFollowers]  = useState(false)
+  const [followersLoading, setFollowersLoading] = useState(false)
 
   useEffect(() => {
     setMemesLoading(true)
@@ -34,50 +41,100 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props)
       .catch(() => {})
       .finally(() => setMemesLoading(false))
     fetchPlayer(address).then(setPlayer).catch(() => {})
+    fetchFollowStats(address).then(s => {
+      setFollowersCount(s.followers)
+      setFollowingCount(s.following)
+    })
   }, [address])
 
-  if (!profile) return (
-    <div className="profile-empty">
-      <p className="quiz-oracle-label">MY PROFILE</p>
-      <h2 className="profile-empty-title">No archetype yet</h2>
-      <p className="profile-empty-sub">Complete the Oracle interview to get your character.</p>
-      <button className="quiz-start-btn" onClick={onGoToOracle}>Go to Oracle</button>
-    </div>
-  )
+  const openFollowers = async () => {
+    setShowFollowers(true)
+    if (followersList.length === 0) {
+      setFollowersLoading(true)
+      fetchFollowers(address)
+        .then(setFollowersList)
+        .finally(() => setFollowersLoading(false))
+    }
+  }
 
-  const name       = CHAR_NAME[profile.character] ?? profile.character
-  const heroImage  = profile.characterImageDataUrl ?? profile.portraitDataUrl ?? `/assets/chars/${profile.character}.png`
-  const updated    = profile.updatedAt ? new Date(profile.updatedAt).toLocaleDateString() : null
+  const name      = profile ? (CHAR_NAME[profile.character] ?? profile.character) : '???'
+  const heroImage = profile?.characterImageDataUrl ?? profile?.portraitDataUrl ?? (profile ? `/assets/chars/${profile.character}.png` : null)
+  const updated   = profile?.updatedAt ? new Date(profile.updatedAt).toLocaleDateString() : null
 
   return (
     <div className="profile-page">
+
+      {/* ── Followers modal ── */}
+      {showFollowers && (
+        <div className="follow-modal-backdrop" onClick={() => setShowFollowers(false)}>
+          <div className="follow-modal" onClick={e => e.stopPropagation()}>
+            <div className="follow-modal-header">
+              <h3 className="follow-modal-title">Followers ({followersCount})</h3>
+              <button className="follow-modal-close" onClick={() => setShowFollowers(false)}>✕</button>
+            </div>
+            <div className="follow-modal-list">
+              {followersLoading ? (
+                <p className="follow-modal-empty">Loading…</p>
+              ) : followersList.length === 0 ? (
+                <p className="follow-modal-empty">No followers yet.</p>
+              ) : (
+                followersList.map(w => (
+                  <div key={w} className="follow-modal-row" onClick={() => setShowFollowers(false)}>
+                    <UserChip wallet={w} size="md" />
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="profile-hero">
-        <img src={heroImage} alt={name} className="profile-hero-avatar" />
+        {heroImage
+          ? <img src={heroImage} alt={name} className="profile-hero-avatar" />
+          : <div className="profile-hero-avatar profile-hero-avatar--placeholder">?</div>
+        }
         <div className="profile-hero-info">
           <p className="quiz-oracle-label">YOUR ARCHETYPE</p>
           <h1 className="profile-hero-name">{name}</h1>
-          <p className="profile-hero-desc">{profile.description}</p>
+          {profile
+            ? <p className="profile-hero-desc">{profile.description}</p>
+            : (
+              <div className="profile-no-archetype">
+                <p className="profile-no-archetype-text">No archetype assigned yet.</p>
+                <button className="quiz-start-btn profile-oracle-cta" onClick={onGoToOracle}>Go to Onboarding</button>
+              </div>
+            )
+          }
           {updated && <p className="profile-hero-date">Last updated {updated}</p>}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            {profile.characterImageDataUrl && (
-              <a
-                href={profile.characterImageDataUrl}
-                download={`${profile.character}_full.jpg`}
-                className="pfp-modal-download"
-              >
-                Download Character
-              </a>
-            )}
-            {profile.portraitDataUrl && (
-              <a
-                href={profile.portraitDataUrl}
-                download={`${profile.character}_pfp.jpg`}
-                className="pfp-modal-download"
-              >
-                Download PFP
-              </a>
-            )}
+
+          {/* ── Follow stats ── */}
+          <div className="profile-follow-stats">
+            <button className="profile-follow-stat-btn" onClick={openFollowers} title="Click to see your followers">
+              <span className="profile-follow-stat-num">{followersCount.toLocaleString()}</span>
+              <span className="profile-follow-stat-label">Followers</span>
+            </button>
+            <div className="profile-follow-stat-divider" />
+            <div className="profile-follow-stat-btn profile-follow-stat-btn--plain">
+              <span className="profile-follow-stat-num">{followingCount.toLocaleString()}</span>
+              <span className="profile-follow-stat-label">Following</span>
+            </div>
           </div>
+
+          {profile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+              {profile.characterImageDataUrl && (
+                <a href={profile.characterImageDataUrl} download={`${profile.character}_full.jpg`} className="pfp-modal-download">
+                  Download Character
+                </a>
+              )}
+              {profile.portraitDataUrl && (
+                <a href={profile.portraitDataUrl} download={`${profile.character}_pfp.jpg`} className="pfp-modal-download">
+                  Download PFP
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -91,9 +148,9 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props)
             </div>
             <div className="profile-streaks">
               {[
-                { label: 'Login', count: player.login_streak },
+                { label: 'Login',  count: player.login_streak    },
                 { label: 'Create', count: player.creation_streak },
-                { label: 'Vote', count: player.voting_streak },
+                { label: 'Vote',   count: player.voting_streak   },
               ].map(({ label, count }) => (
                 <div key={label} className="profile-streak">
                   <span className="profile-streak-icon">{count >= 3 ? '🔥' : '○'}</span>
@@ -111,16 +168,18 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props)
         <BadgeGrid wallet={address} />
       </div>
 
-      <div className="profile-section">
-        <h3 className="profile-section-title">Traits</h3>
-        <div className="quiz-reveal-attrs">
-          {Object.entries(profile.attributes).map(([k, v]) => (
-            <span key={k} className="pfp-attr-tag">
-              <span className="pfp-attr-key">{k}</span> {v}
-            </span>
-          ))}
+      {profile && Object.keys(profile.attributes).length > 0 && (
+        <div className="profile-section">
+          <h3 className="profile-section-title">Traits</h3>
+          <div className="quiz-reveal-attrs">
+            {Object.entries(profile.attributes).map(([k, v]) => (
+              <span key={k} className="pfp-attr-tag">
+                <span className="pfp-attr-key">{k}</span> {v}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="profile-section">
         <h3 className="profile-section-title">Memes ({memesLoading ? '…' : memes.length})</h3>
@@ -161,8 +220,16 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props)
       </div>
 
       <div className="profile-section">
-        <button className="quiz-retake-btn" onClick={onGoToOracle}>Retake Oracle Interview</button>
+        <h3 className="profile-section-title">X / Twitter</h3>
+        <XTimeline wallet={address} />
       </div>
+
+      {profile && (
+        <div className="profile-section">
+          <button className="quiz-retake-btn" onClick={onGoToOracle}>Retake Oracle Interview</button>
+        </div>
+      )}
+
     </div>
   )
 }
