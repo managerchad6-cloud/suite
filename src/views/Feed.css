@@ -790,3 +790,33 @@
   80%  { opacity: 1; }
   100% { top: 105vh;  opacity: 0; transform: rotate(calc(var(--rot) + 720deg)) scale(0.6); }
 }
+
+/* ── X shared badge (live metrics overlay on feed cards) ─────────────────── */
+.feed-x-shared-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(29,155,240,0.35);
+  border-radius: 20px;
+  padding: 4px 10px 4px 8px;
+  pointer-events: none;
+  z-index: 10;
+}
+.feed-x-shared-logo {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1d9bf0;
+  line-height: 1;
+}
+.feed-x-shared-stat {
+  font-size: 12px;
+  color: #e7e9ea;
+  font-weight: 600;
+  white-space: nowrap;
+}

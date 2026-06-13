@@ -14,7 +14,8 @@ import { dispatchXP } from '../api/player'
 import { XPGain } from '../components/XPGain'
 import { CHARACTERS } from '../data/characterLore'
 import type { UnifiedMemeItem, MemeSourceType, MemeTier } from '../types/unified'
-import { fetchXStatus, postXTweet } from '../api/twitter'
+import { fetchXStatus, postXTweet, fetchMyShares, type TweetShare } from '../api/twitter'
+import { useXMetrics } from '../hooks/useXMetrics'
 import './Feed.css'
 
 // ── Feed session cache ────────────────────────────────────────────────────────
@@ -205,8 +206,11 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   const [shareItem,   setShareItem]   = useState<UnifiedMemeItem | null>(null)
   const [tweetText,   setTweetText]   = useState('')
   const [tweetUrl,    setTweetUrl]    = useState('')
+  const [tweetId,     setTweetId]     = useState<string | null>(null)
   const [xHandle,     setXHandle]     = useState<string | null>(null)
   const shareItemRef = useRef<UnifiedMemeItem | null>(null)
+  const [myShares,    setMyShares]    = useState<TweetShare[]>([])
+  const xMetrics = useXMetrics(address || null)
   const [followingSet,  setFollowingSet]  = useState<Set<string>>(new Set())
   const [feedPrefs, setFeedPrefsState] = useState<FeedPrefs>(() =>
     address ? loadPrefs(address) : emptyPrefs(),
@@ -253,6 +257,12 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   useEffect(() => {
     if (!address) return
     fetchFollowing(address).then(list => setFollowingSet(new Set(list))).catch(() => {})
+  }, [address])
+
+  // Load shares so we know which feed cards have been posted to X
+  useEffect(() => {
+    if (!address) return
+    fetchMyShares(address).then(setMyShares).catch(() => {})
   }, [address])
 
 
@@ -580,6 +590,13 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   visibleRef.current = visible
   const currentItem = visible[idx] ?? null
 
+  // meme_id → tweet_id for memes this user has already shared to X
+  const sharedMemeMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of myShares) { if (s.tweet_id) m.set(s.meme_id, s.tweet_id) }
+    return m
+  }, [myShares])
+
   // Sync local vote state whenever the card at idx changes
   useEffect(() => {
     if (!currentItem) { setLocalVote(null); return }
@@ -636,6 +653,8 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     if (!forceClass && (offset < -1 || offset > 1)) return null
     const cls = forceClass ?? (offset < 0 ? 'prev' : offset > 0 ? 'next' : 'current')
     const isCurrent = cls === 'current'
+    const sharedTweetId = sharedMemeMap.get(item.sourceId)
+    const sharedMetrics = sharedTweetId ? xMetrics.get(sharedTweetId) : null
     return (
       <div key={item.key} className={`feed-slide feed-slide--${cls}${heropeek ? ' feed-slide--hero-peek' : ''}`}>
         <FeedCard
@@ -643,6 +662,16 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
           address={address}
           onOpen={it => { recordSignalForItem(it, 'detail'); onOpenItem(it) }}
         />
+        {sharedMetrics && (
+          <div className="feed-x-shared-badge">
+            <span className="feed-x-shared-logo">𝕏</span>
+            <span className="feed-x-shared-stat">❤ {sharedMetrics.like_count.toLocaleString()}</span>
+            <span className="feed-x-shared-stat">🔁 {sharedMetrics.retweet_count.toLocaleString()}</span>
+            {sharedMetrics.impression_count > 0 && (
+              <span className="feed-x-shared-stat">👁 {sharedMetrics.impression_count.toLocaleString()}</span>
+            )}
+          </div>
+        )}
         {isCurrent && localVote && (
           <div className="feed-actions" style={{ position: 'relative' }}>
             {xpGain && <XPGain key={xpGain.key} amount={xpGain.amount} onDone={() => setXpGain(null)} />}
@@ -789,7 +818,14 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
         creator_wallet: item.wallet ?? undefined,
       })
       setTweetUrl(result.tweet_url)
+      setTweetId(result.tweet_id)
       setXHandle(result.handle)
+      setMyShares(prev => [...prev, {
+        id: result.share_id, wallet: address,
+        meme_id: item.sourceId, meme_type: item.type,
+        tweet_id: result.tweet_id, tweet_url: result.tweet_url,
+        created_at: Date.now(),
+      }])
       setShareModal('success')
     } catch (e) {
       alert((e as Error).message)
@@ -878,7 +914,9 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
             )}
 
             {/* ── Success — full tweet card + confetti ── */}
-            {shareModal === 'success' && (
+            {shareModal === 'success' && (() => {
+              const liveM = tweetId ? xMetrics.get(tweetId) : null
+              return (
               <>
                 <div className="feed-xcard">
                   <div className="feed-xcard-header">
@@ -894,9 +932,12 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
                     <img src={shareItem.imageUrl} className="feed-xcard-img" alt="meme" />
                   )}
                   <div className="feed-xcard-actions">
-                    <span className="feed-xcard-action">💬 <em>0</em></span>
-                    <span className="feed-xcard-action">🔁 <em>0</em></span>
-                    <span className="feed-xcard-action">❤️ <em>0</em></span>
+                    <span className="feed-xcard-action">💬 <em>{(liveM?.reply_count ?? 0).toLocaleString()}</em></span>
+                    <span className="feed-xcard-action">🔁 <em>{(liveM?.retweet_count ?? 0).toLocaleString()}</em></span>
+                    <span className="feed-xcard-action">❤️ <em>{(liveM?.like_count ?? 0).toLocaleString()}</em></span>
+                    {(liveM?.impression_count ?? 0) > 0 && (
+                      <span className="feed-xcard-action">👁 <em>{liveM!.impression_count.toLocaleString()}</em></span>
+                    )}
                   </div>
                 </div>
                 <div className="feed-share-rewards" style={{ marginTop: 4 }}>
@@ -919,7 +960,8 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
                   <button className="feed-share-btn feed-share-btn--secondary" onClick={() => setShareModal(null)} style={{ flex: 1 }}>Done</button>
                 </div>
               </>
-            )}
+              )
+            })()}
           </div>
         </div>
       )}

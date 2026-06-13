@@ -64,3 +64,34 @@ export async function fetchMyShares(wallet: string): Promise<TweetShare[]> {
   const data = await res.json()
   return data.items ?? []
 }
+
+export interface TweetMetrics {
+  tweet_id: string
+  like_count: number
+  retweet_count: number
+  reply_count: number
+  quote_count: number
+  impression_count: number
+  updated_at: number
+}
+
+export async function fetchTweetMetrics(wallet: string): Promise<TweetMetrics[]> {
+  try {
+    const res = await fetch(`/api/x/metrics?wallet=${encodeURIComponent(wallet)}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.items ?? []
+  } catch { return [] }
+}
+
+export function subscribeToMetrics(
+  wallet: string,
+  onUpdate: (m: TweetMetrics) => void,
+): () => void {
+  const es = new EventSource(`/api/x/metrics/events?wallet=${encodeURIComponent(wallet)}`)
+  es.onmessage = e => {
+    try { onUpdate(JSON.parse(e.data) as TweetMetrics) } catch {}
+  }
+  es.onerror = () => {}
+  return () => es.close()
+}
