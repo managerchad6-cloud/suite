@@ -1,13 +1,55 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { fetchGalleryMemes, studioMemeImageUrl } from '../api/studio'
 import { fetchMemes, imageUrl } from '../api/memes'
+import { fetchFollowing } from '../api/follow'
+import {
+  loadPrefs, savePrefs, recordSignal, personalBoost, explorationNoise, emptyPrefs,
+  type FeedPrefs, type EngagementSignal,
+} from '../lib/feedPrefs'
 import { truncateAddress } from '../wallet'
 import { FeedCard } from '../components/FeedCard'
 import { CommentsPanel } from '../components/CommentsPanel'
-import { castVote } from '../api/votes'
+import { castVote, trackFeedAction } from '../api/votes'
+import { dispatchXP } from '../api/player'
+import { XPGain } from '../components/XPGain'
 import { CHARACTERS } from '../data/characterLore'
 import type { UnifiedMemeItem, MemeSourceType, MemeTier } from '../types/unified'
+import { fetchXStatus, postXTweet } from '../api/twitter'
 import './Feed.css'
+
+// ── Feed session cache ────────────────────────────────────────────────────────
+// v3: includes noiseMap + sessionPrefs so remounts restore the exact same order.
+// No app-level TTL — sessionStorage expires naturally when the browser tab closes.
+const FEED_CACHE_KEY = 'vvc-feed-state-v3'
+
+type FeedCache = {
+  items: UnifiedMemeItem[]
+  idx: number
+  sort: SortMode
+  topPeriod: TopPeriod
+  filter: MemeSourceType[]
+  filterChars: string[]
+  heroActive: boolean
+  pages: { studio: number; factory: number; reddit: number }
+  hasMore: { studio: boolean; factory: boolean; reddit: boolean }
+  savedAt: number
+  noiseMap?: Record<string, number>
+  sessionPrefs?: FeedPrefs
+  sortedKeys?: string[]
+}
+
+function readFeedCache(): FeedCache | null {
+  try {
+    const raw = sessionStorage.getItem(FEED_CACHE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as FeedCache
+  } catch { return null }
+}
+
+function writeFeedCache(c: FeedCache) {
+  try { sessionStorage.setItem(FEED_CACHE_KEY, JSON.stringify(c)) } catch {}
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface BankPost {
   id: string; title: string; image_url: string; score: number; date: string
@@ -42,7 +84,16 @@ function ageHours(dateIso: string) {
   return (Date.now() - new Date(dateIso).getTime()) / 3_600_000
 }
 
-function sortItems(items: UnifiedMemeItem[], mode: SortMode, topPeriod: TopPeriod = 'week'): UnifiedMemeItem[] {
+function sortItems(
+  items: UnifiedMemeItem[],
+  mode: SortMode,
+  topPeriod: TopPeriod = 'week',
+  followedWallets: Set<string> = new Set(),
+  prefs: FeedPrefs = emptyPrefs(),
+  // noiseFor is injected so the component can cache one noise value per item key,
+  // making the foryou order stable across re-renders within the same session.
+  noiseFor: (key: string) => number = () => explorationNoise(),
+): UnifiedMemeItem[] {
   const copy = [...items]
   switch (mode) {
     case 'fresh':
@@ -76,13 +127,25 @@ function sortItems(items: UnifiedMemeItem[], mode: SortMode, topPeriod: TopPerio
       })
     case 'foryou':
     default:
-      // Wilson-style score blended with recency decay
+      // Personalised score: global popularity × recency × follow boost × taste boost × exploration noise
+      // Each component is independent so the feed is always full of content — follows/taste just re-rank it.
       return copy.sort((a, b) => {
-        const scoreA = (a.up_votes ?? 0) - (a.down_votes ?? 0) + (a.redditScore ?? 0)
-        const scoreB = (b.up_votes ?? 0) - (b.down_votes ?? 0) + (b.redditScore ?? 0)
+        // Global quality baseline (floor at 0.5 so fresh memes still compete)
+        const qA = Math.max(0.5, (a.up_votes ?? 0) - (a.down_votes ?? 0)) + (a.redditScore ?? 0) / 60
+        const qB = Math.max(0.5, (b.up_votes ?? 0) - (b.down_votes ?? 0)) + (b.redditScore ?? 0) / 60
+        // Recency — halves every 24 h
         const decayA = 1 / (1 + ageHours(a.dateIso) / 24)
         const decayB = 1 / (1 + ageHours(b.dateIso) / 24)
-        return (scoreB * decayB) - (scoreA * decayA)
+        // Follow boost — followed creators get a lift but don't monopolise
+        const followA = a.wallet && followedWallets.has(a.wallet) ? 2 : 1
+        const followB = b.wallet && followedWallets.has(b.wallet) ? 2 : 1
+        // Taste boost from engagement history (1 for cold start, up to ~6× for preferred content)
+        const tasteA = personalBoost(a, prefs)
+        const tasteB = personalBoost(b, prefs)
+        // Exploration noise — slight randomness so the feed feels alive and surfaces new content
+        const noiseA = noiseFor(a.key)
+        const noiseB = noiseFor(b.key)
+        return (qB * decayB * followB * tasteB * noiseB) - (qA * decayA * followA * tasteA * noiseA)
       })
   }
 }
@@ -96,30 +159,169 @@ interface Props {
   onOpenFactory?: () => void
 }
 
+const CONFETTI_COLORS = ['#ff4d4d','#ffd700','#4dff91','#4dc8ff','#ff4dce','#fff','#1d9bf0','#ff922b']
+function XConfetti() {
+  const pieces = useMemo(() =>
+    Array.from({ length: 60 }, (_, i) => i), []
+  )
+  return (
+    <>
+      {pieces.map(i => (
+        <span key={i} className="feed-xconfetti-piece" style={{
+          '--x':        `${Math.random() * 100}vw`,
+          '--delay':    `${(Math.random() * 0.9).toFixed(2)}s`,
+          '--duration': `${(0.9 + Math.random() * 0.9).toFixed(2)}s`,
+          '--color':    CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+          '--rot':      `${Math.floor(Math.random() * 360)}deg`,
+        } as React.CSSProperties} />
+      ))}
+    </>
+  )
+}
+
 export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenFactory }: Props) {
-  const [items,       setItems]       = useState<UnifiedMemeItem[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [idx,         setIdx]         = useState(0)
-  const [heroActive,  setHeroActive]  = useState(true)
+  // Read session cache exactly once on first render
+  const _initCache = useRef<FeedCache | null | undefined>(undefined)
+  if (_initCache.current === undefined) _initCache.current = readFeedCache()
+  const cache = _initCache.current
+
+  const [items,       setItems]       = useState<UnifiedMemeItem[]>(() => cache?.items ?? [])
+  const [loading,     setLoading]     = useState(() => !cache || cache.items.length === 0)
+  const [idx,         setIdx]         = useState(() => cache?.idx ?? 0)
+  const [heroActive,  setHeroActive]  = useState(() => cache?.heroActive ?? true)
   const [heroLeaving, setHeroLeaving] = useState(false)
   const heroLeavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [sort,        setSort]        = useState<SortMode>('foryou')
-  const [topPeriod,   setTopPeriod]   = useState<TopPeriod>('week')
-  const [filter,      setFilter]      = useState<Set<MemeSourceType>>(new Set(['studio', 'factory', 'reddit']))
-  const [filterChars, setFilterChars] = useState<Set<string>>(new Set())
-  const [charPickerOpen, setCharPickerOpen] = useState(false)
+  const [sort,        setSort]        = useState<SortMode>(() => cache?.sort ?? 'foryou')
+  const [topPeriod,   setTopPeriod]   = useState<TopPeriod>(() => cache?.topPeriod ?? 'week')
+  const [filter,      setFilter]      = useState<Set<MemeSourceType>>(() => new Set(cache?.filter ?? ['studio', 'factory', 'reddit']))
+  const [filterChars, setFilterChars] = useState<Set<string>>(() => new Set(cache?.filterChars ?? []))
   const [localVote,     setLocalVote]     = useState<{
     upVotes: number; downVotes: number; yourVote: 1|-1|null; tier: MemeTier; voting: boolean
   } | null>(null)
   const [showComments,  setShowComments]  = useState(false)
-  const pages       = useRef({ studio: 1, factory: 1, reddit: 1 })
-  const hasMore     = useRef({ studio: true, factory: true, reddit: true })
+  const [xpGain, setXpGain] = useState<{ amount: number; key: number } | null>(null)
+  // connect = no X account yet; compose = ready to post; posting = awaiting API; success = tweet live
+  const [shareModal,  setShareModal]  = useState<null | 'connect' | 'compose' | 'posting' | 'success'>(null)
+  const [shareItem,   setShareItem]   = useState<UnifiedMemeItem | null>(null)
+  const [tweetText,   setTweetText]   = useState('')
+  const [tweetUrl,    setTweetUrl]    = useState('')
+  const [xHandle,     setXHandle]     = useState<string | null>(null)
+  const shareItemRef = useRef<UnifiedMemeItem | null>(null)
+  const [followingSet,  setFollowingSet]  = useState<Set<string>>(new Set())
+  const [feedPrefs, setFeedPrefsState] = useState<FeedPrefs>(() =>
+    address ? loadPrefs(address) : emptyPrefs(),
+  )
+  // Incrementing this forces the load effect to re-run even if sort hasn't changed.
+  const [refreshKey, setRefreshKey] = useState(0)
+  // Refs for skip/view detection — kept in refs to avoid stale closures
+  const prevItemRef  = useRef<UnifiedMemeItem | null>(null)
+  const itemShownAt  = useRef<number>(Date.now())
+  // Prefs snapshot frozen at session start — restored from sessionStorage on remount
+  // so tab-switching never re-sorts. Fresh values come in only on F5 or Refresh.
+  const sessionPrefsRef = useRef<FeedPrefs>(
+    cache?.sessionPrefs ?? (address ? loadPrefs(address) : emptyPrefs()),
+  )
+  // Noise cache restored from sessionStorage on remount so item order is identical.
+  const noiseCacheRef = useRef<Map<string, number>>(
+    cache?.noiseMap ? new Map(Object.entries(cache.noiseMap)) : new Map(),
+  )
+  // Locked sort order for this session — key sequence from the last computed visible list.
+  // useMemo uses this to reorder items without re-running sortItems, so vote updates from
+  // loadTierData can't reposition items mid-session.
+  const sessionSortRef = useRef<string[] | null>(cache?.sortedKeys ?? null)
+  const getItemNoise = useCallback((key: string) => {
+    if (!noiseCacheRef.current.has(key)) noiseCacheRef.current.set(key, explorationNoise())
+    return noiseCacheRef.current.get(key)!
+  }, [])
+  // visibleRef lets effects read the latest visible list without it being a dep
+  const visibleRef = useRef<UnifiedMemeItem[]>([])
+  const pages   = useRef(cache?.pages   ?? { studio: 1, factory: 1, reddit: 1 })
+  const hasMore = useRef(cache?.hasMore ?? { studio: true, factory: true, reddit: true })
+  const sortWhenLoaded = useRef<SortMode | null>(null)
   const loading_more  = useRef(false)
   const wheelLock     = useRef(false)
   const wheelAccum    = useRef(0)
   const wheelIdleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const touchY        = useRef(0)
   const tierCache   = useRef<Map<string, TierRow>>(new Map())
+
+  // Always-fresh ref for save-on-unmount (avoids stale closure in cleanup)
+  const latestRef = useRef({ items, idx, sort, topPeriod, filter, filterChars, heroActive })
+  useEffect(() => { latestRef.current = { items, idx, sort, topPeriod, filter, filterChars, heroActive } })
+
+  // Load following list for foryou boost
+  useEffect(() => {
+    if (!address) return
+    fetchFollowing(address).then(list => setFollowingSet(new Set(list))).catch(() => {})
+  }, [address])
+
+
+  // Clear noise cache and locked sort order only when the user actively changes sort mode.
+  // Using a prevSort ref prevents this from firing on initial mount (which would undo the
+  // session-restore we just loaded from sessionStorage).
+  const prevSortRef = useRef<SortMode | null>(null)
+  useEffect(() => {
+    if (prevSortRef.current !== null && prevSortRef.current !== sort) {
+      noiseCacheRef.current.clear()
+      sessionSortRef.current = null
+    }
+    prevSortRef.current = sort
+  }, [sort])
+
+  // ── Personalisation signal helpers ────────────────────────────────────────
+  const recordSignalForItem = useCallback((item: UnifiedMemeItem, signal: EngagementSignal) => {
+    if (!address) return
+    setFeedPrefsState(prev => {
+      const next = recordSignal(prev, signal, item)
+      savePrefs(address, next)
+      return next
+    })
+  }, [address])
+
+  // Detect skip when the user advances past an item in under 1.6 s
+  useEffect(() => {
+    const item = visibleRef.current[idx] ?? null
+    const now   = Date.now()
+    const dwell = now - itemShownAt.current
+    const prev  = prevItemRef.current
+
+    if (prev && dwell > 150 && dwell < 1600) {
+      recordSignalForItem(prev, 'skip')
+      trackFeedAction(address, prev.sourceId, prev.type, 'skip', dwell)
+    }
+
+    prevItemRef.current = item
+    itemShownAt.current = now
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, sort])
+
+  // Record a 'view' signal after 5 s of uninterrupted viewing in foryou mode
+  useEffect(() => {
+    if (sort !== 'foryou') return
+    const item = visibleRef.current[idx] ?? null
+    if (!item) return
+    const timer = setTimeout(() => recordSignalForItem(item, 'view'), 5000)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx, sort])
+
+  // Persist full feed state (incl. noise map + prefs snapshot) when navigating away.
+  // Restored on remount so tab-switching never changes the sort order.
+  useEffect(() => {
+    return () => {
+      const s = latestRef.current
+      writeFeedCache({
+        items: s.items, idx: s.idx, sort: s.sort, topPeriod: s.topPeriod,
+        filter: [...s.filter], filterChars: [...s.filterChars],
+        heroActive: s.heroActive,
+        pages: { ...pages.current }, hasMore: { ...hasMore.current },
+        savedAt: Date.now(),
+        noiseMap: Object.fromEntries(noiseCacheRef.current),
+        sessionPrefs: sessionPrefsRef.current,
+        sortedKeys: sessionSortRef.current ?? visibleRef.current.map(i => i.key),
+      })
+    }
+  }, [])
 
   // Enrich items array with tier/vote data from the cache
   function enrichWithTiers(list: UnifiedMemeItem[]): UnifiedMemeItem[] {
@@ -152,10 +354,13 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
 
   const fetchBatch = useCallback(async (p: { studio: number; factory: number; reddit: number }, currentSort: SortMode) => {
     const redditSort = currentSort === 'fresh' ? 'new' : currentSort === 'top' ? 'top' : 'top'
+    // Wrap each source in a 6 s timeout so a slow/unreachable remote never blocks the feed.
+    const withTimeout = <T,>(promise: Promise<T>, ms = 6000): Promise<T> =>
+      Promise.race([promise, new Promise<T>((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))])
     const [sr, fr, rr] = await Promise.allSettled([
-      hasMore.current.studio  ? fetchGalleryMemes(p.studio, 10)  : Promise.resolve(null),
-      hasMore.current.factory ? fetchMemes(p.factory, 10)         : Promise.resolve(null),
-      hasMore.current.reddit  ? fetch(`/memebank?page=${p.reddit}&limit=10&sort=${redditSort}`).then(r => r.json()) : Promise.resolve(null),
+      hasMore.current.studio  ? withTimeout(fetchGalleryMemes(p.studio, 10))  : Promise.resolve(null),
+      hasMore.current.factory ? withTimeout(fetchMemes(p.factory, 10))         : Promise.resolve(null),
+      hasMore.current.reddit  ? withTimeout(fetch(`/memebank?page=${p.reddit}&limit=10&sort=${redditSort}`).then(r => r.json())) : Promise.resolve(null),
     ])
     const next: UnifiedMemeItem[] = []
     if (sr.status === 'fulfilled' && sr.value) {
@@ -207,20 +412,49 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
       .finally(() => { loading_more.current = false })
   }, [fetchBatch, sort])
 
+  // Explicit refresh: clear session cache, take latest prefs, re-fetch from scratch.
+  // Normal tab-switching preserves state — only F5 or this button starts fresh.
+  const handleRefresh = useCallback(() => {
+    sessionStorage.removeItem(FEED_CACHE_KEY)
+    noiseCacheRef.current.clear()
+    sessionSortRef.current = null
+    sessionPrefsRef.current = address ? loadPrefs(address) : emptyPrefs()
+    pages.current   = { studio: 1, factory: 1, reddit: 1 }
+    hasMore.current = { studio: true, factory: true, reddit: true }
+    sortWhenLoaded.current = null
+    setItems([])
+    setIdx(0)
+    setHeroActive(true)
+    setHeroLeaving(false)
+    setRefreshKey(k => k + 1)
+  }, [address])
+
   useEffect(() => {
+    // Cache hit on mount: restore saved feed state, skip full reload
+    if (_initCache.current !== null && _initCache.current !== undefined && _initCache.current.items.length > 0) {
+      sortWhenLoaded.current = sort
+      _initCache.current = null
+      void loadTierData()
+      return
+    }
+    _initCache.current = null
+    // StrictMode guard: skip if this exact sort was already loaded (double-invoke protection)
+    if (sortWhenLoaded.current === sort) return
+    sortWhenLoaded.current = sort
     setLoading(true)
     setIdx(0)
     setHeroActive(true)
     setHeroLeaving(false)
     pages.current   = { studio: 1, factory: 1, reddit: 1 }
     hasMore.current = { studio: true, factory: true, reddit: true }
-    Promise.all([
-      fetchBatch({ studio: 1, factory: 1, reddit: 1 }, sort),
-      loadTierData(),
-    ]).then(([next]) => {
-      setItems(sortItems(next, sort, topPeriod))
-    }).finally(() => setLoading(false))
-  }, [sort, fetchBatch, loadTierData])
+    // loadTierData enriches vote counts — run it in parallel but don't let it block rendering.
+    void loadTierData()
+    fetchBatch({ studio: 1, factory: 1, reddit: 1 }, sort)
+      .then(next => {
+        setItems(sortItems(next, sort, topPeriod, followingSet, sessionPrefsRef.current, getItemNoise))
+      })
+      .finally(() => setLoading(false))
+  }, [sort, fetchBatch, loadTierData, refreshKey])
 
   function itemMatchesCharFilter(item: UnifiedMemeItem): boolean {
     if (filterChars.size === 0) return true
@@ -315,7 +549,35 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     filter.size === 1 && filter.has('factory') ? 'factory' :
     filter.size === 1 && filter.has('reddit')  ? 'reddit'  : 'all'
 
-  const visible = sortItems(items.filter(i => filter.has(i.type) && itemMatchesCharFilter(i)), sort, topPeriod)
+  // feedPrefs intentionally excluded — the order is computed once per session
+  // (prefs are snapshotted at mount). Signals recorded during scrolling are
+  // saved and will reshape the feed on the NEXT session, not mid-scroll.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const visible = useMemo(() => {
+    const filtered = items.filter(i => filter.has(i.type) && itemMatchesCharFilter(i))
+
+    // If a locked order exists for this session, restore it exactly.
+    // New items appended after the locked block in fresh sort order.
+    // This prevents loadTierData (fresh vote counts) from repositioning items.
+    if (sessionSortRef.current) {
+      const keyOrder = new Map(sessionSortRef.current.map((k, i) => [k, i]))
+      const inOrder: typeof filtered = []
+      const newItems: typeof filtered = []
+      filtered.forEach(item => (keyOrder.has(item.key) ? inOrder : newItems).push(item))
+      inOrder.sort((a, b) => (keyOrder.get(a.key) ?? 99999) - (keyOrder.get(b.key) ?? 99999))
+      const appended = sortItems(newItems, sort, topPeriod, followingSet, sessionPrefsRef.current, getItemNoise)
+      const result = [...inOrder, ...appended]
+      sessionSortRef.current = result.map(i => i.key)
+      return result
+    }
+
+    // Fresh sort — lock the order for the rest of this session.
+    const sorted = sortItems(filtered, sort, topPeriod, followingSet, sessionPrefsRef.current, getItemNoise)
+    sessionSortRef.current = sorted.map(i => i.key)
+    return sorted
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, sort, topPeriod, filter, filterChars, followingSet, getItemNoise])
+  visibleRef.current = visible
   const currentItem = visible[idx] ?? null
 
   // Sync local vote state whenever the card at idx changes
@@ -339,16 +601,32 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     try {
       const result = await castVote(currentItem.sourceId, currentItem.type, dir, address)
       setLocalVote({ upVotes: result.up_votes, downVotes: result.down_votes, yourVote: newYourVote, tier: result.tier, voting: false })
-      setItems(prev => prev.map(item =>
-        item.key === currentItem.key
-          ? { ...item, up_votes: result.up_votes, down_votes: result.down_votes, tier: result.tier, your_vote: newYourVote ?? undefined }
-          : item
+      // Update item in place + tier cache so vote state survives navigation.
+      // sessionSortRef stays locked so foryou order never shifts mid-session.
+      const cacheKey = `${currentItem.sourceId}:${currentItem.type}`
+      const prev = tierCache.current.get(cacheKey)
+      tierCache.current.set(cacheKey, {
+        meme_id: currentItem.sourceId, meme_source: currentItem.type,
+        tier: result.tier, score: result.up_votes - result.down_votes,
+        velocity: prev?.velocity ?? 0,
+        up_votes: result.up_votes, down_votes: result.down_votes,
+        your_vote: newYourVote,
+      })
+      setItems(prev => prev.map(i =>
+        i.key === currentItem.key
+          ? { ...i, up_votes: result.up_votes, down_votes: result.down_votes, your_vote: newYourVote, tier: result.tier }
+          : i
       ))
+      recordSignalForItem(currentItem, dir === 1 ? 'vote_up' : 'vote_down')
+      if (result.xp_awarded > 0) {
+        dispatchXP(result.xp_awarded)
+        setXpGain({ amount: result.xp_awarded, key: Date.now() })
+      }
     } catch (err) {
       console.error('Vote failed:', err)
       setLocalVote(prev => prev ? { ...prev, voting: false } : prev)
     }
-  }, [currentItem, localVote, address])
+  }, [currentItem, localVote, address, recordSignalForItem])
 
   // Render one slide; vote buttons are co-rendered inside current slide as a flex sibling
   function renderSlide(visIdx: number, forceClass?: 'prev' | 'current' | 'next', heropeek?: boolean) {
@@ -360,9 +638,14 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     const isCurrent = cls === 'current'
     return (
       <div key={item.key} className={`feed-slide feed-slide--${cls}${heropeek ? ' feed-slide--hero-peek' : ''}`}>
-        <FeedCard item={item} address={address} onOpen={onOpenItem} />
+        <FeedCard
+          item={item}
+          address={address}
+          onOpen={it => { recordSignalForItem(it, 'detail'); onOpenItem(it) }}
+        />
         {isCurrent && localVote && (
-          <div className="feed-actions">
+          <div className="feed-actions" style={{ position: 'relative' }}>
+            {xpGain && <XPGain key={xpGain.key} amount={xpGain.amount} onDone={() => setXpGain(null)} />}
 
             {/* 👍 Upvote */}
             <button
@@ -406,13 +689,8 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
             <button
               className="feed-action-btn"
               onClick={() => {
-                const url = item.type === 'reddit' && item.redditPermalink
-                  ? `https://reddit.com${item.redditPermalink}`
-                  : window.location.href
-                window.open(
-                  `https://twitter.com/intent/tweet?text=${encodeURIComponent(item.title)}&url=${encodeURIComponent(url)}`,
-                  '_blank', 'noopener,noreferrer'
-                )
+                recordSignalForItem(item, 'share')
+                handleShareClick(item)
               }}
               title="Share to X"
             >
@@ -462,6 +740,63 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     )
   }
 
+  const handleShareClick = async (item: UnifiedMemeItem) => {
+    shareItemRef.current = item
+    setShareItem(item)
+    setTweetText(`${item.title}\n\n#VirginVsChad #Memes $VVC`)
+    setTweetUrl('')
+    if (!address) return
+    const status = await fetchXStatus(address).catch(() => ({ connected: false as const }))
+    if (status.connected && status.handle) {
+      setXHandle(status.handle)
+      setShareModal('compose')
+    } else {
+      setShareModal('connect')
+    }
+  }
+
+  const handleConnectX = () => {
+    if (!address) return
+    window.open(
+      `/api/x/auth?wallet=${encodeURIComponent(address)}`,
+      'x-oauth'
+    )
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type !== 'x_auth') return
+      window.removeEventListener('message', onMsg)
+      if (e.data.handle) {
+        setXHandle(e.data.handle)
+        setShareModal('compose')
+      } else {
+        alert(e.data.error || 'X connection failed')
+        setShareModal(null)
+      }
+    }
+    window.addEventListener('message', onMsg)
+  }
+
+  const handlePostTweet = async () => {
+    const item = shareItemRef.current ?? shareItem
+    if (!item || !address) return
+    setShareModal('posting')
+    try {
+      const result = await postXTweet({
+        wallet: address,
+        text: tweetText,
+        image_url: item.imageUrl ? new URL(item.imageUrl, window.location.origin).href : undefined,
+        meme_id: item.sourceId,
+        meme_type: item.type,
+        creator_wallet: item.wallet ?? undefined,
+      })
+      setTweetUrl(result.tweet_url)
+      setXHandle(result.handle)
+      setShareModal('success')
+    } catch (e) {
+      alert((e as Error).message)
+      setShareModal('compose')
+    }
+  }
+
   return (
     <div
       className="feed-root"
@@ -469,6 +804,126 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
+
+      {/* ── Share modal ── */}
+      {shareModal && (
+        <div
+          className="feed-share-backdrop"
+          onClick={shareModal === 'posting' ? undefined : () => setShareModal(null)}
+        >
+          {shareModal === 'success' && <XConfetti />}
+          <div
+            className={`feed-share-modal${shareModal === 'compose' || shareModal === 'success' ? ' feed-share-modal--wide' : ''}`}
+            onClick={e => e.stopPropagation()}
+          >
+            {shareModal !== 'posting' && (
+              <button className="feed-share-close" onClick={() => setShareModal(null)}>✕</button>
+            )}
+
+            {/* ── Connect X account ── */}
+            {shareModal === 'connect' && (
+              <>
+                <div className="feed-share-x-logo">𝕏</div>
+                <h3 className="feed-share-title">Connect your X account</h3>
+                <p className="feed-share-sub">One-time OAuth — then post memes to X with one click, with the image attached.</p>
+                <button className="feed-share-btn feed-share-btn--primary" onClick={handleConnectX}>
+                  Connect X
+                </button>
+              </>
+            )}
+
+            {/* ── Compose — X-style ── */}
+            {shareModal === 'compose' && (
+              <div className="feed-xcompose">
+                <div className="feed-xcompose-row">
+                  <div className="feed-xcompose-avatar">{xHandle?.[0]?.toUpperCase() ?? '?'}</div>
+                  <div className="feed-xcompose-right">
+                    <div className="feed-xcompose-handle">@{xHandle}</div>
+                    <textarea
+                      className="feed-xcompose-textarea"
+                      value={tweetText}
+                      onChange={e => setTweetText(e.target.value.slice(0, 280))}
+                      autoFocus
+                    />
+                    {shareItem?.imageUrl && (
+                      <div className="feed-xcompose-img-wrap">
+                        <img src={shareItem.imageUrl} className="feed-xcompose-img" alt="meme preview" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="feed-xcompose-footer">
+                  <span className={`feed-xcompose-counter${tweetText.length > 260 ? ' feed-xcompose-counter--warn' : ''}`}>
+                    {280 - tweetText.length}
+                  </span>
+                  <button
+                    className="feed-xcompose-post-btn"
+                    onClick={handlePostTweet}
+                    disabled={!tweetText.trim()}
+                  >
+                    Post
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Posting ── */}
+            {shareModal === 'posting' && (
+              <>
+                <div className="feed-share-x-logo">𝕏</div>
+                <h3 className="feed-share-title">Posting…</h3>
+                <p className="feed-share-sub">Uploading image and posting to X.</p>
+                <div className="feed-share-spinner" />
+              </>
+            )}
+
+            {/* ── Success — full tweet card + confetti ── */}
+            {shareModal === 'success' && (
+              <>
+                <div className="feed-xcard">
+                  <div className="feed-xcard-header">
+                    <div className="feed-xcard-avatar">{xHandle?.[0]?.toUpperCase() ?? '?'}</div>
+                    <div className="feed-xcard-meta">
+                      <span className="feed-xcard-name">Virgin Vs Chad</span>
+                      <span className="feed-xcard-handle">@{xHandle}</span>
+                    </div>
+                    <span className="feed-xcard-logo">𝕏</span>
+                  </div>
+                  <p className="feed-xcard-text">{tweetText}</p>
+                  {shareItem?.imageUrl && (
+                    <img src={shareItem.imageUrl} className="feed-xcard-img" alt="meme" />
+                  )}
+                  <div className="feed-xcard-actions">
+                    <span className="feed-xcard-action">💬 <em>0</em></span>
+                    <span className="feed-xcard-action">🔁 <em>0</em></span>
+                    <span className="feed-xcard-action">❤️ <em>0</em></span>
+                  </div>
+                </div>
+                <div className="feed-share-rewards" style={{ marginTop: 4 }}>
+                  <span className="feed-share-reward-chip">10 likes → 75 XP</span>
+                  <span className="feed-share-reward-chip">50 likes → 200 XP</span>
+                  <span className="feed-share-reward-chip">10 RTs → 50 XP</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                  {tweetUrl && (
+                    <a
+                      href={tweetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="feed-share-btn feed-share-btn--post"
+                      style={{ flex: 1, textAlign: 'center', textDecoration: 'none' }}
+                    >
+                      View on X ↗
+                    </a>
+                  )}
+                  <button className="feed-share-btn feed-share-btn--secondary" onClick={() => setShareModal(null)} style={{ flex: 1 }}>Done</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="feed-topbar">
         <div className="feed-topbar-inner">
@@ -478,6 +933,9 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
                 {SORT_LABELS[s]}
               </button>
             ))}
+            <button className="feed-refresh-btn" onClick={handleRefresh} title="Refresh feed">
+              ↺
+            </button>
           </div>
           {sort === 'top' && (
             <div className="feed-period-tabs">
@@ -505,6 +963,31 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
         {visible.length > 0 && (
           <span className="feed-counter">{idx + 1} / {visible.length}</span>
         )}
+        <div className="feed-char-picker-bar">
+          <span className="feed-char-picker-label">Filter by character</span>
+          <div className="feed-char-picker-row">
+          {CHARACTERS.map(char => {
+            const active = filterChars.has(char.key)
+            return (
+              <button
+                key={char.key}
+                className={`feed-char-picker-chip ${active ? 'feed-char-picker-chip--active' : ''}`}
+                onClick={() => {
+                  setFilterChars(prev => {
+                    const n = new Set(prev)
+                    active ? n.delete(char.key) : n.add(char.key)
+                    return n
+                  })
+                  setIdx(0)
+                }}
+              >
+                <img src={`/assets/chars/${char.file}.${char.ext ?? 'png'}`} alt={char.name} className="feed-char-picker-chip-avatar" />
+                <span className="feed-char-picker-chip-name">{char.name}</span>
+              </button>
+            )
+          })}
+          </div>
+        </div>
       </div>
 
       {/* Feed body: carousel + optional comments panel side-by-side */}
@@ -601,57 +1084,6 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
         )}
       </div>
 
-      {/* ── Floating character filter button ── */}
-      <button
-        className={`feed-char-filter-btn ${filterChars.size > 0 ? 'feed-char-filter-btn--active' : ''}`}
-        onClick={() => setCharPickerOpen(o => !o)}
-        title="Filter by character"
-      >
-        {filterChars.size > 0 ? (
-          <span className="feed-char-filter-count">{filterChars.size}</span>
-        ) : '⚡'}
-        <span>CAST</span>
-      </button>
-
-      {/* ── Character picker panel ── */}
-      {charPickerOpen && (
-        <div className="feed-char-picker">
-          <div className="feed-char-picker-header">
-            <span>Filter by character</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {filterChars.size > 0 && (
-                <button className="feed-char-picker-clear" onClick={() => setFilterChars(new Set())}>
-                  Clear all
-                </button>
-              )}
-              <button className="feed-char-picker-close" onClick={() => setCharPickerOpen(false)}>✕</button>
-            </div>
-          </div>
-          <div className="feed-char-picker-grid">
-            {CHARACTERS.map(char => {
-              const active = filterChars.has(char.key)
-              return (
-                <button
-                  key={char.key}
-                  className={`feed-char-picker-item ${active ? 'feed-char-picker-item--active' : ''}`}
-                  onClick={() => {
-                    setFilterChars(prev => {
-                      const n = new Set(prev)
-                      active ? n.delete(char.key) : n.add(char.key)
-                      return n
-                    })
-                    setIdx(0)
-                  }}
-                >
-                  <img src={`/assets/chars/${char.file}.${char.ext ?? 'png'}`} alt={char.name} className="feed-char-picker-avatar" />
-                  <span className="feed-char-picker-name">{char.name}</span>
-                  {active && <span className="feed-char-picker-check">✓</span>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

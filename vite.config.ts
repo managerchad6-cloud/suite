@@ -8,6 +8,7 @@ const GENERATOR = 'http://93.127.214.75:8000'
 const RANKING   = 'http://93.127.214.75:3007'
 const CHAT      = 'http://94.130.36.242:3002'
 const ANIM      = 'http://94.130.36.242:3003'
+const X_BACKEND = 'http://localhost:3025'
 
 export default defineConfig({
   plugins: [react()],
@@ -41,6 +42,12 @@ export default defineConfig({
       '/api/credits':      { target: STUDIO, changeOrigin: true },
       '/api/badges':       { target: STUDIO, changeOrigin: true },
       '/api/handmade':     { target: STUDIO, changeOrigin: true },
+      '/api/forum':        { target: STUDIO, changeOrigin: true },
+      '/api/follow':       { target: STUDIO, changeOrigin: true },
+      '/api/twitter':      { target: STUDIO,     changeOrigin: true },
+      '/api/x':            { target: X_BACKEND, changeOrigin: true },
+      '/share':            { target: STUDIO, changeOrigin: true },
+      '/forum-uploads':    { target: STUDIO, changeOrigin: true },
       '/api/skins':        { target: STUDIO, changeOrigin: true },
       '/api/memes':        { target: STUDIO, changeOrigin: true },
       '/internal':         { target: STUDIO, changeOrigin: true },
