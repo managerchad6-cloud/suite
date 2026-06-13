@@ -15,6 +15,7 @@ export interface XStatus {
   handle?: string
   user_id?: string
   configured?: boolean
+  profile_image_url?: string | null
 }
 
 export interface TweetResult {

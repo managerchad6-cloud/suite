@@ -143,11 +143,12 @@
 }
 .xtml-ms-progress-fill {
   height: 100%;
-  background: #1d9bf0;
+  background: #333;
   border-radius: 2px;
   transition: width 0.4s ease;
   min-width: 4px;
 }
+.xtml-ms-progress-fill--next { background: #1d9bf0; }
 
 /* ── Tweet timeline ── */
 .xtml-timeline {
@@ -184,6 +185,12 @@
   font-weight: 800;
   color: #fff;
   flex-shrink: 0;
+  object-fit: cover;
+  overflow: hidden;
+}
+.xtml-tweet-avatar--img {
+  background: #111;
+  display: block;
 }
 .xtml-tweet-thread-line {
   width: 2px;
