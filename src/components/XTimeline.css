@@ -63,92 +63,109 @@
 .xtml-milestones-section { display: flex; flex-direction: column; gap: 10px; }
 .xtml-milestones-scroll {
   display: flex;
-  gap: 8px;
+  gap: 7px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 6px;
   scrollbar-width: none;
 }
 .xtml-milestones-scroll::-webkit-scrollbar { display: none; }
 
+/* Base card — locked/unachieved */
 .xtml-ms-card {
   flex-shrink: 0;
-  width: 108px;
-  background: #0d0d0d;
-  border: 1px solid #1e1e1e;
+  width: 96px;
+  background: #090909;
+  border: 1px solid #1a1a1a;
   border-radius: 10px;
-  padding: 12px 10px;
+  padding: 11px 8px 9px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   text-align: center;
-  transition: border-color 0.2s;
-}
-.xtml-ms-card--achieved {
-  background: linear-gradient(135deg, #0d1a0d, #0d1400);
-  border-color: #2a5a1a;
-  box-shadow: 0 0 12px rgba(74,222,60,0.08);
-}
-.xtml-ms-card--next {
-  background: linear-gradient(135deg, #0d0d18, #0d1020);
-  border-color: #1d9bf0;
-  box-shadow: 0 0 12px rgba(29,155,240,0.12);
+  transition: box-shadow 0.25s, border-color 0.25s;
+  position: relative;
+  overflow: hidden;
 }
 
+/* Metric icon */
 .xtml-ms-icon {
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
-  color: #333;
+  filter: grayscale(1) brightness(0.35);
+  transition: filter 0.25s;
 }
-.xtml-ms-card--achieved .xtml-ms-icon { color: #4ade3c; font-size: 20px; }
-.xtml-ms-card--next     .xtml-ms-icon { color: #1d9bf0; }
 
+/* Label */
 .xtml-ms-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #666;
-}
-.xtml-ms-card--achieved .xtml-ms-label { color: #e7e9ea; }
-.xtml-ms-card--next     .xtml-ms-label { color: #e7e9ea; }
-
-.xtml-ms-reward {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.xtml-ms-xp {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #333;
+  letter-spacing: 0.02em;
+  transition: color 0.25s;
 }
-.xtml-ms-credits {
-  font-size: 10px;
-  font-weight: 600;
-  color: #2a2a2a;
-}
-.xtml-ms-card--achieved .xtml-ms-xp     { color: #f5c518; }
-.xtml-ms-card--achieved .xtml-ms-credits { color: #4ade3c; }
-.xtml-ms-card--next     .xtml-ms-xp     { color: #aaa; }
-.xtml-ms-card--next     .xtml-ms-credits { color: #888; }
 
-/* Progress bar on "next" milestone */
+/* Rewards */
+.xtml-ms-reward { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.xtml-ms-xp     { font-size: 10px; font-weight: 700; color: #2a2a2a; transition: color 0.25s; }
+.xtml-ms-credits{ font-size: 9px;  font-weight: 600; color: #222;    transition: color 0.25s; }
+
+/* Progress bar */
 .xtml-ms-progress-bar {
   width: 100%;
-  height: 3px;
-  background: #1a1a2a;
+  height: 2px;
+  background: #161616;
   border-radius: 2px;
   overflow: hidden;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .xtml-ms-progress-fill {
   height: 100%;
-  background: #333;
   border-radius: 2px;
-  transition: width 0.4s ease;
-  min-width: 4px;
+  transition: width 0.5s ease;
+  min-width: 3px;
 }
-.xtml-ms-progress-fill--next { background: #1d9bf0; }
+
+/* ── Tier colour tokens ──────────────────────────────────────────────────── */
+/* t1 = bronze */
+.xtml-ms-card--t1 { --ms-c: #cd7f32; --ms-glow: rgba(205,127,50,0.22); --ms-bg: #120d08; }
+/* t2 = silver */
+.xtml-ms-card--t2 { --ms-c: #a0aec0; --ms-glow: rgba(160,174,192,0.22); --ms-bg: #0d0e10; }
+/* t3 = gold */
+.xtml-ms-card--t3 { --ms-c: #f5c518; --ms-glow: rgba(245,197,24,0.28); --ms-bg: #111008; }
+/* t4 = platinum / cyan */
+.xtml-ms-card--t4 { --ms-c: #4dc8ff; --ms-glow: rgba(77,200,255,0.28); --ms-bg: #080e14; }
+/* t5 = diamond / violet */
+.xtml-ms-card--t5 { --ms-c: #b266ff; --ms-glow: rgba(178,102,255,0.32); --ms-bg: #0c0810; }
+/* t6 = legendary / hot-pink */
+.xtml-ms-card--t6 { --ms-c: #ff4dce; --ms-glow: rgba(255,77,206,0.38); --ms-bg: #110810; }
+
+/* Achieved state — unlock colour, glow, bg */
+.xtml-ms-card--achieved {
+  background: var(--ms-bg);
+  border-color: var(--ms-c);
+  box-shadow: 0 0 14px var(--ms-glow), inset 0 0 20px rgba(255,255,255,0.02);
+}
+.xtml-ms-card--achieved .xtml-ms-icon    { filter: none; }
+.xtml-ms-card--achieved .xtml-ms-label   { color: #e7e9ea; }
+.xtml-ms-card--achieved .xtml-ms-xp      { color: var(--ms-c); }
+.xtml-ms-card--achieved .xtml-ms-credits { color: var(--ms-c); opacity: 0.75; }
+.xtml-ms-card--achieved .xtml-ms-progress-fill { background: var(--ms-c); }
+
+/* In-progress (unachieved but progress > 0): faint border hint, progress bar tinted */
+.xtml-ms-card:not(.xtml-ms-card--achieved) .xtml-ms-progress-fill {
+  background: var(--ms-c, #444);
+  opacity: 0.45;
+}
+
+/* t6 legendary: subtle shimmer animation on achieved */
+@keyframes xtml-shimmer {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.75; }
+}
+.xtml-ms-card--t6.xtml-ms-card--achieved {
+  animation: xtml-shimmer 2.4s ease-in-out infinite;
+}
 
 /* ── Timeline header + refresh ── */
 .xtml-timeline-header {

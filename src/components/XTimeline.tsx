@@ -4,14 +4,48 @@ import { useXMetrics } from '../hooks/useXMetrics'
 import './XTimeline.css'
 
 // ── Milestone definitions ─────────────────────────────────────────────────────
-const MILESTONES = [
-  { id: 'likes_10',  metric: 'likes' as const, threshold: 10,   xp: 75,   credits: 15,  label: '10 Likes'  },
-  { id: 'likes_50',  metric: 'likes' as const, threshold: 50,   xp: 200,  credits: 40,  label: '50 Likes'  },
-  { id: 'likes_100', metric: 'likes' as const, threshold: 100,  xp: 500,  credits: 100, label: '100 Likes' },
-  { id: 'likes_1k',  metric: 'likes' as const, threshold: 1000, xp: 1500, credits: 300, label: '1K Likes'  },
-  { id: 'rts_10',    metric: 'rts'   as const, threshold: 10,   xp: 50,   credits: 10,  label: '10 RTs'    },
-  { id: 'rts_100',   metric: 'rts'   as const, threshold: 100,  xp: 250,  credits: 50,  label: '100 RTs'   },
+// tier 1=bronze  2=silver  3=gold  4=platinum  5=diamond  6=legendary
+type MetricKey = 'likes' | 'rts' | 'replies' | 'views'
+interface Milestone {
+  id: string; metric: MetricKey; threshold: number
+  xp: number; credits: number; label: string; tier: 1|2|3|4|5|6
+}
+const MILESTONES: Milestone[] = [
+  // ── Likes ❤ ──────────────────────────────────────────────────────────────
+  { id: 'l1',   metric: 'likes',   threshold: 1,      xp: 10,    credits: 2,    label: '1 Like',      tier: 1 },
+  { id: 'l10',  metric: 'likes',   threshold: 10,     xp: 75,    credits: 15,   label: '10 Likes',    tier: 2 },
+  { id: 'l50',  metric: 'likes',   threshold: 50,     xp: 200,   credits: 40,   label: '50 Likes',    tier: 3 },
+  { id: 'l100', metric: 'likes',   threshold: 100,    xp: 500,   credits: 100,  label: '100 Likes',   tier: 3 },
+  { id: 'l500', metric: 'likes',   threshold: 500,    xp: 1000,  credits: 200,  label: '500 Likes',   tier: 4 },
+  { id: 'l1k',  metric: 'likes',   threshold: 1000,   xp: 1500,  credits: 300,  label: '1K Likes',    tier: 4 },
+  { id: 'l5k',  metric: 'likes',   threshold: 5000,   xp: 5000,  credits: 1000, label: '5K Likes',    tier: 5 },
+  { id: 'l10k', metric: 'likes',   threshold: 10000,  xp: 10000, credits: 2000, label: '10K Likes',   tier: 6 },
+  // ── Retweets 🔁 ──────────────────────────────────────────────────────────
+  { id: 'r1',   metric: 'rts',     threshold: 1,      xp: 5,     credits: 1,    label: '1 RT',        tier: 1 },
+  { id: 'r10',  metric: 'rts',     threshold: 10,     xp: 50,    credits: 10,   label: '10 RTs',      tier: 2 },
+  { id: 'r50',  metric: 'rts',     threshold: 50,     xp: 150,   credits: 30,   label: '50 RTs',      tier: 3 },
+  { id: 'r100', metric: 'rts',     threshold: 100,    xp: 250,   credits: 50,   label: '100 RTs',     tier: 4 },
+  { id: 'r500', metric: 'rts',     threshold: 500,    xp: 750,   credits: 150,  label: '500 RTs',     tier: 5 },
+  { id: 'r1k',  metric: 'rts',     threshold: 1000,   xp: 2000,  credits: 400,  label: '1K RTs',      tier: 6 },
+  // ── Replies 💬 ───────────────────────────────────────────────────────────
+  { id: 'c1',   metric: 'replies', threshold: 1,      xp: 5,     credits: 1,    label: '1 Reply',     tier: 1 },
+  { id: 'c10',  metric: 'replies', threshold: 10,     xp: 50,    credits: 10,   label: '10 Replies',  tier: 2 },
+  { id: 'c50',  metric: 'replies', threshold: 50,     xp: 200,   credits: 40,   label: '50 Replies',  tier: 3 },
+  { id: 'c100', metric: 'replies', threshold: 100,    xp: 500,   credits: 100,  label: '100 Replies', tier: 4 },
+  { id: 'c500', metric: 'replies', threshold: 500,    xp: 1500,  credits: 300,  label: '500 Replies', tier: 5 },
+  // ── Impressions 👁 ───────────────────────────────────────────────────────
+  { id: 'v100', metric: 'views',   threshold: 100,    xp: 15,    credits: 3,    label: '100 Views',   tier: 1 },
+  { id: 'v500', metric: 'views',   threshold: 500,    xp: 50,    credits: 10,   label: '500 Views',   tier: 2 },
+  { id: 'v1k',  metric: 'views',   threshold: 1000,   xp: 100,   credits: 20,   label: '1K Views',    tier: 2 },
+  { id: 'v5k',  metric: 'views',   threshold: 5000,   xp: 300,   credits: 60,   label: '5K Views',    tier: 3 },
+  { id: 'v10k', metric: 'views',   threshold: 10000,  xp: 500,   credits: 100,  label: '10K Views',   tier: 4 },
+  { id: 'v50k', metric: 'views',   threshold: 50000,  xp: 2000,  credits: 400,  label: '50K Views',   tier: 5 },
+  { id: 'v100k',metric: 'views',   threshold: 100000, xp: 5000,  credits: 1000, label: '100K Views',  tier: 6 },
 ]
+
+const METRIC_ICON: Record<MetricKey, string> = {
+  likes: '❤', rts: '🔁', replies: '💬', views: '👁',
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function timeAgo(ts: number): string {
@@ -36,15 +70,14 @@ function memeImageUrl(meme_id: string, meme_type: string): string | null {
 
 // ── Milestone card ────────────────────────────────────────────────────────────
 interface MilestoneCardProps {
-  label: string; xp: number; credits: number
-  achieved: boolean; isNext: boolean; progress: number
+  icon: string; label: string; xp: number; credits: number
+  tier: 1|2|3|4|5|6; achieved: boolean; progress: number
 }
-function MilestoneCard({ label, xp, credits, achieved, isNext, progress }: MilestoneCardProps) {
-  const cls = achieved ? ' xtml-ms-card--achieved' : isNext ? ' xtml-ms-card--next' : ''
+function MilestoneCard({ icon, label, xp, credits, tier, achieved, progress }: MilestoneCardProps) {
   const showBar = !achieved && progress > 0
   return (
-    <div className={`xtml-ms-card${cls}`}>
-      <div className="xtml-ms-icon">{achieved ? '✓' : isNext ? '◎' : '🔒'}</div>
+    <div className={`xtml-ms-card xtml-ms-card--t${tier}${achieved ? ' xtml-ms-card--achieved' : ''}`}>
+      <div className="xtml-ms-icon">{icon}</div>
       <div className="xtml-ms-label">{label}</div>
       <div className="xtml-ms-reward">
         <span className="xtml-ms-xp">+{xp.toLocaleString()} XP</span>
@@ -52,10 +85,7 @@ function MilestoneCard({ label, xp, credits, achieved, isNext, progress }: Miles
       </div>
       {showBar && (
         <div className="xtml-ms-progress-bar">
-          <div
-            className={`xtml-ms-progress-fill${isNext ? ' xtml-ms-progress-fill--next' : ''}`}
-            style={{ width: `${Math.min(100, progress * 100).toFixed(1)}%` }}
-          />
+          <div className="xtml-ms-progress-fill" style={{ width: `${Math.min(100, progress * 100).toFixed(1)}%` }} />
         </div>
       )}
     </div>
@@ -147,16 +177,18 @@ export function XTimeline({ wallet }: Props) {
   // Totals + best-single-tweet for milestone gates
   const stats = useMemo(() => {
     let likes = 0, rts = 0, replies = 0, views = 0
-    let bestLikes = 0, bestRTs = 0
+    let bestLikes = 0, bestRTs = 0, bestReplies = 0, bestViews = 0
     for (const s of shares) {
       const m = s.tweet_id ? xMetrics.get(s.tweet_id) : null
       if (!m) continue
       likes   += m.like_count;   rts     += m.retweet_count
       replies += m.reply_count;  views   += m.impression_count
-      if (m.like_count    > bestLikes) bestLikes = m.like_count
-      if (m.retweet_count > bestRTs)   bestRTs   = m.retweet_count
+      if (m.like_count       > bestLikes)   bestLikes   = m.like_count
+      if (m.retweet_count    > bestRTs)     bestRTs     = m.retweet_count
+      if (m.reply_count      > bestReplies) bestReplies = m.reply_count
+      if (m.impression_count > bestViews)   bestViews   = m.impression_count
     }
-    return { likes, rts, replies, views, bestLikes, bestRTs }
+    return { likes, rts, replies, views, bestLikes, bestRTs, bestReplies, bestViews }
   }, [shares, xMetrics])
 
   const tracked = shares.filter(s => s.tweet_id)
@@ -208,24 +240,23 @@ export function XTimeline({ wallet }: Props) {
       <div className="xtml-milestones-section">
         <div className="xtml-section-label">MILESTONES</div>
         <div className="xtml-milestones-scroll">
-          {MILESTONES.map((ms, i) => {
-            const best     = ms.metric === 'likes' ? stats.bestLikes : stats.bestRTs
-            const achieved = best >= ms.threshold
-            const prevInMetric = MILESTONES.slice(0, i).filter(m => m.metric === ms.metric)
-            const isNext   = !achieved && prevInMetric.every(m => {
-              const b = m.metric === 'likes' ? stats.bestLikes : stats.bestRTs
-              return b >= m.threshold
-            })
-            // Show progress on ALL unachieved cards — isNext gets the bright bar colour
-            const progress = achieved ? 0 : best / ms.threshold
+          {MILESTONES.map(ms => {
+            const best: Record<MetricKey, number> = {
+              likes: stats.bestLikes, rts: stats.bestRTs,
+              replies: stats.bestReplies, views: stats.bestViews,
+            }
+            const b        = best[ms.metric]
+            const achieved = b >= ms.threshold
+            const progress = achieved ? 0 : b / ms.threshold
             return (
               <MilestoneCard
                 key={ms.id}
+                icon={METRIC_ICON[ms.metric]}
                 label={ms.label}
                 xp={ms.xp}
                 credits={ms.credits}
+                tier={ms.tier}
                 achieved={achieved}
-                isNext={isNext}
                 progress={progress}
               />
             )
