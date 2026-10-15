@@ -25,20 +25,6 @@ import { profileImage } from './identity/api'
 
 type View = 'live' | 'memes' | 'factory' | 'vote' | 'characters' | 'quiz' | 'profile' | 'prizes' | 'studio' | 'brackets'
 
-/** Stand-in for member-only views until their individual controls are locked (identity step 4). */
-function JoinPrompt({ title, reason, text }: { title: string; reason: string; text: string }) {
-  const { join, status } = useIdentity()
-  return (
-    <div className="join-prompt-view">
-      <h2>{title}</h2>
-      <p>{text}</p>
-      <button className="quiz-start-btn" onClick={() => join(reason)}>
-        {status === 'pending' ? 'Finish joining' : 'Join'}
-      </button>
-    </div>
-  )
-}
-
 function NavIdentity({ playerState, onOpenProfile, active }: {
   playerState: PlayerState | null
   onOpenProfile: () => void
@@ -82,7 +68,7 @@ function NavIdentity({ playerState, onOpenProfile, active }: {
 }
 
 export default function App() {
-  const { status, wallet, memberWallet, profile } = useIdentity()
+  const { status, wallet, memberWallet } = useIdentity()
   const [view,          setView]          = useState<View>('live')
   const [playerState,   setPlayerState]   = useState<PlayerState | null>(null)
   const [rankUp,        setRankUp]        = useState<{ from: string; to: string; direction: string } | null>(null)
@@ -90,10 +76,6 @@ export default function App() {
   const [detailMeme,    setDetailMeme]    = useState<Meme | null>(null)
   const [charTarget,    setCharTarget]    = useState<string | null>(null)
   const [profileTarget, setProfileTarget] = useState<string | null>(null)
-
-  // Who participates. Legacy views still take a string wallet; '' means "nobody" until step 4
-  // replaces the prop with useIdentity() and locks their controls.
-  const viewer = memberWallet ?? ''
 
   const refreshPlayer = useCallback(async (addr: string) => {
     try { setPlayerState(await fetchPlayer(addr)) } catch {}
@@ -186,13 +168,11 @@ export default function App() {
         {unifiedDetail ? (
           <UnifiedMemeDetail
             item={unifiedDetail}
-            address={memberWallet}
             onBack={() => setUnifiedDetail(null)}
           />
         ) : detailMeme ? (
           <MemeDetail
             meme={detailMeme}
-            address={memberWallet}
             onBack={() => setDetailMeme(null)}
             onNavigate={setDetailMeme}
             onOpenCharacter={(name) => { setDetailMeme(null); setView('characters'); setCharTarget(name) }}
@@ -208,20 +188,17 @@ export default function App() {
           />
         ) : (
           <>
-            {view === 'live'       && <Live address={viewer} />}
-            {view === 'memes'      && <Feed address={viewer} onOpenItem={setUnifiedDetail} onOpenProfile={w => setProfileTarget(w)} />}
-            {view === 'factory'    && (isMember
-              ? <Memes address={viewer} onOpenDetail={setDetailMeme} onOpenProfile={(w) => setProfileTarget(w)} />
-              : <JoinPrompt title="The Meme Factory" reason="make memes" text="Members turn ideas into memes here. Join to start creating." />)}
-            {view === 'vote'       && <Vote address={viewer} />}
-            {view === 'characters' && <Characters onOpenDetail={setDetailMeme} initialChar={charTarget} address={memberWallet} />}
-            {view === 'brackets'   && <Brackets address={viewer} />}
+            {/* Every view is open to everyone; participation inside them is locked for non-members */}
+            {view === 'live'       && <Live />}
+            {view === 'memes'      && <Feed onOpenItem={setUnifiedDetail} onOpenProfile={w => setProfileTarget(w)} />}
+            {view === 'factory'    && <Memes onOpenDetail={setDetailMeme} onOpenProfile={(w) => setProfileTarget(w)} />}
+            {view === 'vote'       && <Vote />}
+            {view === 'characters' && <Characters onOpenDetail={setDetailMeme} initialChar={charTarget} />}
+            {view === 'brackets'   && <Brackets />}
             {view === 'prizes'     && <div className="placeholder-view"><span>Prizes</span><p>Coming soon.</p></div>}
-            {view === 'studio'     && (isMember
-              ? <MemeStudio address={viewer} onPublished={handlePublished} />
-              : <JoinPrompt title="The Studio" reason="create" text="The studio is where members build memes by hand. Join to open it." />)}
+            {view === 'studio'     && <MemeStudio onPublished={handlePublished} />}
             {view === 'profile'    && isMember && (
-              <Profile address={viewer} profile={profile} onGoToOracle={() => setView('quiz')} onOpenDetail={setDetailMeme} />
+              <Profile onGoToOracle={() => setView('quiz')} onOpenDetail={setDetailMeme} />
             )}
             {view === 'quiz'       && isMember && <RetakeView onDone={() => setView('profile')} />}
           </>

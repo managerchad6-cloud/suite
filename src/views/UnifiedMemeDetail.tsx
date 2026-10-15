@@ -95,11 +95,10 @@ const BADGE_LABEL: Record<string, string> = {
 
 interface Props {
   item: UnifiedMemeItem
-  address: string | null
   onBack: () => void
 }
 
-export function UnifiedMemeDetail({ item, address, onBack }: Props) {
+export function UnifiedMemeDetail({ item, onBack }: Props) {
   const [studioMeta,  setStudioMeta]  = useState<StudioMeme | null>(null)
   const [factoryMeta, setFactoryMeta] = useState<JobMetadata | null>(null)
   const [imgLoaded,   setImgLoaded]   = useState(false)
@@ -282,7 +281,7 @@ export function UnifiedMemeDetail({ item, address, onBack }: Props) {
 
           {/* Comments — for studio and factory; reddit links to thread */}
           {item.type !== 'reddit' ? (
-            <CommentSection jobId={item.sourceId} address={address} />
+            <CommentSection jobId={item.sourceId} />
           ) : item.redditPermalink ? (
             <a className="smd-reddit-thread-link" href={item.redditPermalink} target="_blank" rel="noopener noreferrer">
               View discussion on Reddit ↗

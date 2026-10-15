@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { CHARACTERS, type CharData } from '../data/characterLore'
 import { editCharacter, inActionCharacter, reskinCharacterInScene } from '../api/pfp'
 import { publishHandmade, saveDraft, deleteDraftById, type DraftPayload } from '../api/memes'
-import { signAction, truncateAddress } from '../wallet'
+import { truncateAddress } from '../wallet'
+import { useMemberGate } from '../identity/gate'
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from '../lib/studioDb'
 import { StudioHome } from './StudioHome'
 import { deductCredits, claimSignupBonus, type CreditAction } from '../api/credits'
@@ -454,7 +455,11 @@ function StudioJoysticks({ onZoomDelta, onPanDelta }: { onZoomDelta: (d: number)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MemeStudio({ address, onPublished }: { address: string; onPublished?: (id: string) => void }) {
+export function MemeStudio({ onPublished }: { onPublished?: (id: string) => void }) {
+  // The editor opens only from StudioHome's New/Open, which are member-only, so inside it
+  // there is always a member. '' just keeps the guest-visible home from doing member work.
+  const memberWallet = useMemberGate().wallet
+  const address = memberWallet ?? ''
   const displayRef = useRef<HTMLCanvasElement>(null)
   const offscreen  = useRef<Record<string, HTMLCanvasElement>>({})
   const maskCanvas = useRef<Record<string, HTMLCanvasElement>>({})
@@ -3486,8 +3491,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
           text:    m.text,
           charKey: m.linkedCharId ? (charLayersRef.current[m.linkedCharId]?.charKey ?? null) : null,
         }))
-      const signature = await signAction('publish-handmade-meme', address)
-      const result = await publishHandmade({ imageDataUrl, characters, titles, labels, labelLinks, wallet: address, signature })
+      const result = await publishHandmade({ imageDataUrl, characters, titles, labels, labelLinks, wallet: address })
       if (currentDraftId) {
         deleteDraftById(currentDraftId, address).catch(() => {})
         setCurrentDraftId(null)
@@ -3641,7 +3645,7 @@ export function MemeStudio({ address, onPublished }: { address: string; onPublis
   if (studioView === 'home') {
     return (
       <div className="mstudio">
-        <StudioHome address={address} onNew={handleNewDocument} onOpenDraft={handleLoadDraft} />
+        <StudioHome onNew={handleNewDocument} onOpenDraft={handleLoadDraft} />
       </div>
     )
   }

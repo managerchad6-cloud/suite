@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { trackFeedAction } from '../api/votes'
+import { useIdentity } from '../identity/IdentityProvider'
 import type { UnifiedMemeItem } from '../types/unified'
 import './FeedCard.css'
 
@@ -21,11 +22,12 @@ const TIER_LABEL: Record<string, string> = {
 
 interface Props {
   item: UnifiedMemeItem
-  address: string
   onOpen: (item: UnifiedMemeItem) => void
 }
 
-export function FeedCard({ item, address, onOpen }: Props) {
+export function FeedCard({ item, onOpen }: Props) {
+  // Engagement tracking is per member; guests browse untracked
+  const { memberWallet } = useIdentity()
   const [imgAspect, setImgAspect] = useState<number | null>(null)
   const dwellStart = useRef(Date.now())
 
@@ -48,7 +50,7 @@ export function FeedCard({ item, address, onOpen }: Props) {
 
         {/* ── Image ── */}
         <div className="fc-img-wrap" onClick={() => {
-          trackFeedAction(address, item.sourceId, item.type, 'detail', Date.now() - dwellStart.current)
+          if (memberWallet) trackFeedAction(memberWallet, item.sourceId, item.type, 'detail', Date.now() - dwellStart.current)
           onOpen(item)
         }}>
           <img
@@ -80,7 +82,7 @@ export function FeedCard({ item, address, onOpen }: Props) {
               className="fc-share-btn"
               onClick={() => {
                 navigator.clipboard?.writeText(window.location.href).catch(() => {})
-                trackFeedAction(address, item.sourceId, item.type, 'share')
+                if (memberWallet) trackFeedAction(memberWallet, item.sourceId, item.type, 'share')
               }}
               title="Share"
             >↗</button>

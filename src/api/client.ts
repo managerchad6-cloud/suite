@@ -50,8 +50,10 @@ async function send(path: string, { method = 'GET', body, signal }: RequestOptio
 }
 
 async function toError(res: Response): Promise<ApiError> {
-  const data = await res.json().catch(() => null) as { code?: string; message?: string; detail?: string } | null
-  return new ApiError(res.status, data?.code ?? `http_${res.status}`, data?.message ?? data?.detail ?? `Request failed (${res.status})`)
+  // Services disagree on the field name: identity {message}, memestudio/MF {detail}, livestream {error}
+  const data = await res.json().catch(() => null) as { code?: string; message?: string; detail?: string; error?: string } | null
+  const message = data?.message ?? data?.detail ?? data?.error ?? `Request failed (${res.status})`
+  return new ApiError(res.status, data?.code ?? `http_${res.status}`, message)
 }
 
 /** JSON request to one of our own services. Resolves with the parsed body (undefined for 204). */

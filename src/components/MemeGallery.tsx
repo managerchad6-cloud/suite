@@ -8,7 +8,8 @@ import {
   type Meme,
   type LeaderboardEntry,
 } from '../api/memes'
-import { signAction, connectWallet, isPhantomInstalled, truncateAddress } from '../wallet'
+import { truncateAddress } from '../wallet'
+import { useMemberGate } from '../identity/gate'
 import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
 
 // ── Creator avatar ─────────────────────────────────────────────────
@@ -95,13 +96,14 @@ function Lightbox({ jobId, virgin, chad, onClose }: LightboxEntry & { onClose: (
 
 interface MemeCardProps {
   item: Meme
-  address: string | null
   onSelect: (item: Meme) => void
   onOpenDetail?: (item: Meme) => void
   onOpenProfile?: (wallet: string) => void
 }
 
-function MemeCard({ item, address, onSelect, onOpenDetail, onOpenProfile }: MemeCardProps) {
+function MemeCard({ item, onSelect, onOpenDetail, onOpenProfile }: MemeCardProps) {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const { virgin, chad } = parseMemeId(item.meme_id)
   const [imgFailed, setImgFailed] = useState(false)
   const [voting, setVoting] = useState(false)
@@ -115,12 +117,11 @@ function MemeCard({ item, address, onSelect, onOpenDetail, onOpenProfile }: Meme
     if (!address || voted || voting) return
     setVoting(true)
     try {
-      const sig = await signAction(`vote:${item.job_id}`, address)
-      const result = await submitVote(item.job_id, address, sig)
+      const result = await submitVote(item.job_id, address)
       localStorage.setItem(getVotedKey(address, item.job_id), '1')
       setVoted(true)
       setVoteCount(result.vote_count)
-    } catch { /* phantom rejected */ } finally {
+    } catch { /* already voted or failed */ } finally {
       setVoting(false)
     }
   }
@@ -174,9 +175,10 @@ function MemeCard({ item, address, onSelect, onOpenDetail, onOpenProfile }: Meme
             )}
             <button
               className={`btn-vote ${voted ? 'voted' : voting ? 'voting' : 'unvoted'}`}
-              onClick={handleVote}
-              disabled={!address || voted || voting}
-              title={voted ? 'Already voted' : !address ? 'Connect wallet to vote' : undefined}
+              {...gate.lockProps('vote')}
+              onClick={e => { e.stopPropagation(); gate.guard(handleVote, 'vote')(e) }}
+              disabled={!gate.locked && (voted || voting)}
+              title={gate.locked ? gate.lockProps('vote').title : voted ? 'Already voted' : undefined}
             >
               {voted ? `✓ ${voteCount}` : voting ? '…' : `↑ ${voteCount || 'Vote'}`}
             </button>
@@ -259,24 +261,11 @@ function Leaderboard({ onOpenProfile }: { onOpenProfile?: (wallet: string) => vo
 
 // ── Winners & Rewards ─────────────────────────────────────────────
 
-function WinnersRewards({ address, onConnect, onOpenProfile }: { address: string | null; onConnect: (a: string) => void; onOpenProfile?: (wallet: string) => void }) {
-  const [connecting, setConnecting] = useState(false)
+function WinnersRewards({ onOpenProfile }: { onOpenProfile?: (wallet: string) => void }) {
+  const gate = useMemberGate()
+  const address = gate.wallet
 
   const userRewards = null as { prize: string; memeId: string } | null
-
-  const handleConnect = async () => {
-    if (!isPhantomInstalled()) {
-      window.open('https://phantom.app/', '_blank', 'noopener')
-      return
-    }
-    setConnecting(true)
-    try {
-      const addr = await connectWallet()
-      onConnect(addr)
-    } catch { /* rejected */ } finally {
-      setConnecting(false)
-    }
-  }
 
   return (
     <div className="winners-wrap">
@@ -285,9 +274,9 @@ function WinnersRewards({ address, onConnect, onOpenProfile }: { address: string
         {!address ? (
           <div className="winners-state">
             <span className="winners-state-icon">🏆</span>
-            <p className="winners-state-text">Connect your wallet to check your rewards</p>
-            <button className="btn-primary" onClick={handleConnect} disabled={connecting}>
-              {connecting ? 'Connecting…' : 'Connect wallet'}
+            <p className="winners-state-text">Join to check your rewards</p>
+            <button className="btn-primary" onClick={() => gate.join('check your rewards')}>
+              Join
             </button>
           </div>
         ) : userRewards ? (
@@ -324,7 +313,6 @@ function WinnersRewards({ address, onConnect, onOpenProfile }: { address: string
 // ── Gallery ───────────────────────────────────────────────────────
 
 interface MemeGalleryProps {
-  address: string | null
   onSelectMeme?: (meme: Meme) => void
   onAutoSelect?: (meme: Meme) => void
   onOpenDetail?: (meme: Meme) => void
@@ -334,7 +322,7 @@ interface MemeGalleryProps {
 }
 
 export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
-  ({ address, onSelectMeme, onAutoSelect, onOpenDetail, onOpenProfile, characterFilter, onClearCharacterFilter }, ref) => {
+  ({ onSelectMeme, onAutoSelect, onOpenDetail, onOpenProfile, characterFilter, onClearCharacterFilter }, ref) => {
     const [tab, setTab] = useState<Tab>('all')
     const [allMemes, setAllMemes] = useState<Meme[]>([])
     const [loading, setLoading] = useState(true)
@@ -342,22 +330,6 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
     const [page, setPage] = useState(1)
     const [hasMore, setHasMore] = useState(false)
     const [loadingMore, setLoadingMore] = useState(false)
-    const [walletAddress, setWalletAddress] = useState(address)
-
-    useEffect(() => { setWalletAddress(address) }, [address])
-    useEffect(() => {
-      const h = (e: Event) => {
-        const addr = (e as CustomEvent<string>).detail
-        if (addr) setWalletAddress(addr)
-      }
-      window.addEventListener('vvc:wallet-connected', h)
-      return () => window.removeEventListener('vvc:wallet-connected', h)
-    }, [])
-
-    const handleConnect = (addr: string) => {
-      setWalletAddress(addr)
-      window.dispatchEvent(new CustomEvent('vvc:wallet-connected', { detail: addr }))
-    }
 
     const load = useCallback(async (pageNum: number, replace: boolean) => {
       try {
@@ -427,7 +399,7 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
           </div>
 
           {tab === 'winners' && (
-            <WinnersRewards address={walletAddress} onConnect={handleConnect} onOpenProfile={onOpenProfile} />
+            <WinnersRewards onOpenProfile={onOpenProfile} />
           )}
 
           {showGrid && (
@@ -447,7 +419,6 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
                 <MemeCard
                   key={item.job_id}
                   item={item}
-                  address={walletAddress}
                   onSelect={handleSelectMeme}
                   onOpenDetail={onOpenDetail}
                   onOpenProfile={onOpenProfile}

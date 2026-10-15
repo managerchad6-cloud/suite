@@ -5,21 +5,11 @@ import {
   type Video, type RoadmapItem,
 } from '../api/viewer'
 import { getSuggestions, voteOnSuggestion, sendChat, type Suggestion } from '../api/livestream'
+import { MemberGate, useMemberGate } from '../identity/gate'
 
-type Phantom = { signMessage: (m: Uint8Array, enc: string) => Promise<{ signature: Uint8Array }> }
-
-function getPhantomSolana(): Phantom | null {
-  return (window as unknown as { phantom?: { solana?: Phantom } }).phantom?.solana ?? null
-}
-
-async function signVote(message: string): Promise<string> {
-  const p = getPhantomSolana()
-  if (!p) throw new Error('Phantom not found')
-  const { signature } = await p.signMessage(new TextEncoder().encode(message), 'utf8')
-  return Array.from(signature).map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function VideoVoting({ address }: { address: string }) {
+function VideoVoting() {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [byFile, setByFile] = useState<Record<string, Video>>({})
   const [myVote, setMyVote] = useState<string | null>(null)
   const [voting, setVoting] = useState<string | null>(null)
@@ -27,7 +17,7 @@ function VideoVoting({ address }: { address: string }) {
   const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null)
 
   const load = async () => {
-    const [ranks, mv] = await Promise.all([getRanks(), getMyVideoVote(address)])
+    const [ranks, mv] = await Promise.all([getRanks(), address ? getMyVideoVote(address) : null])
     const map: Record<string, Video> = {}
     for (const v of ranks) map[v.file] = v
     setByFile(map)
@@ -42,9 +32,7 @@ function VideoVoting({ address }: { address: string }) {
     if (voting) return
     setVoting(file)
     try {
-      const date = new Date().toISOString().split('T')[0]
-      const sig = await signVote(`VVC Vote: ${file} | ${date}`)
-      await voteVideo(address, file, sig)
+      await voteVideo(file)
       await load()
     } catch { /* rejected */ } finally { setVoting(null) }
   }
@@ -79,8 +67,9 @@ function VideoVoting({ address }: { address: string }) {
               : (
                 <button
                   className="gallery__vote-btn"
-                  onClick={(e) => handleVote(file, e)}
-                  disabled={!!voting}
+                  {...gate.lockProps('vote')}
+                  onClick={(e) => { e.stopPropagation(); gate.guard(handleVote, 'vote')(file, e) }}
+                  disabled={!gate.locked && !!voting}
                 >
                   {voting === file ? '…' : myVote ? 'Change Vote' : 'Vote'}
                 </button>
@@ -139,7 +128,9 @@ function VideoVoting({ address }: { address: string }) {
   )
 }
 
-function RoadmapVoting({ address }: { address: string }) {
+function RoadmapVoting() {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [items, setItems] = useState<RoadmapItem[]>([])
   const [myVotes, setMyVotes] = useState<string[]>([])
   const [voting, setVoting] = useState<string | null>(null)
@@ -147,7 +138,7 @@ function RoadmapVoting({ address }: { address: string }) {
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const load = async () => {
-    const [roadmap, mv] = await Promise.all([getRoadmap(), getMyRoadmapVotes(address)])
+    const [roadmap, mv] = await Promise.all([getRoadmap(), address ? getMyRoadmapVotes(address) : []])
     setItems(roadmap)
     setMyVotes(mv)
     setLoading(false)
@@ -160,9 +151,7 @@ function RoadmapVoting({ address }: { address: string }) {
     if (voting || myVotes.includes(itemId)) return
     setVoting(itemId)
     try {
-      const date = new Date().toISOString().split('T')[0]
-      const sig = await signVote(`VVC Roadmap Vote: ${itemId} | ${date}`)
-      await voteRoadmap(address, itemId, sig)
+      await voteRoadmap(itemId)
       setMyVotes((prev) => [...prev, itemId])
       await load()
     } catch { /* rejected */ } finally { setVoting(null) }
@@ -193,8 +182,9 @@ function RoadmapVoting({ address }: { address: string }) {
                   <span className="roadmap-card__votes">{item.votes}</span>
                   <button
                     className={`btn-vote-item${voted ? ' voted' : ''}`}
-                    onClick={(e) => handleVote(item.id, e)}
-                    disabled={!!voting || voted}
+                    {...gate.lockProps('vote')}
+                    onClick={(e) => { e.stopPropagation(); gate.guard(handleVote, 'vote')(item.id, e) }}
+                    disabled={!gate.locked && (!!voting || voted)}
                   >
                     {voting === item.id ? '…' : voted ? '✓' : '↑'}
                   </button>
@@ -217,7 +207,9 @@ function RoadmapVoting({ address }: { address: string }) {
   )
 }
 
-function SuggestionsVoting({ address }: { address: string }) {
+function SuggestionsVoting() {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [voting, setVoting] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -232,21 +224,14 @@ function SuggestionsVoting({ address }: { address: string }) {
 
   useEffect(() => { load() }, [])
 
-  const hasVoted = (s: Suggestion) => s.voters.includes(address.toLowerCase())
+  const hasVoted = (s: Suggestion) => !!address && s.voters.includes(address.toLowerCase())
 
   const handleVote = async (s: Suggestion, e: React.MouseEvent) => {
     e.stopPropagation()
     if (voting) return
     setVoting(s.id)
     try {
-      const nonce = String(Date.now())
-      const action = hasVoted(s) ? 'unvote' : 'upvote'
-      const challenge = `VVC Live: ${action} suggestion ${s.id} as ${address} ts ${nonce}`
-      const p = getPhantomSolana()
-      if (!p) throw new Error('Phantom not found')
-      const { signature } = await p.signMessage(new TextEncoder().encode(challenge), 'utf8')
-      const sig = btoa(String.fromCharCode(...Array.from(signature)))
-      await voteOnSuggestion(address, s.id, sig, nonce, action)
+      await voteOnSuggestion(s.id, hasVoted(s) ? 'unvote' : 'upvote')
       await load()
     } catch { /* rejected */ } finally { setVoting(null) }
   }
@@ -270,7 +255,7 @@ function SuggestionsVoting({ address }: { address: string }) {
         <span className="vote-section-title">SUGGESTIONS</span>
         <span className="vote-section-sub">Community ideas · vote to boost</span>
       </div>
-      <div className="suggestion-submit">
+      <MemberGate reason="suggest" className="suggestion-submit">
         <input
           className="suggestion-input"
           placeholder="Submit a new suggestion…"
@@ -287,7 +272,7 @@ function SuggestionsVoting({ address }: { address: string }) {
         >
           {submitting ? '…' : 'Submit'}
         </button>
-      </div>
+      </MemberGate>
       {loading ? <div className="vote-spinner" /> : suggestions.length === 0 ? (
         <div className="suggestion-empty">No suggestions yet — be the first.</div>
       ) : (
@@ -304,8 +289,9 @@ function SuggestionsVoting({ address }: { address: string }) {
                 <div className="suggestion-card__row">
                   <button
                     className={`btn-vote-item${voted ? ' voted' : ''}`}
-                    onClick={(e) => handleVote(s, e)}
-                    disabled={!!voting}
+                    {...gate.lockProps('vote')}
+                    onClick={(e) => { e.stopPropagation(); gate.guard(handleVote, 'vote')(s, e) }}
+                    disabled={!gate.locked && !!voting}
                   >
                     {voting === s.id ? '…' : voted ? '✓' : '↑'}
                   </button>
@@ -328,7 +314,7 @@ function SuggestionsVoting({ address }: { address: string }) {
   )
 }
 
-export function Vote({ address }: { address: string }) {
+export function Vote() {
   return (
     <div className="vote-view">
       <div className="vote-gallery-section">
@@ -336,11 +322,11 @@ export function Vote({ address }: { address: string }) {
           <span className="vote-section-title">VIDEO QUEUE</span>
           <span className="vote-section-sub">One vote · changeable</span>
         </div>
-        <VideoVoting address={address} />
+        <VideoVoting />
       </div>
       <div className="vote-bottom-row">
-        <RoadmapVoting address={address} />
-        <SuggestionsVoting address={address} />
+        <RoadmapVoting />
+        <SuggestionsVoting />
       </div>
     </div>
   )

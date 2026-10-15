@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { sendChat } from '../api/livestream'
+import { MemberGate } from '../identity/gate'
 
-export function ChatInput({ address: _address }: { address: string }) {
+export function ChatInput() {
   const [msg, setMsg] = useState('')
   const [sending, setSending] = useState(false)
 
@@ -19,20 +20,22 @@ export function ChatInput({ address: _address }: { address: string }) {
 
   return (
     <div className="chat-input-wrap">
-      <div className="chat-input-row">
-        <input
-          className="chat-input"
-          placeholder="Say something… they're listening"
-          value={msg}
-          onChange={(e) => setMsg(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSend() }}
-          disabled={sending}
-          maxLength={300}
-        />
-        <button className="chat-send-btn" onClick={handleSend} disabled={sending || !msg.trim()}>
-          {sending ? '…' : '▶ SEND'}
-        </button>
-      </div>
+      <MemberGate reason="chat with the stream">
+        <div className="chat-input-row">
+          <input
+            className="chat-input"
+            placeholder="Say something… they're listening"
+            value={msg}
+            onChange={(e) => setMsg(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSend() }}
+            disabled={sending}
+            maxLength={300}
+          />
+          <button className="chat-send-btn" onClick={handleSend} disabled={sending || !msg.trim()}>
+            {sending ? '…' : '▶ SEND'}
+          </button>
+        </div>
+      </MemberGate>
     </div>
   )
 }

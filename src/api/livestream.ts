@@ -1,3 +1,5 @@
+import { api } from './client'
+
 const CHAT = ''
 const ANIM = ''
 
@@ -18,37 +20,16 @@ export async function getSuggestions(): Promise<Suggestion[]> {
   } catch { return [] }
 }
 
-export async function voteOnSuggestion(
-  address: string,
-  id: string,
-  signature: string,
-  nonce: string,
-  action: 'upvote' | 'unvote',
-): Promise<{ voteCount: number }> {
-  const challenge = `VVC Live: ${action} suggestion ${id} as ${address} ts ${nonce}`
-  const res = await fetch(`${CHAT}/api/suggestions/${id}/vote`, {
-    method: action === 'upvote' ? 'POST' : 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet: address, walletType: 'sol', signature, challenge, nonce }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`)
-  }
-  return res.json()
+// Votes act as the signed-in member (session cookie); no per-vote wallet signature.
+export function voteOnSuggestion(id: string, action: 'upvote' | 'unvote'): Promise<{ voteCount: number }> {
+  return api(`${CHAT}/api/suggestions/${encodeURIComponent(id)}/vote`, { method: action === 'upvote' ? 'POST' : 'DELETE' })
 }
 
 export const STREAM_URL = `${ANIM}/streams/live/stream.m3u8`
 export const WS_URL     = `wss://suite.virginvschad.vip/ws/orchestrator`
 
-export async function sendChat(message: string, voice?: 'chad' | 'virgin') {
-  const res = await fetch(`${CHAT}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, voice, mode: 'router' }),
-  })
-  if (!res.ok) throw new Error(`Chat failed: ${res.status}`)
-  return res.json()
+export function sendChat(message: string, voice?: 'chad' | 'virgin') {
+  return api(`${CHAT}/api/chat`, { method: 'POST', body: { message, voice, mode: 'router' } })
 }
 
 export async function getMemeIntake() {
@@ -59,14 +40,8 @@ export async function getMemeIntake() {
   } catch { return null }
 }
 
-export async function voteMeme(number: number) {
-  const res = await fetch(`${ANIM}/api/meme-intake/vote`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ number }),
-  })
-  if (!res.ok) throw new Error(`Vote failed: ${res.status}`)
-  return res.json()
+export function voteMeme(number: number) {
+  return api(`${ANIM}/api/meme-intake/vote`, { method: 'POST', body: { number } })
 }
 
 export interface YtQueueItem {
@@ -88,32 +63,11 @@ export async function getYtQueue(): Promise<YtQueueItem[]> {
 }
 
 export async function submitYtVideo(url: string, title: string): Promise<YtQueueItem> {
-  const res = await fetch(`${ANIM}/api/yt-queue`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, title }),
-  })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-  return data.item
+  return (await api<{ item: YtQueueItem }>(`${ANIM}/api/yt-queue`, { method: 'POST', body: { url, title } })).item
 }
 
-export async function voteYtQueue(
-  address: string,
-  id: string,
-  signature: string,
-  nonce: string,
-  action: 'upvote' | 'unvote',
-): Promise<{ voteCount: number }> {
-  const challenge = `VVC Live: ${action} yt-queue ${id} as ${address} ts ${nonce}`
-  const res = await fetch(`${ANIM}/api/yt-queue/${id}/vote`, {
-    method: action === 'upvote' ? 'POST' : 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet: address, walletType: 'sol', signature, challenge, nonce }),
-  })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-  return data
+export function voteYtQueue(id: string, action: 'upvote' | 'unvote'): Promise<{ voteCount: number }> {
+  return api(`${ANIM}/api/yt-queue/${encodeURIComponent(id)}/vote`, { method: action === 'upvote' ? 'POST' : 'DELETE' })
 }
 
 export async function getLists() {
@@ -124,23 +78,10 @@ export async function getLists() {
   } catch { return null }
 }
 
-export async function voteList(list: 'video' | 'roadmap', index: number) {
-  const res = await fetch(`${ANIM}/api/lists/vote`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ list, index }),
-  })
-  if (!res.ok) throw new Error(`Vote failed: ${res.status}`)
-  return res.json()
+export function voteList(list: 'video' | 'roadmap', index: number) {
+  return api(`${ANIM}/api/lists/vote`, { method: 'POST', body: { list, index } })
 }
 
-export async function submitMemeToLivestream(text: string, userId?: string): Promise<{ ok: boolean; voting?: boolean; intake?: boolean; queued?: boolean; id?: string | null }> {
-  const res = await fetch(`${ANIM}/api/orchestrator/meme/freestyle`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, userId }),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`)
-  return data
+export function submitMemeToLivestream(text: string): Promise<{ ok: boolean; voting?: boolean; intake?: boolean; queued?: boolean; id?: string | null }> {
+  return api(`${ANIM}/api/orchestrator/meme/freestyle`, { method: 'POST', body: { text } })
 }

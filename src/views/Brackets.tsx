@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useMemberGate } from '../identity/gate'
 import './Brackets.css'
 
 interface Matchup {
@@ -39,12 +40,13 @@ function timeLeft(iso: string): string {
 }
 
 function MatchupCard({
-  matchup, address, onVoted,
+  matchup, onVoted,
 }: {
   matchup: Matchup
-  address: string
   onVoted: (matchup_id: string, votes_a: number, votes_b: number) => void
 }) {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [votesA, setVotesA] = useState(matchup.votes_a)
   const [votesB, setVotesB] = useState(matchup.votes_b)
   const [myVote, setMyVote] = useState<string | null>(null)
@@ -55,7 +57,7 @@ function MatchupCard({
   const pctB    = 100 - pctA
 
   async function vote(meme_id: string) {
-    if (voting || ended || myVote === meme_id) return
+    if (!address || voting || ended || myVote === meme_id) return
     setVoting(true)
     try {
       const res = await fetch('/api/brackets/vote', {
@@ -80,8 +82,9 @@ function MatchupCard({
         {/* Side A */}
         <button
           className={`matchup-side ${myVote === matchup.meme_a_id ? 'matchup-side--voted' : ''} ${matchup.winner === matchup.meme_a_id ? 'matchup-side--winner' : ''} ${matchup.winner && matchup.winner !== matchup.meme_a_id ? 'matchup-side--loser' : ''}`}
-          onClick={() => vote(matchup.meme_a_id)}
-          disabled={voting || ended || !!matchup.winner}
+          {...(!ended && !matchup.winner ? gate.lockProps('vote') : {})}
+          onClick={gate.guard(() => vote(matchup.meme_a_id), 'vote')}
+          disabled={(!gate.locked && voting) || ended || !!matchup.winner}
         >
           <img src={memeImageUrl(matchup.meme_a_id, matchup.meme_a_source)} alt="A" className="matchup-img" />
           <div className="matchup-vote-count">{votesA}</div>
@@ -101,8 +104,9 @@ function MatchupCard({
         {/* Side B */}
         <button
           className={`matchup-side ${myVote === matchup.meme_b_id ? 'matchup-side--voted' : ''} ${matchup.winner === matchup.meme_b_id ? 'matchup-side--winner' : ''} ${matchup.winner && matchup.winner !== matchup.meme_b_id ? 'matchup-side--loser' : ''}`}
-          onClick={() => vote(matchup.meme_b_id)}
-          disabled={voting || ended || !!matchup.winner}
+          {...(!ended && !matchup.winner ? gate.lockProps('vote') : {})}
+          onClick={gate.guard(() => vote(matchup.meme_b_id), 'vote')}
+          disabled={(!gate.locked && voting) || ended || !!matchup.winner}
         >
           <img src={memeImageUrl(matchup.meme_b_id, matchup.meme_b_source)} alt="B" className="matchup-img" />
           <div className="matchup-vote-count">{votesB}</div>
@@ -112,11 +116,7 @@ function MatchupCard({
   )
 }
 
-interface Props {
-  address: string
-}
-
-export function Brackets({ address }: Props) {
+export function Brackets() {
   const [bracket,  setBracket]  = useState<Bracket | null>(null)
   const [matchups, setMatchups] = useState<Matchup[]>([])
   const [loading,  setLoading]  = useState(true)
@@ -208,7 +208,6 @@ export function Brackets({ address }: Props) {
               <MatchupCard
                 key={m.id}
                 matchup={m}
-                address={address}
                 onVoted={handleVoted}
               />
             ))}

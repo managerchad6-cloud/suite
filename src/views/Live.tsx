@@ -3,16 +3,16 @@ import { ChatInput } from '../components/ChatInput'
 import { MemeQueue } from '../components/MemeQueue'
 import { YtVideosPanel } from '../components/YtVideosPanel'
 
-export function Live({ address }: { address: string }) {
+export function Live() {
   return (
     <div className="live-layout">
       <div className="live-center">
         <StreamPlayer />
-        <ChatInput address={address} />
+        <ChatInput />
       </div>
       <div className="live-right">
-        <MemeQueue address={address} />
-        <YtVideosPanel address={address} />
+        <MemeQueue />
+        <YtVideosPanel />
       </div>
     </div>
   )

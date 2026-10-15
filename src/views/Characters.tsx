@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useMemberGate } from '../identity/gate'
 import { MALE, FEMALE, DEITIES, CHARACTERS, type CharData, type Rarity } from '../data/characterLore'
 import { fetchMemes, fetchMemesByCharacter, parseMemeId, imageUrl, handmadeImageUrl, type Meme } from '../api/memes'
 import { fetchCharacters, unlockCharacter, setMainCharacter, MASTERY_LEVELS, RARITY_COLOR, type Character } from '../api/characters'
@@ -112,14 +113,15 @@ function TaggedMemes({ charName, charKey, onOpenDetail }: {
 
 // ── Character detail ──────────────────────────────────────────────────────────
 
-function CharacterDetail({ char, onBack, onOpenDetail, colState, wallet, onCollectionChange }: {
+function CharacterDetail({ char, onBack, onOpenDetail, colState, onCollectionChange }: {
   char: CharData
   onBack: () => void
   onOpenDetail?: (m: Meme) => void
   colState?: Character
-  wallet?: string
   onCollectionChange?: () => void
 }) {
+  const gate = useMemberGate()
+  const wallet = gate.wallet
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -160,6 +162,11 @@ function CharacterDetail({ char, onBack, onOpenDetail, colState, wallet, onColle
           )}
           {unlocked && isMain && (
             <span className="char-main-badge">★ Your Main</span>
+          )}
+          {gate.locked && (
+            <button className="char-action-btn char-action-btn--main" {...gate.lockProps('collect characters')} onClick={() => gate.join('collect characters')}>
+              ☆ Set as Main
+            </button>
           )}
           {!unlocked && colState?.can_unlock && wallet && (
             <button className="char-action-btn char-action-btn--unlock" onClick={handleUnlock} disabled={busy}>
@@ -306,11 +313,12 @@ function SpectrumRow({ chars, chadLabel, virginLabel, onSelect, stateMap }: {
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export function Characters({ onOpenDetail, initialChar, address }: {
+export function Characters({ onOpenDetail, initialChar }: {
   onOpenDetail?: (meme: Meme) => void
   initialChar?: string | null
-  address?: string | null
 }) {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [selected,  setSelected]  = useState<CharData | null>(() =>
     initialChar ? (CHARACTERS.find(c => c.name === initialChar) ?? null) : null
   )
@@ -332,7 +340,6 @@ export function Characters({ onOpenDetail, initialChar, address }: {
         onBack={() => setSelected(null)}
         onOpenDetail={onOpenDetail}
         colState={stateMap[selected.key]}
-        wallet={address ?? undefined}
         onCollectionChange={loadCollection}
       />
     )
@@ -343,12 +350,19 @@ export function Characters({ onOpenDetail, initialChar, address }: {
   return (
     <div className="characters-view">
 
-      {address && (
+      {address ? (
         <div className="collection-header">
           <span className="collection-header-label">Collection</span>
           <span className="collection-header-count">
             {unlockedCount} / {CHARACTERS.length} unlocked
           </span>
+        </div>
+      ) : (
+        <div className="collection-header">
+          <span className="collection-header-label">Collection</span>
+          <button className="char-action-btn" {...gate.lockProps('start your collection')} onClick={() => gate.join('start your collection')}>
+            Start your collection
+          </button>
         </div>
       )}
 

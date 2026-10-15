@@ -123,7 +123,7 @@ export async function publishHandmade(params: {
   labels?: string[];
   labelLinks?: { text: string; charKey: string | null }[];
   wallet: string;
-  signature?: string;
+
 }): Promise<{ job_id: string }> {
   const res = await fetch(`${BASE}/publish/handmade`, {
     method: 'POST',
@@ -199,15 +199,15 @@ export async function fetchMemesByWallet(wallet: string, limit = 100): Promise<M
   return data.items.filter(m => m.wallet === wallet);
 }
 
+// The vote is cast as the signed-in member (session cookie), not by a per-vote wallet signature.
 export async function submitVote(
   job_id: string,
   wallet: string,
-  signature: string
 ): Promise<{ job_id: string; vote_count: number; already_voted: boolean }> {
   const res = await fetch(`${BASE}/jobs/${job_id}/vote`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet, signature }),
+    body: JSON.stringify({ wallet }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

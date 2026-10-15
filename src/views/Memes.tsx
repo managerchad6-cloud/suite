@@ -37,8 +37,7 @@ function generateFreestylePrompt(
   }
 }
 
-export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, onClearCharacterFilter }: {
-  address: string
+export function Memes({ onOpenDetail, onOpenProfile, characterFilter, onClearCharacterFilter }: {
   onOpenDetail?: (m: Meme) => void
   onOpenProfile?: (wallet: string) => void
   characterFilter?: string | null
@@ -115,15 +114,11 @@ export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, o
               {heroCreatorOpen ? (
                 <MemeCreator
                   key="hero-creator"
-                  address={address}
-                  onNeedConnect={() => {}}
                   variant="flat"
                 />
               ) : selectedMeme && heroParsed ? (
                 <MemeCreator
                   key={selectedMeme.job_id}
-                  address={address}
-                  onNeedConnect={() => {}}
                   variant="flat"
                   readOnly
                   onCreateOwn={() => setHeroCreatorOpen(true)}
@@ -177,7 +172,6 @@ export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, o
 
       {/* ── Gallery ── */}
       <MemeGallery
-        address={address}
         onAutoSelect={(m) => { setSelectedMeme(m) }}
         onSelectMeme={(m) => { setSelectedMeme(m); setHeroCreatorOpen(false) }}
         onOpenDetail={onOpenDetail}
@@ -189,8 +183,6 @@ export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, o
       {/* ── Floating modal ── */}
       <div className={`creator-modal-float ${creatorOpen ? 'creator-modal-float--open' : ''}`}>
         <MemeCreator
-          address={address}
-          onNeedConnect={() => {}}
           onClose={() => setCreatorOpen(false)}
         />
       </div>

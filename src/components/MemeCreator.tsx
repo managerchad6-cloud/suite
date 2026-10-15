@@ -9,7 +9,8 @@ import {
   buildTweetUrl,
   type JobMetadata,
 } from '../api/memes'
-import { getActiveProvider, getActiveType, detectWallets, connectWalletByType } from '../wallet'
+import { getActiveProvider, getActiveType } from '../wallet'
+import { useMemberGate } from '../identity/gate'
 import { fetchCreditBalance, issueMemeToken } from '../api/credits'
 
 const MEME_CREDIT_COST = 10
@@ -27,8 +28,6 @@ function fakeProgress(elapsed: number): number {
 }
 
 export interface MemeCreatorProps {
-  address: string | null
-  onNeedConnect: () => void
   onClose?: () => void
   initialVirgn?: string
   initialChad?: string
@@ -50,7 +49,9 @@ function phaseLabel(elapsed: number, hasMetadata: boolean): string {
 }
 
 export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
-  ({ address, onNeedConnect: _onNeedConnect, onClose, initialVirgn, initialChad, initialVirginLabels, initialChadLabels, initialFreetext, initialFormMode, variant = 'card', readOnly, onCreateOwn }, ref) => {
+  ({ onClose, initialVirgn, initialChad, initialVirginLabels, initialChadLabels, initialFreetext, initialFormMode, variant = 'card', readOnly, onCreateOwn }, ref) => {
+    const gate = useMemberGate()
+    const address = gate.wallet
     const [freetext, setFreetext] = useState(initialFreetext ?? '')
     const [virgin, setVirgin] = useState(initialVirgn ?? '')
     const [chad, setChad] = useState(initialChad ?? '')
@@ -68,7 +69,6 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
     const [metadata, setMetadata] = useState<JobMetadata | null>(null)
     const [finalImage, setFinalImage] = useState<string | null>(null)
     const [errorMsg, setErrorMsg] = useState<string | null>(null)
-    const [connectingInline, setConnectingInline] = useState(false)
     const [creditBalance, setCreditBalance] = useState<number | null>(null)
     const [paymentMode, setPaymentMode] = useState<'usdc' | 'credits'>('usdc')
 
@@ -170,16 +170,6 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
           }
         }
       }, 3000)
-    }
-
-    const handleConnectInline = async () => {
-      const available = detectWallets().filter(w => !w.isEvm && w.detected)
-      if (available.length === 0) { window.open('https://phantom.app/', '_blank', 'noopener'); return }
-      setConnectingInline(true)
-      try {
-        const addr = await connectWalletByType(available[0].type)
-        window.dispatchEvent(new CustomEvent('vvc:wallet-connected', { detail: addr }))
-      } catch { /* rejected */ } finally { setConnectingInline(false) }
     }
 
     const handleSubmit = async () => {
@@ -588,12 +578,9 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
                 : 'TRY AGAIN →'}
               </button>
             </>) : (
-              <div className="connect-prompt">
-                <strong onClick={handleConnectInline}>
-                  {connectingInline ? 'Connecting…' : 'Connect Phantom'}
-                </strong>{' '}
-                to create a meme.
-              </div>
+              <button className="btn-create" {...gate.lockProps('create memes')} onClick={() => gate.join('create memes')}>
+                CREATE →
+              </button>
             )}
             {errorMsg && phase === 'error' && (
               <>

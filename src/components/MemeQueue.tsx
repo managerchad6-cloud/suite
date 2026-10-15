@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { getMemeIntake, voteMeme, submitMemeToLivestream, WS_URL } from '../api/livestream'
 import { OrchestratorWS, type MemeVoteItem, type MemeIntakeState } from '../api/ws'
+import { MemberGate, useMemberGate } from '../identity/gate'
 
 type VotingState = 'idle' | 'voting' | 'rolling'
 
@@ -9,7 +10,8 @@ function countdownSecs(endsAt: number | null): number | null {
   return Math.max(0, Math.round((endsAt - Date.now()) / 1000))
 }
 
-export function MemeQueue({ address: _address }: { address: string }) {
+export function MemeQueue() {
+  const gate = useMemberGate()
   const [pool, setPool] = useState<MemeVoteItem[]>([])
   const [state, setState] = useState<VotingState>('idle')
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -79,7 +81,7 @@ export function MemeQueue({ address: _address }: { address: string }) {
         {state === 'rolling' && <span className="panel-badge rolling">ROLLING</span>}
         {state === 'idle'    && <span className="panel-badge idle">WAITING</span>}
       </div>
-      <div className="panel-form">
+      <MemberGate reason="suggest a meme" className="panel-form">
         <textarea
           className="yt-input"
           placeholder="Virgin X vs Chad Y…"
@@ -99,7 +101,7 @@ export function MemeQueue({ address: _address }: { address: string }) {
           </button>
           {submitMsg && <span style={{ fontSize: 13, fontFamily: 'var(--font-ui)', color: 'var(--gold)' }}>{submitMsg}</span>}
         </div>
-      </div>
+      </MemberGate>
       <div className="panel-body">
         {pool.length === 0 ? (
           <div className="panel-empty">Drop a meme idea above ↑</div>
@@ -111,8 +113,9 @@ export function MemeQueue({ address: _address }: { address: string }) {
               <span className="queue-votes">{item.votes}</span>
               <button
                 className="btn-queue-vote"
-                onClick={() => handleVote(item.number)}
-                disabled={voting !== null || state !== 'voting'}
+                {...gate.lockProps('vote')}
+                onClick={gate.guard(() => handleVote(item.number), 'vote')}
+                disabled={!gate.locked && (voting !== null || state !== 'voting')}
               >
                 {voting === item.number ? '…' : '↑'}
               </button>

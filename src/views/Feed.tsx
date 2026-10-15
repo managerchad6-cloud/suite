@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useMemberGate } from '../identity/gate'
 import { fetchGalleryMemes, studioMemeImageUrl } from '../api/studio'
 import { fetchMemes, imageUrl } from '../api/memes'
 import { truncateAddress } from '../wallet'
@@ -76,12 +77,13 @@ function sortItems(items: UnifiedMemeItem[], mode: SortMode): UnifiedMemeItem[] 
 }
 
 interface Props {
-  address: string
   onOpenItem: (item: UnifiedMemeItem) => void
   onOpenProfile?: (wallet: string) => void
 }
 
-export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
+export function Feed({ onOpenItem, onOpenProfile }: Props) {
+  const gate = useMemberGate()
+  const wallet = gate.wallet
   const [items,       setItems]       = useState<UnifiedMemeItem[]>([])
   const [loading,     setLoading]     = useState(true)
   const [idx,         setIdx]         = useState(0)
@@ -119,7 +121,7 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
   // Load tier state from backend and update cache + items
   const loadTierData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/feed?wallet=${encodeURIComponent(address)}&sort=top&limit=200`)
+      const res = await fetch(`/api/feed?${wallet ? `wallet=${encodeURIComponent(wallet)}&` : ''}sort=top&limit=200`)
       if (!res.ok) return
       const data: { items: TierRow[] } = await res.json()
       data.items.forEach(row => {
@@ -127,7 +129,7 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
       })
       setItems(prev => enrichWithTiers(prev))
     } catch { /* silent */ }
-  }, [address])
+  }, [wallet])
 
   const fetchBatch = useCallback(async (p: { studio: number; factory: number; reddit: number }, currentSort: SortMode) => {
     const redditSort = currentSort === 'fresh' ? 'new' : currentSort === 'top' ? 'top' : 'top'
@@ -272,12 +274,12 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
   }, [currentItem?.key])
 
   const handleVote = useCallback(async (dir: 1 | -1) => {
-    if (!currentItem || localVote?.voting) return
+    if (!currentItem || !wallet || localVote?.voting) return
     const prevYourVote = localVote?.yourVote ?? null
     const newYourVote: 1 | -1 | null = prevYourVote === dir ? null : dir
     setLocalVote(prev => prev ? { ...prev, voting: true } : prev)
     try {
-      const result = await castVote(currentItem.sourceId, currentItem.type, dir, address)
+      const result = await castVote(currentItem.sourceId, currentItem.type, dir, wallet)
       setLocalVote({ upVotes: result.up_votes, downVotes: result.down_votes, yourVote: newYourVote, tier: result.tier, voting: false })
       setItems(prev => prev.map(item =>
         item.key === currentItem.key
@@ -288,7 +290,7 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
       console.error('Vote failed:', err)
       setLocalVote(prev => prev ? { ...prev, voting: false } : prev)
     }
-  }, [currentItem, localVote, address])
+  }, [currentItem, localVote, wallet])
 
   // Render one slide; vote buttons are co-rendered inside current slide as a flex sibling
   function renderSlide(visIdx: number) {
@@ -300,16 +302,17 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
     const isCurrent = cls === 'current'
     return (
       <div key={item.key} className={`feed-slide feed-slide--${cls}`}>
-        <FeedCard item={item} address={address} onOpen={onOpenItem} />
+        <FeedCard item={item} onOpen={onOpenItem} />
         {isCurrent && localVote && (
           <div className="feed-actions">
 
             {/* 👍 Upvote */}
             <button
               className={`feed-action-btn feed-action-btn--up ${localVote.yourVote === 1 ? 'active' : ''}`}
-              onClick={() => handleVote(1)}
-              disabled={localVote.voting}
-              title="Upvote"
+              {...gate.lockProps('vote')}
+              onClick={gate.guard(() => handleVote(1), 'vote')}
+              disabled={!gate.locked && localVote.voting}
+              title={gate.locked ? undefined : 'Upvote'}
             >
               <div className="feed-action-icon">
                 <span className="feed-action-icon-glyph">👍</span>
@@ -320,9 +323,10 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
             {/* 👎 Downvote */}
             <button
               className={`feed-action-btn feed-action-btn--down ${localVote.yourVote === -1 ? 'active' : ''}`}
-              onClick={() => handleVote(-1)}
-              disabled={localVote.voting}
-              title="Downvote"
+              {...gate.lockProps('vote')}
+              onClick={gate.guard(() => handleVote(-1), 'vote')}
+              disabled={!gate.locked && localVote.voting}
+              title={gate.locked ? undefined : 'Downvote'}
             >
               <div className="feed-action-icon">
                 <span className="feed-action-icon-glyph">👎</span>
@@ -450,7 +454,6 @@ export function Feed({ address, onOpenItem, onOpenProfile }: Props) {
         {showComments && currentItem && (
           <CommentsPanel
             item={currentItem}
-            address={address}
             onClose={() => setShowComments(false)}
           />
         )}

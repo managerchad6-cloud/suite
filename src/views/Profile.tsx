@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fetchMemesByWallet, imageUrl, parseMemeId, type Meme } from '../api/memes'
-import { profileImage, type Profile as IdentityProfile } from '../identity/api'
+import { profileImage } from '../identity/api'
+import { useIdentity } from '../identity/IdentityProvider'
 import { archetypeName } from '../identity/archetypes'
 import { fetchPlayer, type PlayerState } from '../api/player'
 import { RankBadge } from '../components/RankBadge'
@@ -8,13 +9,14 @@ import { SpectrumMeter } from '../components/SpectrumMeter'
 import { ShadowEconomy } from '../components/ShadowEconomy'
 
 interface Props {
-  address: string
-  profile: IdentityProfile | null
   onGoToOracle: () => void
   onOpenDetail?: (meme: Meme) => void
 }
 
-export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props) {
+export function Profile({ onGoToOracle, onOpenDetail }: Props) {
+  // Member-only view (App renders it for members): the wallet is always set here
+  const { memberWallet, profile } = useIdentity()
+  const address = memberWallet ?? ''
   const [memes,        setMemes]        = useState<Meme[]>([])
   const [memesLoading, setMemesLoading] = useState(true)
   const [player,       setPlayer]       = useState<PlayerState | null>(null)

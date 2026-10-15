@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchComments, postComment, likeComment, type Comment } from '../api/comments'
 import { truncateAddress } from '../wallet'
+import { MemberGate, useMemberGate } from '../identity/gate'
 import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
 
 type CachedProfile = PublicProfile | null
@@ -27,12 +28,13 @@ function getLikedKey(wallet: string, commentId: number) {
   return `vvc_liked_comment_v1_${wallet}_${commentId}`
 }
 
-function CommentRow({ comment, address, onOpenProfile, onReply }: {
+function CommentRow({ comment, onOpenProfile, onReply }: {
   comment: Comment
-  address: string | null
   onOpenProfile?: (wallet: string) => void
   onReply?: () => void
 }) {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [profile, setProfile] = useState<CachedProfile | undefined>(undefined)
   const [liked, setLiked]     = useState(() =>
     address ? !!localStorage.getItem(getLikedKey(address, comment.id)) : false
@@ -79,14 +81,15 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
         </div>
         <p className="md-comment-text">{comment.text}</p>
         {onReply && (
-          <button className="md-comment-reply-btn" onClick={onReply}>Reply</button>
+          <button className="md-comment-reply-btn" {...gate.lockProps('reply')} onClick={gate.guard(onReply, 'reply')}>Reply</button>
         )}
       </div>
       <button
         className={`md-comment-like ${liked ? 'md-comment-like--liked' : ''}`}
-        onClick={handleLike}
-        disabled={!address || liked || liking}
-        title={!address ? 'Connect wallet to like' : liked ? 'Liked' : 'Like'}
+        {...gate.lockProps('like')}
+        onClick={e => { e.stopPropagation(); gate.guard(handleLike, 'like')(e) }}
+        disabled={!gate.locked && (liked || liking)}
+        title={gate.locked ? undefined : liked ? 'Liked' : 'Like'}
       >
         <span className="md-comment-like-icon">♥</span>
         {likeCount > 0 && <span className="md-comment-like-count">{likeCount}</span>}
@@ -95,14 +98,14 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
   )
 }
 
-function CommentThread({ node, jobId, address, depth = 0, onOpenProfile, onReplyPosted }: {
+function CommentThread({ node, jobId, depth = 0, onOpenProfile, onReplyPosted }: {
   node: CommentNode
   jobId: string
-  address: string | null
   depth?: number
   onOpenProfile?: (wallet: string) => void
   onReplyPosted: () => void
 }) {
+  const { wallet: address } = useMemberGate()
   const [replying, setReplying] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [posting, setPosting] = useState(false)
@@ -123,9 +126,8 @@ function CommentThread({ node, jobId, address, depth = 0, onOpenProfile, onReply
     <div className={`md-thread${depth > 0 ? ' md-thread--nested' : ''}`}>
       <CommentRow
         comment={node}
-        address={address}
         onOpenProfile={onOpenProfile}
-        onReply={address ? () => setReplying(r => !r) : undefined}
+        onReply={() => setReplying(r => !r)}
       />
       {replying && (
         <form className="md-reply-form" onSubmit={handleReply}>
@@ -150,7 +152,6 @@ function CommentThread({ node, jobId, address, depth = 0, onOpenProfile, onReply
               key={r.id}
               node={r}
               jobId={jobId}
-              address={address}
               depth={Math.min(depth + 1, 3)}
               onOpenProfile={onOpenProfile}
               onReplyPosted={onReplyPosted}
@@ -164,11 +165,11 @@ function CommentThread({ node, jobId, address, depth = 0, onOpenProfile, onReply
 
 interface Props {
   jobId: string
-  address: string | null
   onOpenProfile?: (wallet: string) => void
 }
 
-export function CommentSection({ jobId, address, onOpenProfile }: Props) {
+export function CommentSection({ jobId, onOpenProfile }: Props) {
+  const { wallet: address } = useMemberGate()
   const [comments, setComments]           = useState<Comment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(true)
   const [commentText, setCommentText]     = useState('')
@@ -202,7 +203,7 @@ export function CommentSection({ jobId, address, onOpenProfile }: Props) {
         Replies {!commentsLoading && <span className="md-comments-count">({comments.length})</span>}
       </h3>
 
-      {address ? (
+      <MemberGate reason="reply">
         <form className="md-comment-form" onSubmit={handleComment}>
           <input
             ref={inputRef}
@@ -216,9 +217,7 @@ export function CommentSection({ jobId, address, onOpenProfile }: Props) {
             {posting ? '…' : 'Reply'}
           </button>
         </form>
-      ) : (
-        <p className="md-comment-gate">Connect wallet to reply</p>
-      )}
+      </MemberGate>
 
       {commentsLoading ? (
         <div style={{ color: '#444', fontSize: 13, padding: '24px 0' }}>Loading…</div>
@@ -231,7 +230,6 @@ export function CommentSection({ jobId, address, onOpenProfile }: Props) {
               key={node.id}
               node={node}
               jobId={jobId}
-              address={address}
               onOpenProfile={onOpenProfile}
               onReplyPosted={reload}
             />

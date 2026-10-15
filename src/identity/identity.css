@@ -118,16 +118,47 @@
 .suite-nav-join:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--gold-dim); }
 .suite-nav-join-sub { margin: 0; font-size: 10px; line-height: 1.4; color: var(--text-dim); }
 
-/* ── Member-only view placeholder (until step 4 locks individual controls) ── */
-.join-prompt-view {
+/* ── Locked participation (identity/gate.tsx) ─────────────────── */
+/* A single control: dimmed with a lock, still clickable (it opens Join) */
+[data-locked] {
+  opacity: 0.55;
+  filter: grayscale(0.5);
+  cursor: pointer !important;
+}
+[data-locked]:hover { opacity: 0.8; }
+[data-locked]::before {
+  content: '🔒';
+  font-size: 0.75em;
+  margin-right: 0.3em;
+  filter: none;
+}
+/* Icon-only buttons (↑ ✓ ♥): the lock replaces nothing, it just sits in front */
+[data-locked].icon-only::before { margin-right: 0.15em; }
+
+/* A group of inputs: covered by a "Join to …" button */
+.member-gate { position: relative; }
+.member-gate-content { opacity: 0.35; filter: grayscale(0.6); pointer-events: none; user-select: none; }
+.member-gate-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  height: 100%;
-  padding: 24px;
-  text-align: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(17, 17, 17, 0.55);
+  border: 1px dashed rgba(240, 160, 32, 0.45);
+  border-radius: 6px;
+  color: var(--gold);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
 }
-.join-prompt-view h2 { margin: 0; font-family: var(--font-ui); font-size: 26px; color: var(--text); }
-.join-prompt-view p { margin: 0; max-width: 380px; color: #888; font-size: 13px; line-height: 1.5; }
+.member-gate-overlay:hover { background: rgba(17, 17, 17, 0.35); border-color: var(--gold); }
+.member-gate-lock { font-size: 0.9em; }
+/* Big image buttons (bracket sides): the lock sits in a corner instead of before the content */
+.matchup-side[data-locked] { position: relative; }
+.matchup-side[data-locked]::before { position: absolute; top: 8px; left: 8px; z-index: 2; font-size: 16px; margin: 0; }

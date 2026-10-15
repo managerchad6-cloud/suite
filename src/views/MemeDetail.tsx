@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { imageUrl, parseMemeId, submitVote, buildTweetUrl, fetchMemes, fetchMemesByWallet, type Meme } from '../api/memes'
-import { signAction, truncateAddress } from '../wallet'
+import { truncateAddress } from '../wallet'
+import { useMemberGate } from '../identity/gate'
 import { CHARACTERS } from '../data/characterLore'
 import { CommentSection } from '../components/CommentSection'
 import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
@@ -100,14 +101,15 @@ function RelatedStrip({ currentJobId, creatorWallet, onNavigate }: {
 // ── Main component ────────────────────────────────────────────────────────────
 interface Props {
   meme: Meme
-  address: string | null
   onBack: () => void
   onNavigate?: (meme: Meme) => void
   onOpenCharacter?: (name: string) => void
   onOpenProfile?: (wallet: string) => void
 }
 
-export function MemeDetail({ meme, address, onBack, onNavigate, onOpenCharacter, onOpenProfile }: Props) {
+export function MemeDetail({ meme, onBack, onNavigate, onOpenCharacter, onOpenProfile }: Props) {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const { virgin, chad } = parseMemeId(meme.meme_id)
   // Match descriptor to a roster character; fall back to canonical Virgin/Chad
   const virginRoster = CHARACTERS.find(c => c.name === virgin)
@@ -133,12 +135,11 @@ export function MemeDetail({ meme, address, onBack, onNavigate, onOpenCharacter,
     if (!address || voted || voting) return
     setVoting(true)
     try {
-      const sig = await signAction(`vote:${meme.job_id}`, address)
-      const result = await submitVote(meme.job_id, address, sig)
+      const result = await submitVote(meme.job_id, address)
       localStorage.setItem(getVotedKey(address, meme.job_id), '1')
       setVoted(true)
       setVoteCount(result.vote_count)
-    } catch { /* phantom rejected */ } finally { setVoting(false) }
+    } catch { /* already voted or failed */ } finally { setVoting(false) }
   }
 
   const jobShort = meme.job_id.replace('api_', '')
@@ -226,9 +227,9 @@ export function MemeDetail({ meme, address, onBack, onNavigate, onOpenCharacter,
           <div className="md-actions">
             <button
               className={`md-vote-btn ${voted ? 'voted' : ''}`}
-              onClick={handleVote}
-              disabled={!address || voted || voting}
-              title={!address ? 'Connect wallet to vote' : undefined}
+              {...gate.lockProps('vote')}
+              onClick={gate.guard(handleVote, 'vote')}
+              disabled={!gate.locked && (voted || voting)}
             >
               {voted ? `✓ Voted  ·  ${voteCount}` : voting ? '…' : `↑ Vote  ·  ${voteCount}`}
             </button>
@@ -246,7 +247,7 @@ export function MemeDetail({ meme, address, onBack, onNavigate, onOpenCharacter,
       </div>
 
       {/* ── Comments ── */}
-      <CommentSection jobId={meme.job_id} address={address} onOpenProfile={onOpenProfile} />
+      <CommentSection jobId={meme.job_id} onOpenProfile={onOpenProfile} />
 
       {onNavigate && (
         <RelatedStrip

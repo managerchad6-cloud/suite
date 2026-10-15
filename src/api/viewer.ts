@@ -1,3 +1,5 @@
+import { api } from './client'
+
 const BASE = ''
 
 export interface Video {
@@ -31,14 +33,9 @@ export async function getMyVideoVote(address: string): Promise<string | null> {
   } catch { return null }
 }
 
-export async function voteVideo(address: string, videoFile: string, signature: string) {
-  const res = await fetch(`${BASE}/api/vote`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address, videoFile, signature }),
-  })
-  if (!res.ok) throw new Error('Vote failed')
-  return res.json()
+// Votes are cast as the signed-in member (session cookie), not by a per-vote wallet signature.
+export function voteVideo(videoFile: string) {
+  return api(`${BASE}/api/vote`, { method: 'POST', body: { videoFile } })
 }
 
 export async function getRoadmap(): Promise<RoadmapItem[]> {
@@ -55,12 +52,6 @@ export async function getMyRoadmapVotes(address: string): Promise<string[]> {
   } catch { return [] }
 }
 
-export async function voteRoadmap(address: string, itemId: string, signature: string) {
-  const res = await fetch(`${BASE}/api/roadmap/vote`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address, itemId, signature }),
-  })
-  if (!res.ok) throw new Error('Vote failed')
-  return res.json()
+export function voteRoadmap(itemId: string) {
+  return api(`${BASE}/api/roadmap/vote`, { method: 'POST', body: { itemId } })
 }
