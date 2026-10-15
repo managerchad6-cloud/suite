@@ -1,24 +1,15 @@
 import { useState, useEffect } from 'react'
 import { fetchMemesByWallet, imageUrl, parseMemeId, type Meme } from '../api/memes'
-import type { UserProfile } from '../lib/quizLog'
+import { profileImage, type Profile as IdentityProfile } from '../identity/api'
+import { archetypeName } from '../identity/archetypes'
 import { fetchPlayer, type PlayerState } from '../api/player'
 import { RankBadge } from '../components/RankBadge'
 import { SpectrumMeter } from '../components/SpectrumMeter'
 import { ShadowEconomy } from '../components/ShadowEconomy'
 
-
-const CHAR_NAME: Record<string, string> = {
-  gigachad: 'Gigachad', chad: 'Chad', thad: 'Thad', lad: 'Lad',
-  boomer: 'Dad', brad: 'Brad', basic: 'Basic', neckbeard: 'Neckbeard',
-  incel: 'Incel', wizard: 'Wizard', virgin: 'Virgin', stacy: 'Stacy',
-  tracy: 'Tracy', lacy: 'Lacy', brandy: 'Brandy', veronica: 'Veronica',
-  becky: 'Becky', femcel: 'Femcel', legbeard: 'Legbeard', witch: 'Witch',
-  gad: 'Gad', zad: 'Zad', bad: 'Bad', gizzard: 'Gizzard',
-}
-
 interface Props {
   address: string
-  profile: UserProfile | null
+  profile: IdentityProfile | null
   onGoToOracle: () => void
   onOpenDetail?: (meme: Meme) => void
 }
@@ -46,8 +37,9 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props)
     </div>
   )
 
-  const name    = CHAR_NAME[profile.character] ?? profile.character
-  const avatar  = profile.portraitDataUrl ?? `/assets/chars/${profile.character}.png`
+  const name    = archetypeName(profile.archetype)
+  const avatar  = profileImage(profile)
+  const pfpUrl  = profile.portrait.url
   const updated = profile.updatedAt ? new Date(profile.updatedAt).toLocaleDateString() : null
 
   return (
@@ -59,10 +51,10 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail }: Props)
           <h1 className="profile-hero-name">{name}</h1>
           <p className="profile-hero-desc">{profile.description}</p>
           {updated && <p className="profile-hero-date">Last updated {updated}</p>}
-          {profile.portraitDataUrl && (
+          {pfpUrl && (
             <a
-              href={profile.portraitDataUrl}
-              download={`${profile.character}_portrait.jpg`}
+              href={pfpUrl}
+              download={`${profile.archetype}_portrait`}
               className="pfp-modal-download"
             >
               Download PFP

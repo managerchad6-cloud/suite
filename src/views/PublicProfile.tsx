@@ -2,15 +2,10 @@ import { useState, useEffect } from 'react'
 import { fetchMemesByWallet, imageUrl, parseMemeId, type Meme } from '../api/memes'
 import { truncateAddress } from '../wallet'
 import { CHARACTERS } from '../data/characterLore'
+import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
 
-type RemoteProfile = { character: string; portraitDataUrl?: string } | null
-
-async function fetchRemoteProfile(wallet: string): Promise<RemoteProfile> {
-  try {
-    const r = await fetch(`/profiles/${encodeURIComponent(wallet)}`)
-    return r.ok ? r.json() : null
-  } catch { return null }
-}
+type RemoteProfile = PublicProfile | null
+const fetchRemoteProfile = getPublicProfile
 
 interface Props {
   wallet: string
@@ -37,9 +32,9 @@ export function PublicProfile({ wallet, onBack, onOpenDetail }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onBack])
 
-  const charData  = profile ? CHARACTERS.find(c => c.key === profile.character) ?? null : null
-  const avatar    = profile?.portraitDataUrl ?? (profile ? `/assets/chars/${profile.character}.png` : null)
-  const charName  = charData?.name ?? profile?.character ?? null
+  const charData  = profile ? CHARACTERS.find(c => c.key === profile.archetype) ?? null : null
+  const avatar    = profile ? bestImage(profile) : null
+  const charName  = charData?.name ?? profile?.archetype ?? null
 
   return (
     <div className="profile-page">

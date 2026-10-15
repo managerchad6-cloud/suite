@@ -1,19 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { fetchComments, postComment, likeComment, type Comment } from '../api/comments'
 import { truncateAddress } from '../wallet'
+import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
 
-type CachedProfile = { character: string; portraitDataUrl?: string } | null
-const _cache = new Map<string, Promise<CachedProfile>>()
-function getProfile(wallet: string): Promise<CachedProfile> {
-  if (!_cache.has(wallet)) {
-    _cache.set(wallet,
-      fetch(`/profiles/${encodeURIComponent(wallet)}`)
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null)
-    )
-  }
-  return _cache.get(wallet)!
-}
+type CachedProfile = PublicProfile | null
+const getProfile = getPublicProfile
 
 type CommentNode = Comment & { replies: CommentNode[] }
 
@@ -51,7 +42,7 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
 
   useEffect(() => { getProfile(comment.wallet).then(setProfile) }, [comment.wallet])
 
-  const src = profile?.portraitDataUrl ?? (profile ? `/assets/chars/${profile.character}.png` : null)
+  const src = profile ? bestImage(profile) : null
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation()

@@ -4,10 +4,14 @@ if (!('Buffer' in globalThis)) (globalThis as unknown as Record<string, unknown>
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './identity/identity.css'
 import App from './App'
+import { IdentityProvider } from './identity/IdentityProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <IdentityProvider>
+      <App />
+    </IdentityProvider>
   </StrictMode>,
 )

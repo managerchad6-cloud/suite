@@ -3,28 +3,19 @@ import { fetchStudioMeme, type StudioMeme } from '../api/studio'
 import { fetchMetadata, type JobMetadata } from '../api/memes'
 import { truncateAddress } from '../wallet'
 import { CommentSection } from '../components/CommentSection'
+import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
 import type { UnifiedMemeItem } from '../types/unified'
 import '../studio-meme-detail.css'
 
 // ── Creator row (shared with StudioMemeDetail) ────────────────────────────────
 
-type CachedProfile = { character: string; portraitDataUrl?: string } | null
-const _cache = new Map<string, Promise<CachedProfile>>()
-function getProfile(wallet: string): Promise<CachedProfile> {
-  if (!_cache.has(wallet)) {
-    _cache.set(wallet,
-      fetch(`/profiles/${encodeURIComponent(wallet)}`)
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null)
-    )
-  }
-  return _cache.get(wallet)!
-}
+type CachedProfile = PublicProfile | null
+const getProfile = getPublicProfile
 
 function CreatorRow({ wallet }: { wallet: string }) {
   const [profile, setProfile] = useState<CachedProfile | undefined>(undefined)
   useEffect(() => { getProfile(wallet).then(setProfile) }, [wallet])
-  const src = profile?.portraitDataUrl ?? (profile ? `/assets/chars/${profile.character}.png` : null)
+  const src = profile ? bestImage(profile) : null
   return (
     <div className="smd-creator-row">
       <div className="smd-creator-avatar">

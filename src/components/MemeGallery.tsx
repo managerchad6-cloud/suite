@@ -9,21 +9,11 @@ import {
   type LeaderboardEntry,
 } from '../api/memes'
 import { signAction, connectWallet, isPhantomInstalled, truncateAddress } from '../wallet'
+import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
 
 // ── Creator avatar ─────────────────────────────────────────────────
-type CachedProfile = { character: string; portraitDataUrl?: string } | null
-const _profileCache = new Map<string, Promise<CachedProfile>>()
-
-function fetchCreatorProfile(wallet: string): Promise<CachedProfile> {
-  if (!_profileCache.has(wallet)) {
-    _profileCache.set(wallet,
-      fetch(`/profiles/${encodeURIComponent(wallet)}`)
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null)
-    )
-  }
-  return _profileCache.get(wallet)!
-}
+type CachedProfile = PublicProfile | null
+const fetchCreatorProfile = getPublicProfile
 
 function CreatorAvatar({ wallet }: { wallet: string }) {
   const [profile, setProfile] = useState<CachedProfile | undefined>(undefined)
@@ -35,7 +25,7 @@ function CreatorAvatar({ wallet }: { wallet: string }) {
       {wallet.slice(0, 2).toUpperCase()}
     </div>
   )
-  const src = profile.portraitDataUrl ?? `/assets/chars/${profile.character}.png`
+  const src = bestImage(profile)
   return <img className="creator-avatar" src={src} alt="" />
 }
 
