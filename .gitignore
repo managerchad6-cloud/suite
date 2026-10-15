@@ -7,3 +7,6 @@ public/assets/chars/
 
 # Character art (media store: tools/media.py)
 public/assets/cast/
+
+# Local env (Vite): never committed
+*.local
