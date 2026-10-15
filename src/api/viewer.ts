@@ -25,12 +25,9 @@ export async function getRanks(): Promise<Video[]> {
   return (await res.json()).ranks ?? []
 }
 
-export async function getMyVideoVote(address: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${BASE}/api/votes/${address}`)
-    if (!res.ok) return null
-    return (await res.json()).votedFor ?? null
-  } catch { return null }
+/** The signed-in member's video vote (null for guests). */
+export async function getMyVideoVote(): Promise<string | null> {
+  try { return (await api<{ votedFor: string | null }>(`${BASE}/api/vote/mine`)).votedFor ?? null } catch { return null }
 }
 
 // Votes are cast as the signed-in member (session cookie), not by a per-vote wallet signature.
@@ -44,12 +41,9 @@ export async function getRoadmap(): Promise<RoadmapItem[]> {
   return (await res.json()).items ?? []
 }
 
-export async function getMyRoadmapVotes(address: string): Promise<string[]> {
-  try {
-    const res = await fetch(`${BASE}/api/roadmap/votes/${address}`)
-    if (!res.ok) return []
-    return (await res.json()).voted ?? []
-  } catch { return [] }
+/** The signed-in member's roadmap votes ([] for guests). */
+export async function getMyRoadmapVotes(): Promise<string[]> {
+  try { return (await api<{ voted: string[] }>(`${BASE}/api/roadmap/mine`)).voted ?? [] } catch { return [] }
 }
 
 export function voteRoadmap(itemId: string) {

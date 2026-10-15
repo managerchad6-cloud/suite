@@ -49,49 +49,25 @@ export interface MemesResponse {
   has_prev: boolean;
 }
 
-export async function generateRaw(
+/** How a generation is paid: memestudio credits (a single-use token) or a USDC transaction. */
+export type MemePayment = { credit_token: { wallet: string; ts: number; sig: string } } | { tx_signature: string }
+
+// Generation acts as the signed-in member (session); the payment must be theirs too.
+export function generateRaw(
   virgin: string,
   chad: string,
-  wallet?: string,
-  signature?: string,
+  payment: MemePayment,
   virgin_labels?: string[],
   chad_labels?: string[],
-  tx_signature?: string,
-  credit_token?: { wallet: string; ts: number; sig: string },
 ): Promise<{ job_id: string; status: string }> {
-  const res = await fetch(`${BASE}/generate/raw`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ virgin, chad, wallet, signature, virgin_labels, chad_labels, tx_signature, credit_token }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Submit failed: ${res.status}`);
-  }
-  return res.json();
+  return api(`${BASE}/generate/raw`, { method: 'POST', body: { virgin, chad, virgin_labels, chad_labels, ...payment } })
 }
 
-export async function generateFreestyle(
+export function generateFreestyle(
   text: string,
-  wallet?: string,
-  signature?: string,
-  tx_signature?: string,
-  credit_token?: { wallet: string; ts: number; sig: string },
+  payment: MemePayment,
 ): Promise<{ job_id: string; status: string; parsed?: unknown }> {
-  const res = await fetch(`${BASE}/generate/freestyle`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, wallet, signature, tx_signature, credit_token }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      typeof err.detail === 'string'
-        ? err.detail
-        : `Submit failed: ${res.status}`
-    );
-  }
-  return res.json();
+  return api(`${BASE}/generate/freestyle`, { method: 'POST', body: { text, ...payment } })
 }
 
 export async function pollJob(job_id: string): Promise<JobStatus> {
@@ -151,26 +127,14 @@ export async function fetchMemesByCharacter(charKey: string): Promise<Meme[]> {
   }
 }
 
-export async function parse(text: string): Promise<{
+/** Split free text into archetypes + labels (members only: it costs an LLM call). */
+export function parse(text: string): Promise<{
   virgin: string
   chad: string
   virgin_labels: string[]
   chad_labels: string[]
 }> {
-  const res = await fetch(`${BASE}/parse`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(
-      typeof err.detail === 'string'
-        ? err.detail
-        : 'Could not parse your idea. Try being more specific.'
-    )
-  }
-  return res.json()
+  return api(`${BASE}/parse`, { method: 'POST', body: { text } })
 }
 
 export function buildTweetUrl(virgin: string, chad: string): string {
@@ -203,20 +167,8 @@ export async function fetchMemesByWallet(wallet: string, limit = 100): Promise<M
 }
 
 // The vote is cast as the signed-in member (session cookie), not by a per-vote wallet signature.
-export async function submitVote(
-  job_id: string,
-  wallet: string,
-): Promise<{ job_id: string; vote_count: number; already_voted: boolean }> {
-  const res = await fetch(`${BASE}/jobs/${job_id}/vote`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Vote failed: ${res.status}`);
-  }
-  return res.json();
+export function submitVote(job_id: string): Promise<{ job_id: string; vote_count: number; already_voted: boolean }> {
+  return api(`${BASE}/jobs/${encodeURIComponent(job_id)}/vote`, { method: 'POST' })
 }
 
 export async function fetchLeaderboard(limit = 15): Promise<LeaderboardResponse> {

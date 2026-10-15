@@ -17,7 +17,7 @@ function VideoVoting() {
   const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null)
 
   const load = async () => {
-    const [ranks, mv] = await Promise.all([getRanks(), address ? getMyVideoVote(address) : null])
+    const [ranks, mv] = await Promise.all([getRanks(), address ? getMyVideoVote() : null])
     const map: Record<string, Video> = {}
     for (const v of ranks) map[v.file] = v
     setByFile(map)
@@ -138,7 +138,7 @@ function RoadmapVoting() {
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const load = async () => {
-    const [roadmap, mv] = await Promise.all([getRoadmap(), address ? getMyRoadmapVotes(address) : []])
+    const [roadmap, mv] = await Promise.all([getRoadmap(), address ? getMyRoadmapVotes() : []])
     setItems(roadmap)
     setMyVotes(mv)
     setLoading(false)

@@ -117,7 +117,7 @@ function MemeCard({ item, onSelect, onOpenDetail, onOpenProfile }: MemeCardProps
     if (!address || voted || voting) return
     setVoting(true)
     try {
-      const result = await submitVote(item.job_id, address)
+      const result = await submitVote(item.job_id)
       localStorage.setItem(getVotedKey(address, item.job_id), '1')
       setVoted(true)
       setVoteCount(result.vote_count)

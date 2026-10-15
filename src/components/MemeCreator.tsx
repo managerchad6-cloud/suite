@@ -196,10 +196,10 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
 
           setPhase('submitting')
           result = isFreestyle
-            ? await generateFreestyle(ft, address, undefined, undefined, token)
+            ? await generateFreestyle(ft, { credit_token: token })
             : (hasLabels || !context.trim())
-              ? await generateRaw(v, c, address, undefined, filteredVL, filteredCL, undefined, token)
-              : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, address, undefined, undefined, token)
+              ? await generateRaw(v, c, { credit_token: token }, filteredVL, filteredCL)
+              : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, { credit_token: token })
 
         } else {
           // ── USDC path: on-chain $1 payment ────────────────────────────────
@@ -269,10 +269,10 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
           setPhase('submitting')
           void walletName
           result = isFreestyle
-            ? await generateFreestyle(ft, address, undefined, txSig)
+            ? await generateFreestyle(ft, { tx_signature: txSig })
             : (hasLabels || !context.trim())
-              ? await generateRaw(v, c, address, undefined, filteredVL, filteredCL, txSig)
-              : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, address, undefined, txSig)
+              ? await generateRaw(v, c, { tx_signature: txSig }, filteredVL, filteredCL)
+              : await generateFreestyle(`Virgin: ${v}, Chad: ${c}. ${context.trim()}`, { tx_signature: txSig })
         }
 
         setJobId(result.job_id)
