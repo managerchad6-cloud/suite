@@ -228,9 +228,10 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
               <span className="bcm-pay-icon">◎</span> SOL
               {!solPrice && <span className="bcm-pay-fetching"> …</span>}
             </button>
-            <button className={`bcm-pay-btn bcm-pay-btn--vvc ${payMethod === 'vvc' ? 'active' : ''}`} onClick={() => setPayMethod('vvc')}>
+            {/* VVC payment is off in production for now (13 Oct): shown as coming soon */}
+            <button className="bcm-pay-btn bcm-pay-btn--vvc" disabled>
               <span className="bcm-pay-icon">⚡</span> VVC
-              {!vvcPrice && <span className="bcm-pay-fetching"> …</span>}
+              <span className="bcm-pay-badge">50% off, coming soon</span>
             </button>
           </div>
         )}

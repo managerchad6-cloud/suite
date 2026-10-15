@@ -32,6 +32,7 @@
   gap: 6px;
 }
 .bcm-pay-btn {
+  position: relative;
   flex: 1;
   padding: 8px;
   border-radius: 8px;
@@ -53,8 +54,25 @@
 .bcm-pay-btn--vvc { border-color: rgba(240,160,32,0.3); }
 .bcm-pay-btn--vvc:hover { border-color: #F0A020 !important; color: #F0A020 !important; }
 .bcm-pay-btn--vvc.active { border-color: #F0A020; color: #F0A020; background: rgba(240,160,32,0.12); }
+.bcm-pay-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.bcm-pay-btn--vvc:disabled:hover { border-color: rgba(240,160,32,0.3) !important; color: #666 !important; }
 .bcm-pay-icon { font-size: 14px; }
 .bcm-pay-fetching { font-size: 10px; color: #555; }
+.bcm-pay-badge {
+  position: absolute;
+  top: -9px;
+  right: -6px;
+  background: linear-gradient(135deg, #F0A020, #e8720c);
+  color: #111;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  line-height: 1.4;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
 
 .bcm-pack-price--vvc { color: #F0A020; }
 
