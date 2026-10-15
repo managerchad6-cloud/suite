@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { chatWithZad, makeUserMsg, makeModelMsg, type Message } from '../../api/zad'
 import { TOUR_STEPS, type PositionKey } from '../../data/zadCorpus'
+import { MemberGate, useMemberGate } from '../../identity/gate'
 import './ZadHelper.css'
 
 type ZadMode = 'minimized' | 'tour' | 'chat'
@@ -25,10 +26,10 @@ function setSpotlight(target: string | null) {
   if (target) document.querySelector(`[data-zad-target="${target}"]`)?.classList.add('zad-spotlight')
 }
 
-interface Props { address: string }
-
-export default function ZadHelper({ address }: Props) {
-  const TOUR_DONE_KEY = `zad_tour_done_${address}`
+export default function ZadHelper() {
+  // The tour is for everyone; chatting with Zad is for members (it runs on our LLM key)
+  const gate = useMemberGate()
+  const TOUR_DONE_KEY = `zad_tour_done_${gate.wallet ?? 'guest'}`
   const isFirstVisit  = !localStorage.getItem(TOUR_DONE_KEY)
 
   const [mode, setMode]         = useState<ZadMode>('minimized')
@@ -198,7 +199,7 @@ export default function ZadHelper({ address }: Props) {
     const userMsg  = makeUserMsg(text)
     const nextHist = [...history, userMsg]
     try {
-      const reply = await chatWithZad(nextHist, text)
+      const reply = await chatWithZad(nextHist)
       setHistory([...nextHist, makeModelMsg(reply)])
       setResponse(reply)
     } catch { setError('Signal interference. Try again.') }
@@ -277,7 +278,7 @@ export default function ZadHelper({ address }: Props) {
           <button className="zad-minimize-btn" onClick={minimize} title="Minimize">✕</button>
         </div>
       </div>
-      <div className="zad-input-area">
+      <MemberGate reason="talk to Zad" className="zad-input-area">
         <textarea
           ref={inputRef}
           className="zad-input"
@@ -289,7 +290,7 @@ export default function ZadHelper({ address }: Props) {
           rows={1}
         />
         <button className="zad-send" onClick={sendMessage} disabled={loading || !input.trim()} title="Send">↑</button>
-      </div>
+      </MemberGate>
     </div>
   )
 }

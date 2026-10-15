@@ -1,3 +1,8 @@
+import { api } from './client'
+
+// X sharing (xbackend). Your connection, shares and metrics come from the session; per-meme and
+// per-creator stats are public.
+
 export interface TweetShare {
   id: string
   wallet: string
@@ -26,16 +31,14 @@ export interface TweetResult {
   handle: string
 }
 
-export async function fetchXStatus(wallet: string): Promise<XStatus> {
-  try {
-    const res = await fetch(`/api/x/status?wallet=${encodeURIComponent(wallet)}`)
-    if (!res.ok) return { connected: false }
-    return res.json()
-  } catch { return { connected: false } }
+export async function fetchXStatus(): Promise<XStatus> {
+  try { return await api('/api/x/status') } catch { return { connected: false } }
 }
 
-export async function postXTweet(params: {
-  wallet: string
+/** Where to send the member to connect X (OAuth starts from the session). */
+export const X_AUTH_URL = '/api/x/auth'
+
+export function postXTweet(params: {
   text: string
   image_url?: string
   meme_id?: string
@@ -43,30 +46,15 @@ export async function postXTweet(params: {
   creator_wallet?: string
   share_in_community?: boolean
 }): Promise<TweetResult> {
-  const res = await fetch('/api/x/tweet', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(params),
-  })
-  const text = await res.text()
-  const data = text ? JSON.parse(text) : {}
-  if (!res.ok) throw new Error(data.detail || data.title || `HTTP ${res.status}`)
-  return data
+  return api('/api/x/tweet', { method: 'POST', body: params })
 }
 
-export async function disconnectX(wallet: string): Promise<void> {
-  await fetch('/api/x/disconnect', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
+export async function disconnectX(): Promise<void> {
+  await api('/api/x/disconnect', { method: 'DELETE' })
 }
 
-export async function fetchMyShares(wallet: string): Promise<TweetShare[]> {
-  const res = await fetch(`/api/x/shares?wallet=${encodeURIComponent(wallet)}`)
-  if (!res.ok) return []
-  const data = await res.json()
-  return data.items ?? []
+export async function fetchMyShares(): Promise<TweetShare[]> {
+  try { return (await api<{ items?: TweetShare[] }>('/api/x/shares')).items ?? [] } catch { return [] }
 }
 
 export interface TweetMetrics {
@@ -79,28 +67,17 @@ export interface TweetMetrics {
   updated_at: number
 }
 
-export async function fetchTweetMetrics(wallet: string): Promise<TweetMetrics[]> {
-  try {
-    const res = await fetch(`/api/x/metrics?wallet=${encodeURIComponent(wallet)}`)
-    if (!res.ok) return []
-    const data = await res.json()
-    return data.items ?? []
-  } catch { return [] }
+export async function fetchTweetMetrics(): Promise<TweetMetrics[]> {
+  try { return (await api<{ items?: TweetMetrics[] }>('/api/x/metrics')).items ?? [] } catch { return [] }
 }
 
-export async function refreshMetrics(wallet: string): Promise<void> {
-  await fetch('/api/x/metrics/refresh', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
+export async function refreshMetrics(): Promise<void> {
+  await api('/api/x/metrics/refresh', { method: 'POST' }).catch(() => {})
 }
 
-export function subscribeToMetrics(
-  wallet: string,
-  onUpdate: (m: TweetMetrics) => void,
-): () => void {
-  const es = new EventSource(`/api/x/metrics/events?wallet=${encodeURIComponent(wallet)}`)
+/** Live metric updates for your tweets (EventSource sends the session cookie same-origin). */
+export function subscribeToMetrics(onUpdate: (m: TweetMetrics) => void): () => void {
+  const es = new EventSource('/api/x/metrics/events')
   es.onmessage = e => {
     try { onUpdate(JSON.parse(e.data) as TweetMetrics) } catch {}
   }

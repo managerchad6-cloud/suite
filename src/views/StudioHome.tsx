@@ -4,16 +4,19 @@ import { fetchStudioMemesByWallet, studioMemeImageUrl, deleteStudioMeme, type St
 import { truncateAddress } from '../wallet'
 import { hasUserGeminiKey } from '../api/pfp'
 import { GeminiKeyModal } from '../components/GeminiKeyModal'
+import { useMemberGate } from '../identity/gate'
 import '../studio-home.css'
 
 interface Props {
-  address: string
   onNew: () => void
   onOpenDraft: (payload: DraftPayload) => void
   onImportVvc?: (payload: DraftPayload) => void
 }
 
-export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) {
+export function StudioHome({ onNew, onOpenDraft, onImportVvc }: Props) {
+  // Everyone sees the studio; only members can open the editor or have drafts
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [drafts,         setDrafts]         = useState<DraftMeta[]>([])
   const [draftsLoading,  setDraftsLoading]  = useState(true)
   const [published,      setPublished]      = useState<StudioMeme[]>([])
@@ -25,7 +28,12 @@ export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) 
   const [ownKeyActive,   setOwnKeyActive]   = useState(() => hasUserGeminiKey())
 
   useEffect(() => {
-    listDrafts(address)
+    if (!address) {
+      setDrafts([]); setDraftsLoading(false)
+      setPublished([]); setPubLoading(false)
+      return
+    }
+    listDrafts()
       .then(setDrafts)
       .catch(() => setDrafts([]))
       .finally(() => setDraftsLoading(false))
@@ -37,10 +45,10 @@ export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) 
   }, [address])
 
   async function handleOpenDraft(id: string) {
-    if (openingId) return
+    if (openingId || !address) return
     setOpeningId(id)
     try {
-      const payload = await fetchDraft(id, address)
+      const payload = await fetchDraft(id)
       onOpenDraft(payload)
     } catch (err) {
       console.error('Failed to open draft:', err)
@@ -51,10 +59,10 @@ export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) 
 
   async function handleDeleteDraft(e: React.MouseEvent, id: string) {
     e.stopPropagation()
-    if (deletingId || !confirm('Delete this draft?')) return
+    if (!address || deletingId || !confirm('Delete this draft?')) return
     setDeletingId(id)
     try {
-      await deleteDraftById(id, address)
+      await deleteDraftById(id)
       setDrafts(prev => prev.filter(d => d.id !== id))
     } catch (err) {
       console.error('Failed to delete draft:', err)
@@ -65,10 +73,10 @@ export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) 
 
   async function handleDeleteMeme(e: React.MouseEvent, id: string) {
     e.stopPropagation()
-    if (deletingPubId || !confirm('Delete this published meme? This cannot be undone.')) return
+    if (!address || deletingPubId || !confirm('Delete this published meme? This cannot be undone.')) return
     setDeletingPubId(id)
     try {
-      await deleteStudioMeme(id, address)
+      await deleteStudioMeme(id)
       setPublished(prev => prev.filter(m => m.id !== id))
     } catch (err) {
       console.error('Failed to delete meme:', err)
@@ -98,20 +106,37 @@ export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) 
       <div className="sh-header">
         <div className="sh-header-text">
           <h1 className="sh-title">Meme Studio</h1>
-          <p className="sh-sub">{truncateAddress(address)}</p>
+          <p className="sh-sub">{address ? truncateAddress(address) : 'Build memes by hand, layer by layer.'}</p>
         </div>
         <div className="sh-header-btns">
-          <button className="sh-new-btn" onClick={onNew}>
+          <button className="sh-new-btn" {...gate.lockProps('create')} onClick={gate.guard(onNew, 'create')}>
             <span className="sh-new-icon">+</span>
             New Document
           </button>
-          <label className="sh-import-btn" title="Open a .vvc project file">
-            <input type="file" accept=".vvc" style={{ display: 'none' }} onChange={handleImportVvc} />
-            📂 Open .vvc
-          </label>
+          {gate.locked ? (
+            <button className="sh-import-btn" {...gate.lockProps('open projects')} onClick={() => gate.join('open projects')}>
+              📂 Open .vvc
+            </button>
+          ) : (
+            <label className="sh-import-btn" title="Open a .vvc project file">
+              <input type="file" accept=".vvc" style={{ display: 'none' }} onChange={handleImportVvc} />
+              📂 Open .vvc
+            </label>
+          )}
         </div>
       </div>
 
+      {gate.locked && (
+        <section className="sh-section">
+          <h2 className="sh-section-title">Your work</h2>
+          <p className="sh-empty">Members' drafts and published memes live here.</p>
+          <button className="sh-new-btn" onClick={() => gate.join('create')} style={{ marginTop: 12, width: 'fit-content' }}>
+            Join to start creating
+          </button>
+        </section>
+      )}
+
+      {!gate.locked && <>
       {/* ── Gemini API Key ── */}
       <div className={`sh-apikey-card ${ownKeyActive ? 'sh-apikey-card--active' : ''}`}>
         <div className="sh-apikey-left">
@@ -205,6 +230,7 @@ export function StudioHome({ address, onNew, onOpenDraft, onImportVvc }: Props) 
           </div>
         )}
       </section>
+      </>}
     </div>
   )
 }

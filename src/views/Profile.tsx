@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { fetchMemesByWallet, imageUrl, parseMemeId, type Meme } from '../api/memes'
 import { fetchStudioMemesByWallet, studioMemeImageUrl, type StudioMeme } from '../api/studio'
 import { fetchCreatorEngagement, type CreatorEngagement } from '../api/twitter'
-import type { UserProfile } from '../lib/quizLog'
+import { profileImage, requestPortrait, retryAvatar } from '../identity/api'
+import { useIdentity } from '../identity/IdentityProvider'
+import { archetypeName } from '../identity/archetypes'
 import { fetchPlayer, type PlayerState } from '../api/player'
 import { fetchFollowStats, fetchFollowers } from '../api/follow'
 import { fetchFriends } from '../api/friends'
@@ -20,15 +22,17 @@ function fmt(n: number): string {
 }
 
 interface Props {
-  address: string
-  profile: UserProfile | null
   onGoToOracle: () => void
   onOpenDetail?: (meme: Meme) => void
   onOpenStudioMeme?: (id: string) => void
   onOpenProfile?: (wallet: string) => void
 }
 
-export function Profile({ address, profile, onGoToOracle, onOpenDetail, onOpenStudioMeme, onOpenProfile }: Props) {
+export function Profile({ onGoToOracle, onOpenDetail, onOpenStudioMeme, onOpenProfile }: Props) {
+  // Member-only view (the route sends everyone else away): the wallet is always set here
+  const { memberWallet, profile, setMe } = useIdentity()
+  const address = memberWallet ?? ''
+  const [imageBusy, setImageBusy] = useState(false)
   const [memes,            setMemes]            = useState<Meme[]>([])
   const [studioMemes,      setStudioMemes]      = useState<StudioMeme[]>([])
   const [memesLoading,     setMemesLoading]     = useState(true)
@@ -83,13 +87,18 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail, onOpenSt
     }
   }
 
-  const charData  = profile ? (CHARACTERS.find(c => c.key === profile.character) ?? null) : null
-  const charName  = charData?.name ?? (profile?.character ?? '???')
+  const charData  = profile ? (CHARACTERS.find(c => c.key === profile.archetype) ?? null) : null
+  const charName  = charData?.name ?? (profile ? archetypeName(profile.archetype) : '???')
   const name      = profile?.title ? `${profile.title} ${charName}` : charName
-  const stockSrc  = charData
-    ? `/assets/chars/${charData.file}.${charData.ext}`
-    : profile ? `/assets/chars/${profile.character}.png` : null
   const updated   = profile?.updatedAt ? new Date(profile.updatedAt).toLocaleDateString() : null
+
+  // Character art is drawn after joining and can fail without costing membership: offer a retry
+  const runImageJob = async (kind: 'retry' | 'portrait') => {
+    if (imageBusy) return
+    setImageBusy(true)
+    try { setMe((kind === 'retry' ? await retryAvatar() : await requestPortrait()).me) } catch { /* shown by status */ }
+    finally { setImageBusy(false) }
+  }
 
   const totalMemes = memes.length + studioMemes.length
   const hasEngagement = engagement && (
@@ -153,25 +162,7 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail, onOpenSt
       <div className="profile-hero">
         {profile
           ? (
-            <img
-              src={`/profiles/${encodeURIComponent(address)}/portrait/full`}
-              alt={name}
-              className="profile-hero-avatar"
-              onError={e => {
-                // Cascade: server full portrait → localStorage data URL → character stock image
-                const localFull = profile.characterImageDataUrl ?? profile.portraitDataUrl ?? null
-                if (localFull) {
-                  e.currentTarget.onerror = () => {
-                    e.currentTarget.onerror = null
-                    if (stockSrc) e.currentTarget.src = stockSrc
-                  }
-                  e.currentTarget.src = localFull
-                } else {
-                  e.currentTarget.onerror = null
-                  if (stockSrc) e.currentTarget.src = stockSrc
-                }
-              }}
-            />
+            <img src={profile.avatar.url ?? profileImage(profile)} alt={name} className="profile-hero-avatar" />
           )
           : <div className="profile-hero-avatar profile-hero-avatar--placeholder">?</div>
         }
@@ -209,12 +200,27 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail, onOpenSt
 
           {profile && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
-              <a href={`/profiles/${encodeURIComponent(address)}/portrait/full`} download={`${profile.character}_full.jpg`} className="pfp-modal-download">
-                Download Character
-              </a>
-              <a href={`/profiles/${encodeURIComponent(address)}/portrait`} download={`${profile.character}_pfp.jpg`} className="pfp-modal-download">
-                Download PFP
-              </a>
+              {profile.avatar.status === 'generating' && <span className="profile-hero-date">Drawing your character…</span>}
+              {profile.avatar.status === 'failed' && (
+                <button className="pfp-modal-download" onClick={() => runImageJob('retry')} disabled={imageBusy}>
+                  {imageBusy ? '…' : 'Character art failed — try again'}
+                </button>
+              )}
+              {profile.avatar.url && (
+                <a href={profile.avatar.url} download={`${profile.archetype}_full`} className="pfp-modal-download">
+                  Download Character
+                </a>
+              )}
+              {profile.portrait.url ? (
+                <a href={profile.portrait.url} download={`${profile.archetype}_pfp`} className="pfp-modal-download">
+                  Download PFP
+                </a>
+              ) : profile.avatar.status === 'ready' && (
+                <button className="pfp-modal-download" onClick={() => runImageJob('portrait')}
+                  disabled={imageBusy || profile.portrait.status === 'generating'}>
+                  {profile.portrait.status === 'generating' || imageBusy ? 'Generating PFP…' : 'Generate PFP'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -375,7 +381,7 @@ export function Profile({ address, profile, onGoToOracle, onOpenDetail, onOpenSt
 
       <div className="profile-section">
         <h3 className="profile-section-title">Wall</h3>
-        <CommentSection jobId={address} source="profile" address={address} onOpenProfile={onOpenProfile} />
+        <CommentSection source="profile" memeId={address} onOpenProfile={onOpenProfile} />
       </div>
 
       {profile && (

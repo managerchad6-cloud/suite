@@ -1,8 +1,6 @@
-import { getUserGeminiKey } from './pfp'
-import { ZAD_SYSTEM_PROMPT } from '../data/zadCorpus'
+import { api } from './client'
 
-const VVC_API_KEY = ''
-const CHAT_MODEL  = 'gemini-2.5-flash'
+// Zad's chat is answered by memestudio-backend (members only; it holds the corpus and the key).
 
 export interface Message {
   role: 'user' | 'model'
@@ -12,35 +10,17 @@ export interface Message {
 export const makeUserMsg  = (text: string): Message => ({ role: 'user',  parts: [{ text }] })
 export const makeModelMsg = (text: string): Message => ({ role: 'model', parts: [{ text }] })
 
-export async function chatWithZad(history: Message[], userMessage: string): Promise<string> {
-  const apiKey = getUserGeminiKey() ?? VVC_API_KEY
-
-  const contents: Message[] = [
-    ...history,
-    makeUserMsg(userMessage),
-  ]
-
-  const body = JSON.stringify({
-    system_instruction: { parts: [{ text: ZAD_SYSTEM_PROMPT }] },
-    contents,
-    generationConfig: {
-      temperature: 0.9,
-    },
+/** `history` already ends with the new user message. */
+export async function chatWithZad(history: Message[]): Promise<string> {
+  const { text } = await api<{ text: string }>('/api/ai/zad', {
+    method: 'POST',
+    body: { history: history.map(m => ({ role: m.role, text: m.parts[0].text })) },
   })
-
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${CHAT_MODEL}:generateContent?key=${apiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
-  )
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini ${res.status}: ${err.slice(0, 300)}`)
-  }
-
-  const json = await res.json()
-  const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-
-  if (!text) throw new Error('Empty response from Gemini')
   return text.trim()
+}
+
+/** Twelve meme annotation labels for a character in a scene (Studio "magic labels"). */
+export async function generateMemeLabels(character: { name: string; tagline?: string; lore?: string; traits?: string[] }, scene: string): Promise<string[]> {
+  const { labels } = await api<{ labels: string[] }>('/api/ai/labels', { method: 'POST', body: { character, scene } })
+  return labels
 }

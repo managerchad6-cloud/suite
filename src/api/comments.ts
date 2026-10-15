@@ -1,4 +1,22 @@
+import { api } from './client'
+import { dispatchBadges, dispatchXP, type BadgeDef } from './player'
+
+// Comments live in memestudio-backend (/api/comments), keyed by the meme's source and id.
+// (The old /comments endpoint on the retired quiz server is gone.)
+
+export type CommentSource = 'factory' | 'studio' | 'reddit' | 'profile'
+
 export interface Comment {
+  id: string
+  wallet: string
+  text: string
+  createdAt: string
+  like_count: number
+  parent_id: string | null
+  your_like: boolean
+}
+
+interface ServerComment {
   id: string
   wallet: string
   body: string
@@ -6,43 +24,34 @@ export interface Comment {
   likes: number
   parent_id: string | null
   your_like: boolean
-  replies: Comment[]
+  replies: ServerComment[]
 }
 
-export async function fetchComments(source: string, memeId: string, wallet?: string): Promise<Comment[]> {
+const toComment = (c: ServerComment): Comment => ({
+  id: c.id, wallet: c.wallet, text: c.body, createdAt: c.created_at,
+  like_count: c.likes ?? 0, parent_id: c.parent_id, your_like: !!c.your_like,
+})
+
+/** Flat list (top-level + replies); your_like is set when a member is signed in. */
+export async function fetchComments(source: CommentSource, memeId: string): Promise<Comment[]> {
   try {
-    const q = wallet ? `?wallet=${encodeURIComponent(wallet)}` : ''
-    const res = await fetch(`/api/comments/${encodeURIComponent(source)}/${encodeURIComponent(memeId)}${q}`)
-    if (!res.ok) return []
-    const data = await res.json()
-    return data.items ?? []
+    const { items } = await api<{ items: ServerComment[] }>(`/api/comments/${source}/${encodeURIComponent(memeId)}?limit=100`)
+    return items.flatMap(c => [toComment(c), ...c.replies.map(toComment)])
   } catch {
     return []
   }
 }
 
-export async function postComment(
-  memeId: string,
-  source: string,
-  wallet: string,
-  body: string,
-  parentId?: string | null,
-): Promise<Comment> {
-  const res = await fetch('/api/comments', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ meme_id: memeId, meme_source: source, wallet, body, parent_id: parentId ?? null }),
+export async function postComment(source: CommentSource, memeId: string, text: string, parentId?: string): Promise<void> {
+  const r = await api<{ new_badges?: BadgeDef[]; xp_awarded?: number }>('/api/comments', {
+    method: 'POST', body: { meme_id: memeId, meme_source: source, body: text, parent_id: parentId ?? null },
   })
-  if (!res.ok) throw new Error('Failed to post comment')
-  return res.json()
+  dispatchBadges(r.new_badges)
+  if (r.xp_awarded) dispatchXP(r.xp_awarded)
 }
 
-export async function likeComment(commentId: string, wallet: string): Promise<{ likes: number }> {
-  const res = await fetch(`/api/comments/${encodeURIComponent(commentId)}/like`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) throw new Error('Already liked or failed')
-  return res.json()
+/** Toggle your like. */
+export async function likeComment(commentId: string): Promise<{ like_count: number; your_like: boolean }> {
+  const r = await api<{ likes: number; your_like: boolean }>(`/api/comments/${encodeURIComponent(commentId)}/like`, { method: 'POST' })
+  return { like_count: r.likes, your_like: r.your_like }
 }

@@ -1,15 +1,11 @@
 import { useState, useEffect } from 'react'
 import { getYtQueue, submitYtVideo, voteYtQueue, getLists, voteList, type YtQueueItem } from '../api/livestream'
-
-type Phantom = { signMessage: (m: Uint8Array, enc: string) => Promise<{ signature: Uint8Array }> }
-
-function getPhantomSolana(): Phantom | null {
-  return (window as unknown as { phantom?: { solana?: Phantom } }).phantom?.solana ?? null
-}
+import { MemberGate, useMemberGate } from '../identity/gate'
 
 interface VideoItem { title: string; votes: number; index: number }
 
-export function YtVideosPanel({ address }: { address: string }) {
+export function YtVideosPanel() {
+  const gate = useMemberGate()
   // Community queue
   const [items, setItems] = useState<YtQueueItem[]>([])
   const [votingYt, setVotingYt] = useState<string | null>(null)
@@ -46,21 +42,13 @@ export function YtVideosPanel({ address }: { address: string }) {
     loadVideos()
   }, [])
 
-  const hasVoted = (item: YtQueueItem) => item.voters.includes(address.toLowerCase())
+  const hasVoted = (item: YtQueueItem) => !!gate.wallet && item.voters.includes(gate.wallet.toLowerCase())
 
-  const handleYtVote = async (item: YtQueueItem, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleYtVote = async (item: YtQueueItem) => {
     if (votingYt) return
     setVotingYt(item.id)
     try {
-      const nonce = String(Date.now())
-      const action = hasVoted(item) ? 'unvote' : 'upvote'
-      const challenge = `VVC Live: ${action} yt-queue ${item.id} as ${address} ts ${nonce}`
-      const p = getPhantomSolana()
-      if (!p) throw new Error('Phantom not found')
-      const { signature } = await p.signMessage(new TextEncoder().encode(challenge), 'utf8')
-      const sig = btoa(String.fromCharCode(...Array.from(signature)))
-      await voteYtQueue(address, item.id, sig, nonce, action)
+      await voteYtQueue(item.id, hasVoted(item) ? 'unvote' : 'upvote')
       await loadYt()
     } catch { /* rejected */ } finally { setVotingYt(null) }
   }
@@ -96,7 +84,7 @@ export function YtVideosPanel({ address }: { address: string }) {
       </div>
 
       {/* Submit form */}
-      <div className="yt-submit">
+      <MemberGate reason="add a video" className="yt-submit">
         <input
           className="yt-input yt-input--url"
           placeholder="YouTube URL…"
@@ -120,7 +108,7 @@ export function YtVideosPanel({ address }: { address: string }) {
         >
           {submitting ? '…' : 'Add'}
         </button>
-      </div>
+      </MemberGate>
       {error && <div className="yt-error">{error}</div>}
 
       <div className="panel-body">
@@ -145,8 +133,9 @@ export function YtVideosPanel({ address }: { address: string }) {
                   <div className="suggestion-card__row">
                     <button
                       className={`btn-vote-item${voted ? ' voted' : ''}`}
-                      onClick={(e) => handleYtVote(item, e)}
-                      disabled={!!votingYt}
+                      {...gate.lockProps('vote')}
+                      onClick={(e) => { e.stopPropagation(); gate.guard(() => handleYtVote(item), 'vote')() }}
+                      disabled={!gate.locked && !!votingYt}
                     >
                       {votingYt === item.id ? '…' : voted ? '✓' : '↑'}
                     </button>
@@ -190,8 +179,9 @@ export function YtVideosPanel({ address }: { address: string }) {
                   <span className="queue-votes">{v.votes}</span>
                   <button
                     className="btn-queue-vote"
-                    onClick={() => handleVideoVote(v.index)}
-                    disabled={votingVideo !== null}
+                    {...gate.lockProps('vote')}
+                    onClick={gate.guard(() => handleVideoVote(v.index), 'vote')}
+                    disabled={!gate.locked && votingVideo !== null}
                   >
                     {votingVideo === v.index ? '…' : '↑'}
                   </button>

@@ -157,8 +157,8 @@ export function XTimeline({ wallet }: Props) {
 
   const load = useCallback(async () => {
     const [sh, status, cs] = await Promise.all([
-      fetchMyShares(wallet).catch(() => [] as TweetShare[]),
-      fetchXStatus(wallet).catch(() => null as XStatus | null),
+      fetchMyShares().catch(() => [] as TweetShare[]),
+      fetchXStatus().catch(() => null as XStatus | null),
       fetchCreatorShares(wallet).catch(() => [] as MemeShareItem[]),
     ])
     setShares(sh)
@@ -172,7 +172,7 @@ export function XTimeline({ wallet }: Props) {
   const handleRefresh = useCallback(async () => {
     if (refreshing) return
     setRefreshing(true)
-    await refreshMetrics(wallet).catch(() => {})
+    await refreshMetrics()
     setLastRefresh(Date.now())
     setRefreshing(false)
   }, [wallet, refreshing])

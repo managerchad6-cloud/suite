@@ -3,6 +3,8 @@ import MDEditor, { commands, type ICommand, type TextAreaTextApi } from '@uiw/re
 import '@uiw/react-md-editor/markdown-editor.css'
 import { truncateAddress } from '@mf/wallet'
 import { UserChip } from '../components/UserChip'
+import { api } from '../api/client'
+import { MemberGate, useMemberGate } from '../identity/gate'
 import {
   fetchBoards, fetchStats, fetchThreads, fetchThread, createThread, postReply,
   likeThread, likeReply, fetchTopMembers, fetchTopThreads,
@@ -54,7 +56,6 @@ function stripMarkdown(md: string): string {
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 interface ForumProps {
-  address: string
   view?: 'index' | 'board' | 'thread'
   boardId?: string
   threadId?: string
@@ -63,7 +64,9 @@ interface ForumProps {
   onBack?: () => void
 }
 
-export function Forum({ address, view = 'index', boardId, threadId, onOpenBoard, onOpenThread, onBack }: ForumProps) {
+export function Forum({ view = 'index', boardId, threadId, onOpenBoard, onOpenThread, onBack }: ForumProps) {
+  // Reading is open to everyone; '' = guest (posting and liking below are locked for non-members)
+  const address = useMemberGate().wallet ?? ''
   if (view === 'thread' && threadId) {
     return <ThreadDetail address={address} threadId={threadId} onBack={onBack!} />
   }
@@ -203,7 +206,7 @@ function BoardView({ address, boardId, onOpenThread, onBack }: {
 
   const load = useCallback(async (nextSort: SortMode, nextPage: number, append: boolean, q: string) => {
     setLoading(true)
-    const result = await fetchThreads(nextPage, address, nextSort, q || undefined, boardId)
+    const result = await fetchThreads(nextPage, nextSort, q || undefined, boardId)
     setThreads(prev => append ? [...prev, ...result.items] : result.items)
     setHasMore(result.has_more)
     setLoading(false)
@@ -242,7 +245,7 @@ function BoardView({ address, boardId, onOpenThread, onBack }: {
           </nav>
           {board && <p className="forum-board-desc">{board.description}</p>}
         </div>
-        <button className="forum-new-btn" onClick={() => setComposing(true)}>+ New Thread</button>
+        <NewThreadButton onClick={() => setComposing(true)} />
       </div>
 
       <div className="forum-search-row">
@@ -353,13 +356,15 @@ function ThreadCard({ thread, address, onClick, onLike }: {
   thread: ForumThread; address: string
   onClick: () => void; onLike: (r: { like_count: number; your_like: boolean }) => void
 }) {
+  const gate = useMemberGate()
   const [liking, setLiking] = useState(false)
 
   const handleLike = async (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (gate.locked) { gate.join('like'); return }
     if (liking) return
     setLiking(true)
-    try { onLike(await likeThread(thread.id, address)) } catch {} finally { setLiking(false) }
+    try { onLike(await likeThread(thread.id)) } catch {} finally { setLiking(false) }
   }
 
   const preview = stripMarkdown(thread.body).slice(0, 120) + (thread.body.length > 120 ? '…' : '')
@@ -425,7 +430,7 @@ function ThreadCard({ thread, address, onClick, onLike }: {
               <span className="ftc-stat-label">views</span>
             </span>
             <button className={`ftc-like ${thread.your_like ? 'ftc-like--active' : ''}`}
-              onClick={handleLike} disabled={liking}>
+              {...gate.lockProps('like')} onClick={handleLike} disabled={!gate.locked && liking}>
               <span>♥</span><span>{thread.like_count}</span>
             </button>
           </div>
@@ -558,13 +563,7 @@ function ImageInsertModal({ onInsert, onClose }: {
       setUploading(true)
       try {
         const dataUrl = await fileToDataUrl(file)
-        const res = await fetch('/api/forum/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: dataUrl, name: file.name }),
-        })
-        if (!res.ok) throw new Error('Upload failed')
-        const json = await res.json()
+        const json = await api<{ url: string }>('/api/forum/upload', { method: 'POST', body: { data: dataUrl, name: file.name } })
         finalUrl = json.url
       } catch {
         setError('Upload failed. Please try again.')
@@ -702,7 +701,7 @@ function ComposeModal({ address, defaultBoardId, onCreated, onClose }: {
     if (!title.trim()) { setError('Title is required.'); return }
     if (!body.trim())  { setError('Body is required.');  return }
     setPosting(true); setError('')
-    try { onCreated(await createThread(address, title.trim(), body.trim(), tags, defaultBoardId ?? 'general')) }
+    try { onCreated(await createThread(title.trim(), body.trim(), tags, defaultBoardId ?? 'general')) }
     catch { setError('Failed to post. Please try again.') }
     finally { setPosting(false) }
   }
@@ -745,6 +744,7 @@ function ComposeModal({ address, defaultBoardId, onCreated, onClose }: {
 // ─── Thread Detail ────────────────────────────────────────────────────────────
 
 function ThreadDetail({ address, threadId, onBack }: { address: string; threadId: string; onBack: () => void }) {
+  const gate = useMemberGate()
   const [thread,    setThread]    = useState<ForumThreadDetail | null>(null)
   const [loading,   setLoading]   = useState(true)
   const [replyBody, setReplyBody] = useState('')
@@ -755,13 +755,13 @@ function ThreadDetail({ address, threadId, onBack }: { address: string; threadId
 
   useEffect(() => {
     setLoading(true)
-    fetchThread(threadId, address).then(t => { setThread(t); setLoading(false) })
+    fetchThread(threadId).then(t => { setThread(t); setLoading(false) })
   }, [threadId, address])
 
   const handleThreadLike = async () => {
     if (!thread) return
     try {
-      const r = await likeThread(thread.id, address)
+      const r = await likeThread(thread.id)
       setThread(prev => prev ? { ...prev, like_count: r.like_count, your_like: r.your_like } : prev)
     } catch {}
   }
@@ -769,7 +769,7 @@ function ThreadDetail({ address, threadId, onBack }: { address: string; threadId
   const handleReplyLike = async (replyId: string) => {
     if (!thread) return
     try {
-      const r = await likeReply(replyId, address)
+      const r = await likeReply(replyId)
       setThread(prev => prev ? {
         ...prev,
         replies: prev.replies.map(x => x.id === replyId ? { ...x, like_count: r.like_count, your_like: r.your_like } : x),
@@ -788,7 +788,7 @@ function ThreadDetail({ address, threadId, onBack }: { address: string; threadId
     if (!thread || !replyBody.trim()) return
     setPosting(true); setError('')
     try {
-      const r = await postReply(thread.id, address, replyBody.trim(), quotingId)
+      const r = await postReply(thread.id, replyBody.trim(), quotingId)
       setThread(prev => prev ? { ...prev, replies: [...prev.replies, r], reply_count: prev.reply_count + 1 } : prev)
       setReplyBody(''); setQuotingId(null)
     } catch { setError('Failed to post reply. Please try again.') }
@@ -833,7 +833,7 @@ function ThreadDetail({ address, threadId, onBack }: { address: string; threadId
         </div>
         <div className="forum-op-actions">
           <button className={`forum-action-btn forum-like-btn ${thread.your_like ? 'forum-like-btn--active' : ''}`}
-            onClick={handleThreadLike}>♥ {thread.like_count}</button>
+            {...gate.lockProps('like')} onClick={gate.guard(handleThreadLike, 'like')}>♥ {thread.like_count}</button>
           <button className="forum-action-btn"
             onClick={() => replyFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>↩ Reply</button>
           {thread.is_locked && <span className="forum-locked-badge">🔒 Locked</span>}
@@ -856,7 +856,8 @@ function ThreadDetail({ address, threadId, onBack }: { address: string; threadId
       )}
 
       {!thread.is_locked && (
-        <div className="forum-reply-form" ref={replyFormRef}>
+        <MemberGate reason="reply" className="forum-reply-form">
+        <div ref={replyFormRef}>
           <div className="forum-reply-form-label">Your Reply</div>
           {quotingId && (
             <div className="forum-quoting-banner">
@@ -873,6 +874,7 @@ function ThreadDetail({ address, threadId, onBack }: { address: string; threadId
             </button>
           </div>
         </div>
+        </MemberGate>
       )}
     </div>
   )
@@ -883,6 +885,7 @@ function ThreadDetail({ address, threadId, onBack }: { address: string; threadId
 function ReplyCard({ reply, index, address, onLike, onQuote }: {
   reply: ForumReply; index: number; address: string; onLike: () => void; onQuote: () => void
 }) {
+  const gate = useMemberGate()
   const own   = reply.wallet === address
   const admin = isAdmin(reply.wallet)
   return (
@@ -901,12 +904,20 @@ function ReplyCard({ reply, index, address, onLike, onQuote }: {
           <MDEditor.Markdown source={reply.body} />
         </div>
         <div className="forum-reply-actions">
-          <button className={`forum-action-btn forum-like-btn ${reply.your_like ? 'forum-like-btn--active' : ''}`} onClick={onLike}>
+          <button className={`forum-action-btn forum-like-btn ${reply.your_like ? 'forum-like-btn--active' : ''}`}
+            {...gate.lockProps('like')} onClick={gate.guard(onLike, 'like')}>
             ♥ {reply.like_count}
           </button>
-          <button className="forum-action-btn" onClick={onQuote}>Quote</button>
+          <button className="forum-action-btn" {...gate.lockProps('reply')} onClick={gate.guard(onQuote, 'reply')}>Quote</button>
         </div>
       </div>
     </div>
+  )
+}
+
+function NewThreadButton({ onClick }: { onClick: () => void }) {
+  const gate = useMemberGate()
+  return (
+    <button className="forum-new-btn" {...gate.lockProps('post')} onClick={gate.guard(onClick, 'post')}>+ New Thread</button>
   )
 }

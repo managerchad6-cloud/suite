@@ -3,14 +3,16 @@ import { createPortal } from 'react-dom'
 import { CHARACTERS, EXTENDED_CAST, type CharData } from '../data/characterLore'
 import { editCharacter, editLayer, inActionCharacter, reskinCharacterInScene, generativeExpand } from '../api/pfp'
 import { publishHandmade, saveDraft, deleteDraftById, type DraftPayload } from '../api/memes'
-import { fetchXStatus, postXTweet } from '../api/twitter'
+import { fetchXStatus, postXTweet, X_AUTH_URL } from '../api/twitter'
 import { fetchRemixDraft } from '../api/studio'
 import { saveSkin, fetchCharSkins, skinImageUrl, type SkinRecord } from '../api/skins'
-import { signAction, truncateAddress } from '../wallet'
+import { truncateAddress } from '../wallet'
+import { useMemberGate } from '../identity/gate'
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from '../lib/studioDb'
 import { StudioHome } from './StudioHome'
 import { deductCredits, claimSignupBonus, type CreditAction } from '../api/credits'
-import { hasUserGeminiKey } from '../api/pfp'
+import { hasUserGeminiKey, setAiTicket } from '../api/pfp'
+import { generateMemeLabels } from '../api/zad'
 import { BuyCreditsModal } from '../components/BuyCreditsModal'
 import { GeminiKeyModal } from '../components/GeminiKeyModal'
 import '../studio.css'
@@ -97,7 +99,6 @@ function charImgSrc(char: CharData): string {
 const IDENTITY_TF: LayerTransform = { tx: 0, ty: 0, scaleX: 1, scaleY: 1, rotation: 0 }
 const DEFAULT_W = 1200
 const DEFAULT_H = 800
-const VVC_API_KEY_TEXT = ''
 const DROP_SIZE  = 400
 
 const TEXT_FONTS = [
@@ -486,7 +487,11 @@ function StudioJoysticks({ onZoomDelta, onPanDelta }: { onZoomDelta: (d: number)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MemeStudio({ address, onPublished, remixSourceId }: { address: string; onPublished?: (id: string) => void; remixSourceId?: string }) {
+export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: string) => void; remixSourceId?: string }) {
+  // The editor opens only from StudioHome's New/Open, which are member-only, so inside it
+  // there is always a member. '' just keeps the guest-visible home from doing member work.
+  const memberWallet = useMemberGate().wallet
+  const address = memberWallet ?? ''
   const displayRef = useRef<HTMLCanvasElement>(null)
   const offscreen  = useRef<Record<string, HTMLCanvasElement>>({})
   const maskCanvas = useRef<Record<string, HTMLCanvasElement>>({})
@@ -827,13 +832,16 @@ export function MemeStudio({ address, onPublished, remixSourceId }: { address: s
   async function withCredits(action: CreditAction, fn: () => Promise<void>): Promise<void> {
     // If user has their own Gemini key, skip credit deduction entirely
     if (hasUserGeminiKey()) { await fn(); return }
+    let ticket: string | undefined
     try {
-      await deductCredits(address, action)
+      ticket = (await deductCredits(action)).ai_ticket
     } catch (e: any) {
-      if (e?.status === 402) { setShowBuyModal({ required: e.required ?? e.cost ?? 1, balance: e.balance }); return }
+      if (e?.status === 402) { setShowBuyModal({ required: e.data?.required ?? 1, balance: e.data?.balance }); return }
       throw e
     }
-    await fn()
+    // The image calls inside fn() spend this ticket on the server
+    setAiTicket(ticket ?? null)
+    try { await fn() } finally { setAiTicket(null) }
     creditBalanceRefreshRef.current?.()
     window.dispatchEvent(new CustomEvent('vvc:credits-changed'))
   }
@@ -954,7 +962,7 @@ export function MemeStudio({ address, onPublished, remixSourceId }: { address: s
           const r = new FileReader(); r.onload = () => res(r.result as string); r.readAsDataURL(blob)
         })
         console.log('[skin] dataUrl length:', dataUrl.length, 'prefix:', dataUrl.slice(0, 30))
-        const id = await saveSkin({ wallet: address || 'anonymous', char_key: charKey, char_name: charName, prompt, skin_type: skinType, imageDataUrl: dataUrl })
+        const id = await saveSkin({ char_key: charKey, char_name: charName, prompt, skin_type: skinType, imageDataUrl: dataUrl })
         console.log('[skin] server returned id:', id)
         if (id && charActionRef.current === 'skins') {
           const currentMeta = charLayersRef.current[activeIdRef.current]
@@ -1014,7 +1022,7 @@ export function MemeStudio({ address, onPublished, remixSourceId }: { address: s
       }).catch(() => {})
       return
     }
-    void claimSignupBonus(address)
+    void claimSignupBonus()
     loadSession(address).then(snapshot => {
       if (snapshot) void handleLoadDraft(snapshot)
     }).catch(() => { /* no stored session */ })
@@ -1523,41 +1531,10 @@ export function MemeStudio({ address, onPublished, remixSourceId }: { address: s
   async function generateMagicLabels(charKey: string, title: string): Promise<string[]> {
     const lore: CharData | undefined = ALL_CHARS.find(c => c.key === charKey)
     const charName = lore?.name ?? charKey
-    const prompt = `You are writing annotation labels for a "Virgin vs Chad" style internet meme.
-
-Character: ${charName}
-Archetype: ${lore?.tagline ?? ''}
-Description: ${lore?.lore ?? ''}
-Traits: ${lore?.traits?.join(', ') ?? ''}
-
-This character is shown as/doing: "${title}"
-
-Generate exactly 12 short, punchy meme labels that would appear as handwritten annotations pointing at details of this character in this specific scenario. Each label should be funny, observational, and specific to this character + situation combo.
-
-Mix of lengths:
-- 5 labels: very short (2–4 words)
-- 5 labels: medium (5–8 words)
-- 2 labels: longer (9–14 words)
-
-Return ONLY a valid JSON array of exactly 12 strings. No keys, no explanation, no markdown.
-Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
-
-    const key = (localStorage.getItem('vvc_gemini_key') ?? null) ?? VVC_API_KEY_TEXT
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.95 } }),
-      }
+    return generateMemeLabels(
+      { name: charName, tagline: lore?.tagline, lore: lore?.lore, traits: lore?.traits },
+      title,
     )
-    if (!res.ok) throw new Error(`Gemini error ${res.status}`)
-    const json = await res.json()
-    const raw = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]'
-    const cleaned = raw.replace(/```json|```/g, '').trim()
-    const arr = JSON.parse(cleaned) as string[]
-    if (!Array.isArray(arr) || arr.length === 0) throw new Error('Invalid response')
-    return arr.slice(0, 12)
   }
 
   function triggerMagicLabels(charId: string, charKey: string, title: string) {
@@ -4049,15 +4026,14 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
         }
       } catch { /* draft save is best-effort */ }
 
-      const signature = await signAction('publish-handmade-meme', address)
       const result = await publishHandmade({
-        imageDataUrl, characters, titles, labels, labelLinks, wallet: address, signature,
+        imageDataUrl, characters, titles, labels, labelLinks,
         draftId:           currentDraftIdRef.current ?? undefined,
         remixedFrom:       remixSourceId ?? undefined,
         draftPayloadInline,
       })
       if (currentDraftId) {
-        deleteDraftById(currentDraftId, address).catch(() => {})
+        deleteDraftById(currentDraftId).catch(() => {})
         setCurrentDraftId(null)
       }
       setPublishedMemeId(result.job_id)
@@ -4073,12 +4049,12 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
 
   async function handlePubShareClick() {
     if (!publishedMemeId) return
-    const status = await fetchXStatus(address).catch(() => ({ connected: false as const }))
+    const status = await fetchXStatus().catch(() => ({ connected: false as const }))
     if (status.connected && status.handle) {
       setPubXHandle(status.handle)
       setPubShareStage('compose')
     } else {
-      window.open(`/api/x/auth?wallet=${encodeURIComponent(address)}`, 'x-oauth')
+      window.open(X_AUTH_URL, 'x-oauth')
       const onMsg = (e: MessageEvent) => {
         if (e.data?.type !== 'x_auth') return
         window.removeEventListener('message', onMsg)
@@ -4097,7 +4073,6 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     try {
       const imgUrl = new URL(`/handmade/${publishedMemeId}/image`, window.location.origin).href
       const result = await postXTweet({
-        wallet: address,
         text: pubTweetText,
         image_url: imgUrl,
         meme_id: publishedMemeId,
@@ -4266,7 +4241,7 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
   if (studioView === 'home') {
     return (
       <div className="mstudio">
-        <StudioHome address={address} onNew={handleNewDocument} onOpenDraft={handleLoadDraft} />
+        <StudioHome onNew={handleNewDocument} onOpenDraft={handleLoadDraft} />
       </div>
     )
   }

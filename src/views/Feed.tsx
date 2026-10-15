@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useMemberGate } from '../identity/gate'
 import { fetchGalleryMemes, studioMemeImageUrl } from '../api/studio'
 import { fetchMemes, imageUrl } from '../api/memes'
 import { fetchFollowing } from '../api/follow'
@@ -14,7 +15,7 @@ import { dispatchXP } from '../api/player'
 import { XPGain } from '../components/XPGain'
 import { CHARACTERS } from '../data/characterLore'
 import type { UnifiedMemeItem, MemeSourceType, MemeTier } from '../types/unified'
-import { fetchXStatus, postXTweet, fetchMyShares, type TweetShare } from '../api/twitter'
+import { fetchXStatus, postXTweet, fetchMyShares, X_AUTH_URL, type TweetShare } from '../api/twitter'
 import { useXMetrics } from '../hooks/useXMetrics'
 import './Feed.css'
 
@@ -152,7 +153,6 @@ function sortItems(
 }
 
 interface Props {
-  address: string
   onOpenItem: (item: UnifiedMemeItem) => void
   onOpenProfile?: (wallet: string) => void
   onRemix?: (sourceId: string) => void
@@ -180,7 +180,9 @@ function XConfetti() {
   )
 }
 
-export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenFactory }: Props) {
+export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenFactory }: Props) {
+  const gate = useMemberGate()
+  const wallet = gate.wallet
   // Read session cache exactly once on first render
   const _initCache = useRef<FeedCache | null | undefined>(undefined)
   if (_initCache.current === undefined) _initCache.current = readFeedCache()
@@ -212,10 +214,10 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   const shareItemRef   = useRef<UnifiedMemeItem | null>(null)
   const tweetTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [myShares,    setMyShares]    = useState<TweetShare[]>([])
-  const xMetrics = useXMetrics(address || null)
+  const xMetrics = useXMetrics(wallet || null)
   const [followingSet,  setFollowingSet]  = useState<Set<string>>(new Set())
   const [feedPrefs, setFeedPrefsState] = useState<FeedPrefs>(() =>
-    address ? loadPrefs(address) : emptyPrefs(),
+    wallet ? loadPrefs(wallet) : emptyPrefs(),
   )
   // Incrementing this forces the load effect to re-run even if sort hasn't changed.
   const [refreshKey, setRefreshKey] = useState(0)
@@ -225,7 +227,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   // Prefs snapshot frozen at session start — restored from sessionStorage on remount
   // so tab-switching never re-sorts. Fresh values come in only on F5 or Refresh.
   const sessionPrefsRef = useRef<FeedPrefs>(
-    cache?.sessionPrefs ?? (address ? loadPrefs(address) : emptyPrefs()),
+    cache?.sessionPrefs ?? (wallet ? loadPrefs(wallet) : emptyPrefs()),
   )
   // Noise cache restored from sessionStorage on remount so item order is identical.
   const noiseCacheRef = useRef<Map<string, number>>(
@@ -260,15 +262,15 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
 
   // Load following list for foryou boost
   useEffect(() => {
-    if (!address) return
-    fetchFollowing(address).then(list => setFollowingSet(new Set(list))).catch(() => {})
-  }, [address])
+    if (!wallet) return
+    fetchFollowing(wallet).then(list => setFollowingSet(new Set(list))).catch(() => {})
+  }, [wallet])
 
   // Load shares so we know which feed cards have been posted to X
   useEffect(() => {
-    if (!address) return
-    fetchMyShares(address).then(setMyShares).catch(() => {})
-  }, [address])
+    if (!wallet) return
+    fetchMyShares().then(setMyShares).catch(() => {})
+  }, [wallet])
 
 
   // Clear noise cache and locked sort order only when the user actively changes sort mode.
@@ -285,13 +287,13 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
 
   // ── Personalisation signal helpers ────────────────────────────────────────
   const recordSignalForItem = useCallback((item: UnifiedMemeItem, signal: EngagementSignal) => {
-    if (!address) return
+    if (!wallet) return
     setFeedPrefsState(prev => {
       const next = recordSignal(prev, signal, item)
-      savePrefs(address, next)
+      savePrefs(wallet, next)
       return next
     })
-  }, [address])
+  }, [wallet])
 
   // Detect skip when the user advances past an item in under 1.6 s
   useEffect(() => {
@@ -302,7 +304,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
 
     if (prev && dwell > 150 && dwell < 1600) {
       recordSignalForItem(prev, 'skip')
-      trackFeedAction(address, prev.sourceId, prev.type, 'skip', dwell)
+      trackFeedAction(prev.sourceId, prev.type, 'skip', dwell)
     }
 
     prevItemRef.current = item
@@ -357,7 +359,8 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   // Load tier state from backend and update cache + items
   const loadTierData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/feed?wallet=${encodeURIComponent(address)}&sort=top&limit=200`)
+      // Personalised by the session when a member is signed in
+      const res = await fetch('/api/feed?sort=top&limit=200', { credentials: 'same-origin', cache: 'no-store' })
       if (!res.ok) return
       const data: { items: TierRow[] } = await res.json()
       data.items.forEach(row => {
@@ -365,7 +368,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
       })
       setItems(prev => enrichWithTiers(prev))
     } catch { /* silent */ }
-  }, [address])
+  }, [wallet])
 
   const fetchBatch = useCallback(async (p: { studio: number; factory: number; reddit: number }, currentSort: SortMode) => {
     const redditSort = currentSort === 'fresh' ? 'new' : currentSort === 'top' ? 'top' : 'top'
@@ -433,7 +436,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     sessionStorage.removeItem(FEED_CACHE_KEY)
     noiseCacheRef.current.clear()
     sessionSortRef.current = null
-    sessionPrefsRef.current = address ? loadPrefs(address) : emptyPrefs()
+    sessionPrefsRef.current = wallet ? loadPrefs(wallet) : emptyPrefs()
     pages.current   = { studio: 1, factory: 1, reddit: 1 }
     hasMore.current = { studio: true, factory: true, reddit: true }
     sortWhenLoaded.current = null
@@ -442,7 +445,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     setHeroActive(true)
     setHeroLeaving(false)
     setRefreshKey(k => k + 1)
-  }, [address])
+  }, [wallet])
 
   useEffect(() => {
     // Cache hit on mount: restore saved feed state, skip full reload
@@ -684,12 +687,12 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   }, [currentItem?.key])
 
   const handleVote = useCallback(async (dir: 1 | -1) => {
-    if (!currentItem || localVote?.voting) return
+    if (!currentItem || !wallet || localVote?.voting) return
     const prevYourVote = localVote?.yourVote ?? null
     const newYourVote: 1 | -1 | null = prevYourVote === dir ? null : dir
     setLocalVote(prev => prev ? { ...prev, voting: true } : prev)
     try {
-      const result = await castVote(currentItem.sourceId, currentItem.type, dir, address)
+      const result = await castVote(currentItem.sourceId, currentItem.type, dir)
       setLocalVote({ upVotes: result.up_votes, downVotes: result.down_votes, yourVote: newYourVote, tier: result.tier, voting: false })
       // Update item in place + tier cache so vote state survives navigation.
       // sessionSortRef stays locked so foryou order never shifts mid-session.
@@ -716,7 +719,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
       console.error('Vote failed:', err)
       setLocalVote(prev => prev ? { ...prev, voting: false } : prev)
     }
-  }, [currentItem, localVote, address, recordSignalForItem])
+  }, [currentItem, localVote, wallet, recordSignalForItem])
 
   // Render one slide; vote buttons are co-rendered inside current slide as a flex sibling
   function renderSlide(visIdx: number, forceClass?: 'prev' | 'current' | 'next', heropeek?: boolean) {
@@ -732,7 +735,6 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
       <div key={item.key} className={`feed-slide feed-slide--${cls}${heropeek ? ' feed-slide--hero-peek' : ''}`}>
         <FeedCard
           item={item}
-          address={address}
           onOpen={it => { recordSignalForItem(it, 'detail'); onOpenItem(it) }}
         />
         {sharedMetrics && (
@@ -752,9 +754,10 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
             {/* 👍 Upvote */}
             <button
               className={`feed-action-btn feed-action-btn--up ${localVote.yourVote === 1 ? 'active' : ''}`}
-              onClick={() => handleVote(1)}
-              disabled={localVote.voting}
-              title="Upvote"
+              {...gate.lockProps('vote')}
+              onClick={gate.guard(() => handleVote(1), 'vote')}
+              disabled={!gate.locked && localVote.voting}
+              title={gate.locked ? undefined : 'Upvote'}
             >
               <div className="feed-action-icon">
                 <span className="feed-action-icon-glyph">👍</span>
@@ -765,9 +768,10 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
             {/* 👎 Downvote */}
             <button
               className={`feed-action-btn feed-action-btn--down ${localVote.yourVote === -1 ? 'active' : ''}`}
-              onClick={() => handleVote(-1)}
-              disabled={localVote.voting}
-              title="Downvote"
+              {...gate.lockProps('vote')}
+              onClick={gate.guard(() => handleVote(-1), 'vote')}
+              disabled={!gate.locked && localVote.voting}
+              title={gate.locked ? undefined : 'Downvote'}
             >
               <div className="feed-action-icon">
                 <span className="feed-action-icon-glyph">👎</span>
@@ -790,11 +794,12 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
             {/* Share to X */}
             <button
               className="feed-action-btn"
-              onClick={() => {
+              {...gate.lockProps('share to X')}
+              onClick={gate.guard(() => {
                 recordSignalForItem(item, 'share')
                 handleShareClick(item)
-              }}
-              title="Share to X"
+              }, 'share to X')}
+              title={gate.locked ? undefined : 'Share to X'}
             >
               <div className="feed-action-icon">
                 <span className="feed-action-icon-glyph" style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 800 }}>𝕏</span>
@@ -868,8 +873,8 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     setTweetText(`${item.title}\n\nhttps://virginvschad.vip/memes/${item.type}/${item.sourceId}\n\n#VirginVsChad #Memes $VVC`)
     setTweetUrl('')
     setShareInCommunity(false)
-    if (!address) return
-    const status = await fetchXStatus(address).catch(() => ({ connected: false as const }))
+    if (!wallet) return
+    const status = await fetchXStatus().catch(() => ({ connected: false as const }))
     if (status.connected && status.handle) {
       setXHandle(status.handle)
       setShareModal('compose')
@@ -879,11 +884,8 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   }
 
   const handleConnectX = () => {
-    if (!address) return
-    window.open(
-      `/api/x/auth?wallet=${encodeURIComponent(address)}`,
-      'x-oauth'
-    )
+    if (!wallet) return
+    window.open(X_AUTH_URL, 'x-oauth')
     const onMsg = (e: MessageEvent) => {
       if (e.data?.type !== 'x_auth') return
       window.removeEventListener('message', onMsg)
@@ -900,11 +902,10 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
 
   const handlePostTweet = async () => {
     const item = shareItemRef.current ?? shareItem
-    if (!item || !address) return
+    if (!item || !wallet) return
     setShareModal('posting')
     try {
       const result = await postXTweet({
-        wallet: address,
         text: tweetText,
         image_url: item.imageUrl ? new URL(item.imageUrl, window.location.origin).href : undefined,
         meme_id: item.sourceId,
@@ -916,7 +917,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
       setTweetId(result.tweet_id)
       setXHandle(result.handle)
       setMyShares(prev => [...prev, {
-        id: result.share_id, wallet: address,
+        id: result.share_id, wallet: wallet,
         meme_id: item.sourceId, meme_type: item.type,
         tweet_id: result.tweet_id, tweet_url: result.tweet_url,
         created_at: Date.now(),
@@ -1238,7 +1239,6 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
         {showComments && currentItem && (
           <CommentsPanel
             item={currentItem}
-            address={address}
             onClose={() => setShowComments(false)}
           />
         )}

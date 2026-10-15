@@ -1,6 +1,7 @@
 import { imageUrl } from './memes'
 import { studioMemeImageUrl } from './studio'
 import type { UnifiedMemeItem, MemeSourceType } from '../types/unified'
+import { getPublicProfiles, type PublicProfile } from '../identity/api'
 
 function toIso(s: string) { try { return new Date(s).toISOString() } catch { return s } }
 function trunc(a: string) { return a ? `${a.slice(0, 4)}…${a.slice(-4)}` : '—' }
@@ -8,7 +9,8 @@ function trunc(a: string) { return a ? `${a.slice(0, 4)}…${a.slice(-4)}` : '�
 export interface SearchMemeResult { kind: 'meme'; item: UnifiedMemeItem }
 export interface SearchUserResult {
   kind: 'user'; wallet: string
-  character?: string; title?: string; portraitDataUrl?: string
+  /** Set when the wallet belongs to a member */
+  profile?: PublicProfile
 }
 export type SearchResult = SearchMemeResult | SearchUserResult
 
@@ -115,16 +117,9 @@ export async function searchAll(query: string, limit = 10): Promise<SearchResult
     if (isSolanaWallet(q) && !seen.has(q)) seen.add(q)
 
     if (seen.size > 0) {
-      try {
-        const wallets = [...seen]
-        const res = await fetch(`/profiles/batch?wallets=${encodeURIComponent(wallets.join(','))}`)
-        const profiles: Record<string, { character?: string; title?: string; portraitDataUrl?: string }> =
-          res.ok ? await res.json() : {}
-        for (const wallet of wallets) {
-          const p = profiles[wallet] ?? {}
-          out.push({ kind: 'user', wallet, character: p.character, title: p.title, portraitDataUrl: p.portraitDataUrl })
-        }
-      } catch { /* silent */ }
+      const wallets = [...seen]
+      const profiles = await getPublicProfiles(wallets)
+      for (const wallet of wallets) out.push({ kind: 'user', wallet, profile: profiles[wallet] })
     }
   }
 

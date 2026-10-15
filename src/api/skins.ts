@@ -1,3 +1,5 @@
+import { api } from './client'
+
 export interface SkinRecord {
   id: string
   wallet: string
@@ -28,8 +30,8 @@ export async function fetchCharSkins(
   return res.json()
 }
 
+/** Save an AI skin to the shared databank, as the signed-in member. */
 export async function saveSkin(params: {
-  wallet: string
   char_key: string
   char_name: string
   prompt: string
@@ -37,20 +39,9 @@ export async function saveSkin(params: {
   imageDataUrl: string
 }): Promise<string | null> {
   try {
-    const res = await fetch('/api/skins', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    })
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      console.warn('[skin] POST /api/skins failed', res.status, body)
-      return null
-    }
-    const data = await res.json()
-    return data.id ?? null
+    return (await api<{ id?: string }>('/api/skins', { method: 'POST', body: params })).id ?? null
   } catch (e) {
-    console.warn('[skin] fetch error', e)
+    console.warn('[skin] save failed', e)
     return null
   }
 }

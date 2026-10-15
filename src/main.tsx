@@ -5,9 +5,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom'
 import './index.css'
+import './identity/identity.css'
 import App from './App'
+import { IdentityProvider } from './identity/IdentityProvider'
 import {
-  LiveRoute, PfpRoute, FeedRoute, UnifiedDetailRoute,
+  LiveRoute, RetakeRoute, FeedRoute, UnifiedDetailRoute,
   VoteRoute, CastRoute, PrizesRoute, TreasuryRoute,
   StudioRoute, StudioEditRoute,
   FactoryRoute, ForumRoute, ForumBoardRoute, ForumThreadRoute,
@@ -27,7 +29,7 @@ const router = createHashRouter([
     children: [
       { index: true,               element: <Navigate to="/memes" replace /> },
       { path: 'live',              element: <LiveRoute /> },
-      { path: 'pfp',               element: <PfpRoute /> },
+      { path: 'pfp',               element: <RetakeRoute /> },
       { path: 'memes',             element: <FeedRoute /> },
       { path: 'memes/:source/:id', element: <UnifiedDetailRoute /> },
       { path: 'vote',              element: <VoteRoute /> },
@@ -51,6 +53,8 @@ const router = createHashRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <IdentityProvider>
+      <RouterProvider router={router} />
+    </IdentityProvider>
   </StrictMode>,
 )

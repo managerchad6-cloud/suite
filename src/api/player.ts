@@ -1,3 +1,5 @@
+import { api } from './client'
+
 export interface PlayerState {
   wallet: string
   chad_xp: number
@@ -56,16 +58,11 @@ export async function fetchPlayerTimeline(wallet: string, limit = 30): Promise<A
 }
 
 export async function fetchBadges(): Promise<BadgeDef[]> {
-  const res = await fetch('/api/badges')
-  if (!res.ok) return []
-  const data = await res.json()
-  return data.badges ?? []
+  try { return (await api<{ badges?: BadgeDef[] }>('/api/badges')).badges ?? [] } catch { return [] }
 }
 
 export async function fetchPlayerBadges(wallet: string): Promise<{ badges: PlayerBadge[]; total_xp: number }> {
-  const res = await fetch(`/api/badges/${encodeURIComponent(wallet)}`)
-  if (!res.ok) return { badges: [], total_xp: 0 }
-  return res.json()
+  try { return await api(`/api/badges/${encodeURIComponent(wallet)}`) } catch { return { badges: [], total_xp: 0 } }
 }
 
 export function dispatchBadges(badges: BadgeDef[] | undefined) {
@@ -79,18 +76,15 @@ export function dispatchXP(amount: number, alignment: 'chad' | 'virgin' | 'neutr
     window.dispatchEvent(new CustomEvent('vvc:xp-awarded', { detail: { amount, alignment } }))
 }
 
-export async function trackBadgeCounter(wallet: string, counter: string, amount = 1): Promise<BadgeDef[]> {
-  const res = await fetch('/api/badges/track', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet, counter, amount }),
-  })
-  if (!res.ok) return []
-  const data = await res.json()
-  return data.new_badges ?? []
+/** Count something the member did toward a badge (members only; guests count nothing). */
+export async function trackBadgeCounter(counter: string, amount = 1): Promise<BadgeDef[]> {
+  try {
+    return (await api<{ new_badges?: BadgeDef[] }>('/api/badges/track', { method: 'POST', body: { counter, amount } })).new_badges ?? []
+  } catch { return [] }
 }
 
-export async function recordLogin(wallet: string): Promise<{
+/** Daily login for the signed-in member (idempotent per day). */
+export async function recordLogin(): Promise<{
   already_logged?: boolean
   streak?: number
   xp_awarded?: number
@@ -98,9 +92,7 @@ export async function recordLogin(wallet: string): Promise<{
   ranked_up?: boolean
   new_badges?: BadgeDef[]
 }> {
-  const res = await fetch(`/api/player/${encodeURIComponent(wallet)}/login`, { method: 'POST' })
-  if (!res.ok) return {}
-  return res.json()
+  try { return await api('/api/player/login', { method: 'POST' }) } catch { return {} }
 }
 
 export const TIER_DISPLAY: Record<string, { label: string; color: string }> = {

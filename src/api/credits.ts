@@ -1,3 +1,12 @@
+import { api } from './client'
+import { dispatchBadges, type BadgeDef } from './player'
+
+type WithBadges<T> = T & { new_badges?: BadgeDef[] }
+
+function withBadges<T>(p: Promise<WithBadges<T>>): Promise<T> {
+  return p.then(data => { dispatchBadges(data.new_badges); return data })
+}
+
 export interface CreditPack {
   id: string
   label: string
@@ -23,91 +32,37 @@ export interface MemeToken {
 
 export type CreditAction = keyof CreditCosts
 
-export async function fetchCreditBalance(wallet: string): Promise<{ balance: number; lifetime: number }> {
-  const res = await fetch(`/api/credits/${encodeURIComponent(wallet)}`)
-  if (!res.ok) return { balance: 0, lifetime: 0 }
-  return res.json()
+// Your own balance and charges: the session decides whose credits these are.
+export async function fetchCreditBalance(): Promise<{ balance: number; lifetime: number }> {
+  try { return await api('/api/credits/balance') } catch { return { balance: 0, lifetime: 0 } }
 }
 
-export async function fetchCreditPacks(): Promise<{ packs: CreditPack[]; costs: CreditCosts }> {
-  const res = await fetch('/api/credits/packs')
-  if (!res.ok) throw new Error('Failed to load credit packs')
-  return res.json()
+export function fetchCreditPacks(): Promise<{ packs: CreditPack[]; costs: CreditCosts }> {
+  return api('/api/credits/packs')
 }
 
-export async function deductCredits(
-  wallet: string,
-  action: CreditAction,
-  refId?: string,
-): Promise<{ ok: boolean; deducted: number; new_balance: number }> {
-  const res = await fetch('/api/credits/deduct', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet, action, ref_id: refId }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(err.detail ?? 'Credit deduction failed'), { status: res.status, ...err })
-  }
-  const data = await res.json()
-  if (data.new_badges?.length) {
-    const { dispatchBadges } = await import('./player')
-    dispatchBadges(data.new_badges)
-  }
-  return data
+/** Charge an action. Studio AI actions also return `ai_ticket`: the images this charge paid for. */
+export function deductCredits(action: CreditAction, refId?: string): Promise<{ ok: boolean; deducted: number; new_balance: number; ai_ticket?: string }> {
+  return withBadges(api('/api/credits/deduct', { method: 'POST', body: { action, ref_id: refId } }))
 }
 
-export async function refundCredits(wallet: string, action: CreditAction): Promise<void> {
-  await fetch('/api/credits/refund', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet, action }),
-  }).catch(() => {})
-}
-
-export async function verifyPurchase(
-  wallet: string,
+/** Credit a purchase; the transaction must be signed by the signed-in wallet. */
+export function verifyPurchase(
   packId: string,
   txSignature: string,
   paymentMethod: 'usdc' | 'sol' | 'vvc' = 'usdc',
   expectedLamports?: number,
 ): Promise<{ ok: boolean; credits_added: number; new_balance: number }> {
-  const res = await fetch('/api/credits/purchase', {
+  return withBadges(api('/api/credits/purchase', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet, pack_id: packId, tx_signature: txSignature, payment_method: paymentMethod, expected_lamports: expectedLamports }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail ?? 'Purchase verification failed')
-  }
-  const data = await res.json()
-  if (data.new_badges?.length) {
-    const { dispatchBadges } = await import('./player')
-    dispatchBadges(data.new_badges)
-  }
-  return data
+    body: { pack_id: packId, tx_signature: txSignature, payment_method: paymentMethod, expected_lamports: expectedLamports },
+  }))
 }
 
-export async function issueMemeToken(wallet: string): Promise<MemeToken & { credits_deducted: number }> {
-  const res = await fetch('/api/credits/issue-meme-token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw Object.assign(new Error(err.detail ?? 'Token issue failed'), { status: res.status, ...err })
-  }
-  return res.json()
+export function issueMemeToken(): Promise<MemeToken & { credits_deducted: number }> {
+  return api('/api/credits/issue-meme-token', { method: 'POST' })
 }
 
-export async function claimSignupBonus(wallet: string): Promise<{ granted: number; new_balance: number }> {
-  const res = await fetch('/api/credits/signup-bonus', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) return { granted: 0, new_balance: 0 }
-  return res.json()
+export async function claimSignupBonus(): Promise<{ granted: number; new_balance: number }> {
+  try { return await api('/api/credits/signup-bonus', { method: 'POST' }) } catch { return { granted: 0, new_balance: 0 } }
 }

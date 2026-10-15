@@ -2,13 +2,18 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'url'
 
-const QUIZ_LOGGER = 'http://localhost:3015'
-const STUDIO    = 'http://localhost:3016'
-const GENERATOR = 'http://93.127.214.75:8000'
-const RANKING   = 'http://93.127.214.75:3007'
-const CHAT      = 'http://62.83.40.113:3002'
-const ANIM      = 'http://62.83.40.113:3003'
-const X_BACKEND = 'http://localhost:3025'
+// Dev-server targets: every backend runs locally by default (the old server IPs are gone).
+// Livestream routes get xfwd (X-Forwarded-For) so, like through Apache, they count as public
+// requests there; without it they'd look like the operator on loopback.
+// Override any of them with an env var, e.g. VVC_GENERATOR=http://127.0.0.1:8001 npm run dev
+const env = (name: string, fallback: string) => process.env[name] || fallback
+const IDENTITY    = env('VVC_IDENTITY', 'http://127.0.0.1:3020')
+const STUDIO      = env('VVC_STUDIO', 'http://127.0.0.1:3016')
+const GENERATOR   = env('VVC_GENERATOR', 'http://127.0.0.1:8000')
+const RANKING     = env('VVC_RANKING', 'http://127.0.0.1:3007')
+const CHAT        = env('VVC_CHAT', 'http://127.0.0.1:3002')
+const ANIM        = env('VVC_ANIM', 'http://127.0.0.1:3003')
+const X_BACKEND   = env('VVC_XBACKEND', 'http://127.0.0.1:3025')
 
 export default defineConfig({
   plugins: [react()],
@@ -18,9 +23,8 @@ export default defineConfig({
   server: {
     port: 5291,
     proxy: {
-'/api/quiz-log':  { target: STUDIO, changeOrigin: true },
-      '/profiles':     { target: STUDIO, changeOrigin: true },
-      '/comments':     { target: STUDIO, changeOrigin: true },
+      // Identity must keep the browser's Host/Origin: sign-in messages are bound to this site
+      '/api/identity': { target: IDENTITY },
       '/generate':   { target: GENERATOR, changeOrigin: true },
       '/parse':      { target: GENERATOR, changeOrigin: true },
       '/jobs':       { target: GENERATOR, changeOrigin: true },
@@ -54,17 +58,17 @@ export default defineConfig({
       '/api/skins':        { target: STUDIO, changeOrigin: true },
       '/api/memes':        { target: STUDIO, changeOrigin: true },
       '/internal':         { target: STUDIO, changeOrigin: true },
-      '/api/chat':   { target: CHAT,      changeOrigin: true },
+      '/api/chat':   { target: CHAT,      changeOrigin: true, xfwd: true },
       '/api/ranks':  { target: RANKING,   changeOrigin: true },
       '/api/vote':   { target: RANKING,   changeOrigin: true },
       '/api/roadmap':{ target: RANKING,   changeOrigin: true },
-      '/api/meme-intake':    { target: ANIM, changeOrigin: true },
-      '/api/orchestrator':   { target: ANIM, changeOrigin: true },
-      '/api/lists':  { target: ANIM,      changeOrigin: true },
-      '/api/suggestions': { target: CHAT,  changeOrigin: true },
-      '/api/yt-queue':    { target: ANIM,  changeOrigin: true },
-      '/streams':    { target: ANIM,      changeOrigin: true },
-      '/ws/orchestrator': { target: 'ws://62.83.40.113:3003', ws: true, changeOrigin: true },
+      '/api/meme-intake':    { target: ANIM, changeOrigin: true, xfwd: true },
+      '/api/orchestrator':   { target: ANIM, changeOrigin: true, xfwd: true },
+      '/api/lists':  { target: ANIM,      changeOrigin: true, xfwd: true },
+      '/api/suggestions': { target: CHAT,  changeOrigin: true, xfwd: true },
+      '/api/yt-queue':    { target: ANIM,  changeOrigin: true, xfwd: true },
+      '/streams':    { target: ANIM,      changeOrigin: true, xfwd: true },
+      '/ws/orchestrator': { target: ANIM.replace(/^http/, 'ws'), ws: true, changeOrigin: true, xfwd: true },
     },
   },
   resolve: {

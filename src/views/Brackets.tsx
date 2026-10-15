@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { loadProfilesBatch } from '../lib/quizLog'
+import { getPublicProfiles, bestImage, type PublicProfile } from '../identity/api'
+import { displayName } from '../identity/archetypes'
+import { api } from '../api/client'
+import { useMemberGate } from '../identity/gate'
 import './Brackets.css'
 
 interface LeaderboardRow {
@@ -49,12 +52,13 @@ function timeLeft(iso: string): string {
 }
 
 function MatchupCard({
-  matchup, address, onVoted,
+  matchup, onVoted,
 }: {
   matchup: Matchup
-  address: string
   onVoted: (matchup_id: string, votes_a: number, votes_b: number) => void
 }) {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [votesA, setVotesA] = useState(matchup.votes_a)
   const [votesB, setVotesB] = useState(matchup.votes_b)
   const [myVote, setMyVote] = useState<string | null>(null)
@@ -65,16 +69,13 @@ function MatchupCard({
   const pctB    = 100 - pctA
 
   async function vote(meme_id: string) {
-    if (voting || ended || myVote === meme_id) return
+    if (!address || voting || ended || myVote === meme_id) return
     setVoting(true)
     try {
-      const res = await fetch('/api/brackets/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ matchup_id: matchup.id, vote: meme_id, wallet: address }),
-      })
-      if (!res.ok) return
-      const data = await res.json()
+      const data = await api<{ votes_a: number; votes_b: number }>('/api/brackets/vote', {
+        method: 'POST', body: { matchup_id: matchup.id, vote: meme_id },
+      }).catch(() => null)
+      if (!data) return
       setVotesA(data.votes_a)
       setVotesB(data.votes_b)
       setMyVote(meme_id)
@@ -90,8 +91,9 @@ function MatchupCard({
         {/* Side A */}
         <button
           className={`matchup-side ${myVote === matchup.meme_a_id ? 'matchup-side--voted' : ''} ${matchup.winner === matchup.meme_a_id ? 'matchup-side--winner' : ''} ${matchup.winner && matchup.winner !== matchup.meme_a_id ? 'matchup-side--loser' : ''}`}
-          onClick={() => vote(matchup.meme_a_id)}
-          disabled={voting || ended || !!matchup.winner}
+          {...(!ended && !matchup.winner ? gate.lockProps('vote') : {})}
+          onClick={gate.guard(() => vote(matchup.meme_a_id), 'vote')}
+          disabled={(!gate.locked && voting) || ended || !!matchup.winner}
         >
           <img src={memeImageUrl(matchup.meme_a_id, matchup.meme_a_source)} alt="A" className="matchup-img" />
           <div className="matchup-vote-count">{votesA}</div>
@@ -111,8 +113,9 @@ function MatchupCard({
         {/* Side B */}
         <button
           className={`matchup-side ${myVote === matchup.meme_b_id ? 'matchup-side--voted' : ''} ${matchup.winner === matchup.meme_b_id ? 'matchup-side--winner' : ''} ${matchup.winner && matchup.winner !== matchup.meme_b_id ? 'matchup-side--loser' : ''}`}
-          onClick={() => vote(matchup.meme_b_id)}
-          disabled={voting || ended || !!matchup.winner}
+          {...(!ended && !matchup.winner ? gate.lockProps('vote') : {})}
+          onClick={gate.guard(() => vote(matchup.meme_b_id), 'vote')}
+          disabled={(!gate.locked && voting) || ended || !!matchup.winner}
         >
           <img src={memeImageUrl(matchup.meme_b_id, matchup.meme_b_source)} alt="B" className="matchup-img" />
           <div className="matchup-vote-count">{votesB}</div>
@@ -211,12 +214,12 @@ const MEDAL: Record<number, string> = { 0: '🥇', 1: '🥈', 2: '🥉' }
 function LeaderboardCard({ row, rank, profile, onOpen }: {
   row: LeaderboardRow
   rank: number
-  profile?: { character?: string; title?: string; portraitDataUrl?: string }
+  profile?: PublicProfile
   onOpen: () => void
 }) {
-  const avatar = profile?.portraitDataUrl ?? (profile?.character ? `/assets/chars/${profile.character}.png` : null)
-  const name   = profile?.character
-    ? `${profile.title ? `${profile.title} ` : ''}${profile.character}`
+  const avatar = profile ? bestImage(profile) : null
+  const name   = profile
+    ? displayName(profile)
     : `${row.wallet.slice(0, 6)}…${row.wallet.slice(-4)}`
 
   return (
@@ -234,18 +237,15 @@ function LeaderboardCard({ row, rank, profile, onOpen }: {
   )
 }
 
-interface Props {
-  address: string
-}
-
-export function Brackets({ address }: Props) {
+export function Brackets() {
   const navigate = useNavigate()
+  const { wallet: address } = useMemberGate()
   const [bracket,  setBracket]  = useState<Bracket | null>(null)
   const [matchups, setMatchups] = useState<Matchup[]>([])
   const [loading,  setLoading]  = useState(true)
   const [activeRound, setActiveRound] = useState(1)
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([])
-  const [lbProfiles, setLbProfiles]   = useState<Record<string, { character?: string; title?: string; portraitDataUrl?: string }>>({})
+  const [lbProfiles, setLbProfiles]   = useState<Record<string, PublicProfile>>({})
   const [lbLoading, setLbLoading]     = useState(true)
 
   useEffect(() => {
@@ -270,7 +270,7 @@ export function Brackets({ address }: Props) {
       .then(async d => {
         const items: LeaderboardRow[] = d.items ?? []
         setLeaderboard(items)
-        if (items.length) setLbProfiles(await loadProfilesBatch(items.map(i => i.wallet)))
+        if (items.length) setLbProfiles(await getPublicProfiles(items.map(i => i.wallet)))
       })
       .catch(() => {})
       .finally(() => setLbLoading(false))
@@ -394,7 +394,6 @@ export function Brackets({ address }: Props) {
               <MatchupCard
                 key={m.id}
                 matchup={m}
-                address={address}
                 onVoted={handleVoted}
               />
             ))}

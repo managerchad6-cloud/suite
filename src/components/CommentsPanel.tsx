@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { truncateAddress } from '../wallet'
-import { dispatchBadges, dispatchXP } from '../api/player'
+import { dispatchBadges, dispatchXP, type BadgeDef } from '../api/player'
+import { api } from '../api/client'
+import { MemberGate, useMemberGate } from '../identity/gate'
 import type { UnifiedMemeItem } from '../types/unified'
 import './CommentsPanel.css'
 
@@ -30,14 +32,15 @@ function timeAgo(iso: string): string {
 
 interface CommentRowProps {
   comment: Comment
-  address: string
+  wallet: string | null
   depth: number
   onLike: (id: string) => void
   onReply: (id: string, wallet: string) => void
   onDelete: (id: string) => void
 }
 
-function CommentRow({ comment, address, depth, onLike, onReply, onDelete }: CommentRowProps) {
+function CommentRow({ comment, wallet, depth, onLike, onReply, onDelete }: CommentRowProps) {
+  const gate = useMemberGate()
   return (
     <div className={`cp-comment ${depth > 0 ? 'cp-comment--reply' : ''}`}>
       <div className="cp-comment-avatar">
@@ -55,21 +58,22 @@ function CommentRow({ comment, address, depth, onLike, onReply, onDelete }: Comm
         <div className="cp-comment-actions">
           <button
             className={`cp-like-btn ${comment.your_like ? 'active' : ''}`}
-            onClick={() => onLike(comment.id)}
+            {...gate.lockProps('like')}
+            onClick={gate.guard(() => onLike(comment.id), 'like')}
           >
             {comment.your_like ? '❤️' : '🤍'} {comment.likes > 0 ? comment.likes : ''}
           </button>
           {depth === 0 && (
-            <button className="cp-reply-btn" onClick={() => onReply(comment.id, comment.wallet)}>
+            <button className="cp-reply-btn" {...gate.lockProps('reply')} onClick={gate.guard(() => onReply(comment.id, comment.wallet), 'reply')}>
               Reply
             </button>
           )}
-          {comment.wallet === address && (
+          {wallet && comment.wallet === wallet && (
             <button className="cp-delete-btn" onClick={() => onDelete(comment.id)}>Delete</button>
           )}
         </div>
         {comment.replies.map(r => (
-          <CommentRow key={r.id} comment={r} address={address} depth={depth + 1} onLike={onLike} onReply={onReply} onDelete={onDelete} />
+          <CommentRow key={r.id} comment={r} wallet={wallet} depth={depth + 1} onLike={onLike} onReply={onReply} onDelete={onDelete} />
         ))}
       </div>
     </div>
@@ -78,11 +82,11 @@ function CommentRow({ comment, address, depth, onLike, onReply, onDelete }: Comm
 
 interface Props {
   item: UnifiedMemeItem
-  address: string
   onClose: () => void
 }
 
-export function CommentsPanel({ item, address, onClose }: Props) {
+export function CommentsPanel({ item, onClose }: Props) {
+  const { wallet } = useMemberGate()
   const [comments, setComments] = useState<Comment[]>([])
   const [loading,  setLoading]  = useState(true)
   const [input,    setInput]    = useState('')
@@ -92,12 +96,12 @@ export function CommentsPanel({ item, address, onClose }: Props) {
 
   const load = useCallback(() => {
     setLoading(true)
-    fetch(`/api/comments/${encodeURIComponent(item.type)}/${encodeURIComponent(item.sourceId)}?wallet=${encodeURIComponent(address)}&limit=100`)
-      .then(r => r.ok ? r.json() : { items: [] })
+    // your_like comes from the session when a member is signed in
+    api<{ items: Comment[] }>(`/api/comments/${encodeURIComponent(item.type)}/${encodeURIComponent(item.sourceId)}?limit=100`)
       .then(d => setComments(d.items ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [item.type, item.sourceId, address])
+  }, [item.type, item.sourceId, wallet])
 
   useEffect(() => { load() }, [load])
 
@@ -106,18 +110,12 @@ export function CommentsPanel({ item, address, onClose }: Props) {
     if (!body || posting) return
     setPosting(true)
     try {
-      const res = await fetch('/api/comments', {
+      const newComment = await api<Comment & { new_badges?: BadgeDef[]; xp_awarded?: number }>('/api/comments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          meme_id: item.sourceId, meme_source: item.type,
-          wallet: address, body,
-          parent_id: replyTo?.id ?? null,
-        }),
-      })
-      if (!res.ok) return
-      const newComment: Comment & { new_badges?: unknown[]; xp_awarded?: number } = await res.json()
-      dispatchBadges(newComment.new_badges as never)
+        body: { meme_id: item.sourceId, meme_source: item.type, body, parent_id: replyTo?.id ?? null },
+      }).catch(() => null)
+      if (!newComment) return
+      dispatchBadges(newComment.new_badges)
       if (newComment.xp_awarded) dispatchXP(newComment.xp_awarded)
       if (replyTo) {
         setComments(prev => prev.map(c =>
@@ -132,13 +130,9 @@ export function CommentsPanel({ item, address, onClose }: Props) {
   }
 
   async function handleLike(id: string) {
-    const res = await fetch(`/api/comments/${id}/like`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet: address }),
-    })
-    if (!res.ok) return
-    const { likes, your_like } = await res.json()
+    const r = await api<{ likes: number; your_like: boolean }>(`/api/comments/${encodeURIComponent(id)}/like`, { method: 'POST' }).catch(() => null)
+    if (!r) return
+    const { likes, your_like } = r
     const update = (c: Comment): Comment => c.id === id
       ? { ...c, likes, your_like }
       : { ...c, replies: c.replies.map(update) }
@@ -146,11 +140,7 @@ export function CommentsPanel({ item, address, onClose }: Props) {
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/comments/${id}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet: address }),
-    })
+    await api(`/api/comments/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {})
     const remove = (list: Comment[]): Comment[] =>
       list.filter(c => c.id !== id).map(c => ({ ...c, replies: remove(c.replies) }))
     setComments(prev => remove(prev))
@@ -180,7 +170,7 @@ export function CommentsPanel({ item, address, onClose }: Props) {
           <CommentRow
             key={c.id}
             comment={c}
-            address={address}
+            wallet={wallet}
             depth={0}
             onLike={handleLike}
             onReply={startReply}
@@ -196,7 +186,7 @@ export function CommentsPanel({ item, address, onClose }: Props) {
             <button className="cp-cancel-reply" onClick={() => { setReplyTo(null); setInput('') }}>✕</button>
           </div>
         )}
-        <div className="cp-compose-row">
+        <MemberGate reason="comment" className="cp-compose-row">
           <textarea
             ref={inputRef}
             className="cp-input"
@@ -209,7 +199,7 @@ export function CommentsPanel({ item, address, onClose }: Props) {
           <button className="cp-post-btn" onClick={post} disabled={!input.trim() || posting}>
             {posting ? '…' : '↑'}
           </button>
-        </div>
+        </MemberGate>
       </div>
     </div>
   )

@@ -1,3 +1,8 @@
+import { api } from './client'
+
+// Direct messages: only the two people in a conversation can read it. Everything here is yours
+// (the session decides who "you" are); the other side is named by wallet.
+
 export interface DirectMessage {
   id: string
   from_wallet: string
@@ -13,36 +18,25 @@ export interface Conversation {
   unread_count: number
 }
 
-export async function fetchConversations(wallet: string): Promise<{ items: Conversation[]; unread_total: number }> {
+export async function fetchConversations(): Promise<{ items: Conversation[]; unread_total: number }> {
   try {
-    const r = await fetch(`/api/messages/conversations/${encodeURIComponent(wallet)}`)
-    const d = r.ok ? await r.json() : null
-    return Array.isArray(d?.items) ? d : { items: [], unread_total: 0 }
+    const d = await api<{ items?: Conversation[]; unread_total?: number }>('/api/messages/conversations')
+    return Array.isArray(d?.items) ? { items: d.items, unread_total: d.unread_total ?? 0 } : { items: [], unread_total: 0 }
   } catch { return { items: [], unread_total: 0 } }
 }
 
-export async function fetchThread(walletA: string, walletB: string, limit = 50): Promise<DirectMessage[]> {
+/** Your conversation with `wallet`, oldest first. */
+export async function fetchThread(wallet: string, limit = 50): Promise<DirectMessage[]> {
   try {
-    const r = await fetch(`/api/messages/${encodeURIComponent(walletA)}/${encodeURIComponent(walletB)}?limit=${limit}`)
-    const d = r.ok ? await r.json() : []
+    const d = await api<unknown>(`/api/messages/thread/${encodeURIComponent(wallet)}?limit=${limit}`)
     return Array.isArray(d) ? d : []
   } catch { return [] }
 }
 
-export async function sendMessage(from: string, to: string, body: string): Promise<DirectMessage> {
-  const r = await fetch('/api/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to, body }),
-  })
-  if (!r.ok) throw new Error('Message send failed')
-  return r.json()
+export function sendMessage(to: string, body: string): Promise<DirectMessage> {
+  return api('/api/messages', { method: 'POST', body: { to, body } })
 }
 
-export async function markThreadRead(wallet: string, otherWallet: string): Promise<void> {
-  await fetch('/api/messages/read', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet, otherWallet }),
-  })
+export async function markThreadRead(wallet: string): Promise<void> {
+  await api('/api/messages/read', { method: 'POST', body: { with: wallet } }).catch(() => {})
 }

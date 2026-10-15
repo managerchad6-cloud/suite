@@ -1,3 +1,5 @@
+import { api } from './client'
+
 const BASE = ''
 
 export interface StudioMeme {
@@ -45,13 +47,8 @@ export async function fetchGalleryMemes(page = 1, limit = 40): Promise<StudioMem
   return res.json()
 }
 
-export async function deleteStudioMeme(id: string, wallet: string): Promise<void> {
-  const res = await fetch(`${BASE}/studio/memes/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) throw new Error(`Delete meme failed: ${res.status}`)
+export async function deleteStudioMeme(id: string): Promise<void> {
+  await api(`${BASE}/studio/memes/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 export async function fetchStudioMemesByWallet(wallet: string, limit = 100): Promise<StudioMeme[]> {

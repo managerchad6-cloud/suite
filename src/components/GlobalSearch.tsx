@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { searchAll, type SearchResult } from '../api/search'
-import { CHARACTERS } from '../data/characterLore'
+import { bestImage } from '../identity/api'
+import { displayName } from '../identity/archetypes'
 import './GlobalSearch.css'
 
 interface Props {
@@ -120,34 +121,15 @@ export function GlobalSearch({ navigate }: Props) {
             ) : (
               <button key={i} className="gsearch-result" onClick={() => handleSelect(r)}>
                 <div className="gsearch-avatar">
-                  {r.character ? (
-                    <img
-                      src={`/profiles/${encodeURIComponent(r.wallet)}/portrait`}
-                      alt=""
-                      onError={e => {
-                        const img = e.currentTarget
-                        if (!img.dataset.triedFull) {
-                          img.dataset.triedFull = '1'
-                          img.onerror = () => {
-                            img.onerror = null
-                            const cd = CHARACTERS.find(c => c.key === r.character)
-                            img.src = cd ? `/assets/chars/${cd.file}.${cd.ext}` : `/assets/chars/${r.character!}.png`
-                          }
-                          img.src = `/profiles/${encodeURIComponent(r.wallet)}/portrait/full`
-                        }
-                      }}
-                    />
+                  {r.profile ? (
+                    <img src={bestImage(r.profile)} alt="" />
                   ) : (
                     <span>{r.wallet[0]?.toUpperCase()}</span>
                   )}
                 </div>
                 <div className="gsearch-result-info">
                   <span className="gsearch-result-title">
-                    {(() => {
-                      const charName = CHARACTERS.find(c => c.key === r.character)?.name ?? r.character
-                      const full = r.title && charName ? `${r.title} ${charName}` : charName
-                      return full ?? r.wallet.slice(0, 8) + '…'
-                    })()}
+                    {r.profile ? displayName(r.profile) : r.wallet.slice(0, 8) + '…'}
                   </span>
                   <span className="gsearch-result-sub">{r.wallet.slice(0, 6)}…{r.wallet.slice(-4)}</span>
                 </div>

@@ -1,16 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
 import { fetchCreditBalance } from '../api/credits'
 import { BuyCreditsModal } from './BuyCreditsModal'
+import { useIdentity } from '../identity/IdentityProvider'
 import './CreditBalance.css'
 
 interface Props {
-  wallet: string
   onReady?: (refresh: () => void) => void
 }
 
 function cacheKey(wallet: string) { return `vvc_credits_${wallet}` }
 
-export function CreditBalance({ wallet, onReady }: Props) {
+// Member-only (rendered in the member nav): the session decides whose balance this is
+export function CreditBalance({ onReady }: Props) {
+  const wallet = useIdentity().memberWallet ?? ''
   const [balance, setBalance] = useState<number>(() => {
     const cached = localStorage.getItem(cacheKey(wallet))
     return cached !== null ? parseInt(cached, 10) : 0
@@ -19,7 +21,7 @@ export function CreditBalance({ wallet, onReady }: Props) {
   const [showModal, setShowModal] = useState(false)
 
   const refresh = useCallback(() => {
-    fetchCreditBalance(wallet)
+    fetchCreditBalance()
       .then(d => {
         setBalance(d.balance)
         setLoaded(true)

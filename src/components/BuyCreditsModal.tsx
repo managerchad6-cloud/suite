@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getActiveProvider } from '../wallet'
+import { getSigningProvider } from '../wallet'
 import { fetchCreditPacks, verifyPurchase, type CreditPack } from '../api/credits'
 import './BuyCreditsModal.css'
 
@@ -168,8 +168,7 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
       }
 
       setStep('approving')
-      const provider = getActiveProvider()
-      if (!provider) throw new Error('No wallet connected. Connect Phantom, Solflare, or Backpack.')
+      const provider = await getSigningProvider(wallet)
       const signedTx = await provider.signTransaction(tx)
 
       setStep('confirming')
@@ -187,7 +186,7 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
       await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, 'confirmed')
 
       setStep('verifying')
-      const result = await verifyPurchase(wallet, pack.id, txSig, payMethod, expectedLamports)
+      const result = await verifyPurchase(pack.id, txSig, payMethod, expectedLamports)
       setAdded(result.credits_added)
       setStep('done')
       onPurchased(result.new_balance)

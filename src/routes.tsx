@@ -4,7 +4,8 @@ import { Memes } from './views/Memes'
 import { Forum } from './views/Forum'
 import { Vote } from './views/Vote'
 import { Characters } from './views/Characters'
-import { Quiz } from './views/Quiz'
+import { RetakeView } from './identity/RetakeView'
+import { useIdentity } from './identity/IdentityProvider'
 import { Profile } from './views/Profile'
 import { MemeStudio } from './views/MemeStudio'
 import { Feed } from './views/Feed'
@@ -17,27 +18,28 @@ import { VideoFeed } from './views/VideoFeed'
 import type { AppOutletContext } from './App'
 import type { MemeSourceType } from './types/unified'
 
+// Every page is open to everyone; participation inside them is locked for non-members.
+// The two pages about *your* account (profile, retake) send non-members to the memes.
+
 export function LiveRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
-  return <Live address={address} />
+  return <Live />
 }
 
-export function PfpRoute() {
-  const { address, setProfile } = useOutletContext<AppOutletContext>()
+export function RetakeRoute() {
+  const { status } = useIdentity()
   const navigate = useNavigate()
+  if (status !== 'member') return <Navigate to="/memes" replace />
   return (
     <div style={{ height: '100%', overflow: 'auto' }}>
-      <Quiz address={address} onProfileUpdate={setProfile} onComplete={() => navigate('/live')} />
+      <RetakeView onDone={() => navigate('/profile')} />
     </div>
   )
 }
 
 export function FeedRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
   return (
     <Feed
-      address={address}
       onOpenItem={item => navigate(`/memes/${item.type}/${item.sourceId}`)}
       onOpenProfile={w => navigate(`/u/${w}`)}
       onRemix={id => navigate(`/studio/edit/${id}`)}
@@ -49,7 +51,6 @@ export function FeedRoute() {
 
 export function UnifiedDetailRoute() {
   const { source, id } = useParams<{ source: string; id: string }>()
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
 
   const imageUrl =
@@ -70,7 +71,6 @@ export function UnifiedDetailRoute() {
   return (
     <UnifiedMemeDetail
       item={item}
-      address={address}
       onBack={() => navigate(-1)}
       onOpenCharacter={name => navigate(`/cast/${name}`)}
       onRemix={remixId => navigate(`/studio/edit/${remixId}`)}
@@ -80,17 +80,14 @@ export function UnifiedDetailRoute() {
 }
 
 export function VoteRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
-  return <Vote address={address} />
+  return <Vote />
 }
 
 export function CastRoute() {
   const { charKey } = useParams<{ charKey?: string }>()
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
   return (
     <Characters
-      address={address}
       initialChar={charKey ?? null}
       onOpenDetail={meme => navigate(`/memes/factory/${meme.job_id}`)}
       onOpenUnifiedItem={item => navigate(`/memes/${item.type}/${item.sourceId}`)}
@@ -99,8 +96,7 @@ export function CastRoute() {
 }
 
 export function PrizesRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
-  return <Brackets address={address} />
+  return <Brackets />
 }
 
 export function TreasuryRoute() {
@@ -108,11 +104,9 @@ export function TreasuryRoute() {
 }
 
 export function StudioRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
   return (
     <MemeStudio
-      address={address}
       onPublished={id => navigate(`/memes/studio/${id}`)}
     />
   )
@@ -120,11 +114,9 @@ export function StudioRoute() {
 
 export function StudioEditRoute() {
   const { id } = useParams<{ id: string }>()
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
   return (
     <MemeStudio
-      address={address}
       remixSourceId={id}
       onPublished={pubId => navigate(`/memes/studio/${pubId}`)}
     />
@@ -132,11 +124,9 @@ export function StudioEditRoute() {
 }
 
 export function FactoryRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
   return (
     <Memes
-      address={address}
       onOpenDetail={meme => navigate(`/memes/factory/${meme.job_id}`)}
       onOpenProfile={w => navigate(`/u/${w}`)}
     />
@@ -144,13 +134,12 @@ export function FactoryRoute() {
 }
 
 export function ProfileRoute() {
-  const { address, profile } = useOutletContext<AppOutletContext>()
+  const { status } = useIdentity()
   const navigate = useNavigate()
+  if (status !== 'member') return <Navigate to="/memes" replace />
 
   return (
     <Profile
-      address={address}
-      profile={profile}
       onGoToOracle={() => navigate('/pfp')}
       onOpenDetail={meme => navigate(`/memes/factory/${meme.job_id}`)}
       onOpenStudioMeme={id => navigate(`/memes/studio/${id}`)}
@@ -160,12 +149,10 @@ export function ProfileRoute() {
 }
 
 export function ForumRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
   return (
     <Forum
       view="index"
-      address={address}
       onOpenBoard={id => navigate(`/forum/b/${id}`)}
     />
   )
@@ -173,12 +160,10 @@ export function ForumRoute() {
 
 export function ForumBoardRoute() {
   const { boardId } = useParams<{ boardId: string }>()
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
   return (
     <Forum
       view="board"
-      address={address}
       boardId={boardId}
       onOpenThread={id => navigate(`/forum/${id}`)}
       onBack={() => navigate('/forum')}
@@ -188,39 +173,40 @@ export function ForumBoardRoute() {
 
 export function ForumThreadRoute() {
   const { threadId } = useParams<{ threadId: string }>()
-  const { address } = useOutletContext<AppOutletContext>()
   const navigate = useNavigate()
   return (
     <Forum
       view="thread"
-      address={address}
       threadId={threadId}
       onBack={() => navigate(-1)}
     />
   )
 }
 
+// Video (hidden from the nav, not production-ready): its VideoServer has no identity support yet,
+// so the studio is for members only and the wallet is passed as before.
 export function VideoStudioRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
-  return <VideoStudio address={address} />
+  const { memberWallet } = useIdentity()
+  if (!memberWallet) return <Navigate to="/videos" replace />
+  return <VideoStudio address={memberWallet} />
 }
 
 export function VideoFeedRoute() {
-  const { address } = useOutletContext<AppOutletContext>()
-  return <VideoFeed address={address} />
+  const { memberWallet } = useIdentity()
+  return <VideoFeed address={memberWallet ?? ''} />
 }
 
 export function PublicProfileRoute() {
   const { wallet } = useParams<{ wallet: string }>()
-  const { address, openChat } = useOutletContext<AppOutletContext>()
+  const { openChat } = useOutletContext<AppOutletContext>()
+  const { memberWallet } = useIdentity()
   const navigate = useNavigate()
 
-  if (wallet === address) return <Navigate to="/profile" replace />
+  if (wallet === memberWallet) return <Navigate to="/profile" replace />
 
   return (
     <PublicProfile
       wallet={wallet!}
-      address={address}
       onBack={() => navigate(-1)}
       onOpenDetail={meme => navigate(`/memes/factory/${meme.job_id}`)}
       onOpenProfile={w => navigate(`/u/${w}`)}

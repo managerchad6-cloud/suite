@@ -1,19 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { fetchComments, postComment, likeComment, type Comment } from '../api/comments'
+import { fetchComments, postComment, likeComment, type Comment, type CommentSource } from '../api/comments'
 import { truncateAddress } from '../wallet'
+import { MemberGate, useMemberGate } from '../identity/gate'
+import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
 
-type CachedProfile = { character: string; portraitDataUrl?: string } | null
-const _cache = new Map<string, Promise<CachedProfile>>()
-function getProfile(wallet: string): Promise<CachedProfile> {
-  if (!_cache.has(wallet)) {
-    _cache.set(wallet,
-      fetch(`/profiles/${encodeURIComponent(wallet)}`)
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null)
-    )
-  }
-  return _cache.get(wallet)!
-}
+type CachedProfile = PublicProfile | null
+const getProfile = getPublicProfile
 
 type CommentNode = Comment & { replies: CommentNode[] }
 
@@ -32,37 +24,30 @@ function buildTree(flat: Comment[]): CommentNode[] {
   return roots
 }
 
-function getLikedKey(wallet: string, commentId: string) {
-  return `vvc_liked_comment_v1_${wallet}_${commentId}`
-}
-
-function CommentRow({ comment, address, onOpenProfile, onReply }: {
+function CommentRow({ comment, onOpenProfile, onReply }: {
   comment: Comment
-  address: string | null
   onOpenProfile?: (wallet: string) => void
   onReply?: () => void
 }) {
+  const gate = useMemberGate()
   const [profile, setProfile] = useState<CachedProfile | undefined>(undefined)
-  const [liked, setLiked]     = useState(() =>
-    address ? !!localStorage.getItem(getLikedKey(address, comment.id)) : false
-  )
-  const [likeCount, setLikeCount] = useState(comment.likes ?? 0)
+  // The server knows whether you liked it; likes toggle
+  const [liked, setLiked]         = useState(comment.your_like)
+  const [likeCount, setLikeCount] = useState(comment.like_count ?? 0)
   const [liking, setLiking]       = useState(false)
 
   useEffect(() => { getProfile(comment.wallet).then(setProfile) }, [comment.wallet])
 
-  const src = profile?.portraitDataUrl ?? (profile ? `/assets/chars/${profile.character}.png` : null)
+  const src = profile ? bestImage(profile) : null
 
-  const handleLike = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!address || liked || liking) return
+  const handleLike = async () => {
+    if (liking) return
     setLiking(true)
     try {
-      const result = await likeComment(comment.id, address)
-      localStorage.setItem(getLikedKey(address, comment.id), '1')
-      setLiked(true)
-      setLikeCount(result.likes)
-    } catch { /* already liked or failed */ } finally { setLiking(false) }
+      const result = await likeComment(comment.id)
+      setLiked(result.your_like)
+      setLikeCount(result.like_count)
+    } catch { /* failed: leave as is */ } finally { setLiking(false) }
   }
 
   return (
@@ -83,19 +68,20 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
             onClick={() => onOpenProfile?.(comment.wallet)}
           >{truncateAddress(comment.wallet)}</span>
           <span className="md-comment-time">
-            {new Date(comment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {new Date(comment.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
         </div>
-        <p className="md-comment-text">{comment.body}</p>
+        <p className="md-comment-text">{comment.text}</p>
         {onReply && (
-          <button className="md-comment-reply-btn" onClick={onReply}>Reply</button>
+          <button className="md-comment-reply-btn" {...gate.lockProps('reply')} onClick={gate.guard(onReply, 'reply')}>Reply</button>
         )}
       </div>
       <button
         className={`md-comment-like ${liked ? 'md-comment-like--liked' : ''}`}
-        onClick={handleLike}
-        disabled={!address || liked || liking}
-        title={!address ? 'Connect wallet to like' : liked ? 'Liked' : 'Like'}
+        {...gate.lockProps('like')}
+        onClick={e => { e.stopPropagation(); gate.guard(handleLike, 'like')() }}
+        disabled={!gate.locked && liking}
+        title={gate.locked ? undefined : liked ? 'Unlike' : 'Like'}
       >
         <span className="md-comment-like-icon">♥</span>
         {likeCount > 0 && <span className="md-comment-like-count">{likeCount}</span>}
@@ -104,11 +90,10 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
   )
 }
 
-function CommentThread({ node, jobId, source, address, depth = 0, onOpenProfile, onReplyPosted }: {
+function CommentThread({ node, source, memeId, depth = 0, onOpenProfile, onReplyPosted }: {
   node: CommentNode
-  jobId: string
-  source: string
-  address: string | null
+  source: CommentSource
+  memeId: string
   depth?: number
   onOpenProfile?: (wallet: string) => void
   onReplyPosted: () => void
@@ -119,10 +104,10 @@ function CommentThread({ node, jobId, source, address, depth = 0, onOpenProfile,
 
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!address || !replyText.trim() || posting) return
+    if (!replyText.trim() || posting) return
     setPosting(true)
     try {
-      await postComment(jobId, source, address, replyText.trim(), node.id)
+      await postComment(source, memeId, replyText.trim(), node.id)
       setReplyText('')
       setReplying(false)
       onReplyPosted()
@@ -133,9 +118,9 @@ function CommentThread({ node, jobId, source, address, depth = 0, onOpenProfile,
     <div className={`md-thread${depth > 0 ? ' md-thread--nested' : ''}`}>
       <CommentRow
         comment={node}
-        address={address}
         onOpenProfile={onOpenProfile}
-        onReply={address ? () => setReplying(r => !r) : undefined}
+        // Replies are one level deep (the server threads replies under top-level comments)
+        onReply={depth === 0 ? () => setReplying(r => !r) : undefined}
       />
       {replying && (
         <form className="md-reply-form" onSubmit={handleReply}>
@@ -159,10 +144,9 @@ function CommentThread({ node, jobId, source, address, depth = 0, onOpenProfile,
             <CommentThread
               key={r.id}
               node={r}
-              jobId={jobId}
               source={source}
-              address={address}
-              depth={Math.min(depth + 1, 3)}
+              memeId={memeId}
+              depth={depth + 1}
               onOpenProfile={onOpenProfile}
               onReplyPosted={onReplyPosted}
             />
@@ -174,35 +158,37 @@ function CommentThread({ node, jobId, source, address, depth = 0, onOpenProfile,
 }
 
 interface Props {
-  jobId: string
-  source: string
-  address: string | null
+  /** Which kind of meme: Meme Factory jobs, Studio memes or Reddit posts */
+  source: CommentSource
+  memeId: string
   onOpenProfile?: (wallet: string) => void
 }
 
-export function CommentSection({ jobId, source, address, onOpenProfile }: Props) {
+export function CommentSection({ source, memeId, onOpenProfile }: Props) {
+  const { wallet } = useMemberGate()
   const [comments, setComments]           = useState<Comment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(true)
   const [commentText, setCommentText]     = useState('')
   const [posting, setPosting]             = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Reload when the meme changes, and when the visitor joins (your_like becomes known)
   useEffect(() => {
     setComments([])
     setCommentsLoading(true)
-    fetchComments(source, jobId, address ?? undefined)
+    fetchComments(source, memeId)
       .then(setComments)
       .finally(() => setCommentsLoading(false))
-  }, [jobId, source, address])
+  }, [source, memeId, wallet])
 
-  const reload = () => fetchComments(source, jobId, address ?? undefined).then(setComments)
+  const reload = () => fetchComments(source, memeId).then(setComments)
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!address || !commentText.trim() || posting) return
+    if (!commentText.trim() || posting) return
     setPosting(true)
     try {
-      await postComment(jobId, source, address, commentText.trim())
+      await postComment(source, memeId, commentText.trim())
       setCommentText('')
       await reload()
     } catch { /* ignore */ } finally { setPosting(false) }
@@ -214,7 +200,7 @@ export function CommentSection({ jobId, source, address, onOpenProfile }: Props)
         Replies {!commentsLoading && <span className="md-comments-count">({comments.length})</span>}
       </h3>
 
-      {address ? (
+      <MemberGate reason="reply">
         <form className="md-comment-form" onSubmit={handleComment}>
           <input
             ref={inputRef}
@@ -228,9 +214,7 @@ export function CommentSection({ jobId, source, address, onOpenProfile }: Props)
             {posting ? '…' : 'Reply'}
           </button>
         </form>
-      ) : (
-        <p className="md-comment-gate">Connect wallet to reply</p>
-      )}
+      </MemberGate>
 
       {commentsLoading ? (
         <div style={{ color: '#444', fontSize: 13, padding: '24px 0' }}>Loading…</div>
@@ -242,9 +226,8 @@ export function CommentSection({ jobId, source, address, onOpenProfile }: Props)
             <CommentThread
               key={node.id}
               node={node}
-              jobId={jobId}
               source={source}
-              address={address}
+              memeId={memeId}
               onOpenProfile={onOpenProfile}
               onReplyPosted={reload}
             />

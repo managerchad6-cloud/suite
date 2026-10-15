@@ -5,6 +5,8 @@ import { NotificationBell } from './NotificationPanel'
 import { CreditBalance } from './CreditBalance'
 import { GlobalSearch } from './GlobalSearch'
 import type { PlayerState } from '../api/player'
+import { useIdentity } from '../identity/IdentityProvider'
+import { profileImage } from '../identity/api'
 import './TopNav.css'
 
 const NAV_H = 54
@@ -17,22 +19,19 @@ interface NavItem {
 }
 
 interface Props {
-  address: string
   playerState: PlayerState | null
-  avatar: string | null
-  avatarFallback?: string | null
   location: Location
   navItems: readonly NavItem[]
   navigate: (path: string) => void
-  onDisconnect: () => void
   onOpenChat: (wallet?: string) => void
   onOpenMessages: (rect: DOMRect) => void
 }
 
 export function TopNav({
-  address, playerState, avatar, avatarFallback,
-  location, navItems, navigate, onDisconnect, onOpenChat, onOpenMessages,
+  playerState, location, navItems, navigate, onOpenChat, onOpenMessages,
 }: Props) {
+  const { status, memberWallet, profile, join, signOut } = useIdentity()
+  const avatar = profile ? profileImage(profile) : null
   const [visible, setVisible] = useState(true)
   const lastY = useRef(0)
 
@@ -109,37 +108,40 @@ export function TopNav({
             🌐
           </a>
 
-          <button
-            className={`topnav-profile${location.pathname === '/profile' ? ' active' : ''}`}
-            onClick={() => navigate('/profile')}
-            title="My Profile"
-          >
-            {avatar
-              ? <img
-                  src={avatar}
-                  alt="profile"
-                  className="topnav-avatar"
-                  onError={e => {
-                    if (avatarFallback) { e.currentTarget.onerror = null; e.currentTarget.src = avatarFallback }
-                    else e.currentTarget.style.display = 'none'
-                  }}
-                />
-              : <span className="topnav-avatar-placeholder">?</span>}
-            <div className="topnav-profile-info">
-              <span className="topnav-wallet">{truncateAddress(address)}</span>
-              {playerState && (
-                <span className="topnav-xp">⚡ {(playerState.total_xp ?? 0).toLocaleString()} XP</span>
-              )}
-            </div>
-          </button>
+          {status === 'member' && memberWallet ? (
+            <>
+              <button
+                className={`topnav-profile${location.pathname === '/profile' ? ' active' : ''}`}
+                onClick={() => navigate('/profile')}
+                title="My Profile"
+              >
+                {avatar
+                  ? <img src={avatar} alt="profile" className="topnav-avatar" />
+                  : <span className="topnav-avatar-placeholder">?</span>}
+                <div className="topnav-profile-info">
+                  <span className="topnav-wallet">{truncateAddress(memberWallet)}</span>
+                  {playerState && (
+                    <span className="topnav-xp">⚡ {(playerState.total_xp ?? 0).toLocaleString()} XP</span>
+                  )}
+                </div>
+              </button>
 
-          <div data-zad-target="credits" style={{ display: 'contents' }}>
-            <CreditBalance wallet={address} />
-          </div>
+              <div data-zad-target="credits" style={{ display: 'contents' }}>
+                <CreditBalance />
+              </div>
 
-          <NotificationBell wallet={address} onNavigate={navigate} onOpenChat={onOpenChat} onOpenMessages={onOpenMessages} />
+              <NotificationBell onNavigate={navigate} onOpenChat={onOpenChat} onOpenMessages={onOpenMessages} />
 
-          <button className="topnav-disconnect" onClick={onDisconnect}>Disconnect</button>
+              <button className="topnav-disconnect" onClick={signOut}>Sign out</button>
+            </>
+          ) : (
+            <>
+              <button className="suite-nav-join topnav-join" onClick={() => join()}>
+                {status === 'pending' ? 'Finish joining' : 'Join'}
+              </button>
+              {status === 'pending' && <button className="topnav-disconnect" onClick={signOut}>Sign out</button>}
+            </>
+          )}
         </div>
       </div>
     </header>

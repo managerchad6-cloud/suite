@@ -5,29 +5,20 @@ import { fetchMetadata, type JobMetadata } from '../api/memes'
 import { truncateAddress } from '../wallet'
 import { CommentSection } from '../components/CommentSection'
 import { MemeTweetGallery } from '../components/MemeTweetGallery'
+import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
 import type { UnifiedMemeItem } from '../types/unified'
 import '../studio-meme-detail.css'
 
 // ── Creator row (shared with StudioMemeDetail) ────────────────────────────────
 
-type CachedProfile = { character: string; portraitDataUrl?: string } | null
-const _cache = new Map<string, Promise<CachedProfile>>()
-function getProfile(wallet: string): Promise<CachedProfile> {
-  if (!_cache.has(wallet)) {
-    _cache.set(wallet,
-      fetch(`/profiles/${encodeURIComponent(wallet)}`)
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null)
-    )
-  }
-  return _cache.get(wallet)!
-}
+type CachedProfile = PublicProfile | null
+const getProfile = getPublicProfile
 
 function CreatorRow({ wallet }: { wallet: string }) {
   const navigate = useNavigate()
   const [profile, setProfile] = useState<CachedProfile | undefined>(undefined)
   useEffect(() => { getProfile(wallet).then(setProfile) }, [wallet])
-  const src = profile?.portraitDataUrl ?? (profile ? `/assets/chars/${profile.character}.png` : null)
+  const src = profile ? bestImage(profile) : null
   return (
     <div
       className="smd-creator-row smd-creator-row--clickable"
@@ -118,14 +109,13 @@ const BADGE_LABEL: Record<string, string> = {
 
 interface Props {
   item: UnifiedMemeItem
-  address: string | null
   onBack: () => void
   onOpenCharacter?: (name: string) => void
   onRemix?: (sourceId: string) => void
   onOpenSourceMeme?: (sourceId: string) => void
 }
 
-export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRemix, onOpenSourceMeme }: Props) {
+export function UnifiedMemeDetail({ item, onBack, onOpenCharacter, onRemix, onOpenSourceMeme }: Props) {
   const navigate = useNavigate()
   const [studioMeta,  setStudioMeta]  = useState<StudioMeme | null>(null)
   const [factoryMeta, setFactoryMeta] = useState<JobMetadata | null>(null)
@@ -388,9 +378,8 @@ export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRe
           {/* Comments — for studio and factory; reddit links to thread */}
           {item.type !== 'reddit' ? (
             <CommentSection
-              jobId={item.sourceId}
               source={item.type}
-              address={address}
+              memeId={item.sourceId}
               onOpenProfile={w => navigate(`/u/${encodeURIComponent(w)}`)}
             />
           ) : item.redditPermalink ? (

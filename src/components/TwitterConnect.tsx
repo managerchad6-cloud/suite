@@ -24,7 +24,7 @@ export function TwitterConnect({ wallet }: Props) {
   const xMetrics = useXMetrics(wallet)
 
   const refresh = useCallback(async () => {
-    const sh = await fetchMyShares(wallet)
+    const sh = await fetchMyShares()
     setShares(sh)
     setLoading(false)
   }, [wallet])

@@ -4,27 +4,26 @@ import { fetchStudioMemesByWallet, studioMemeImageUrl, type StudioMeme } from '.
 import { fetchFollowStats, toggleFollow, checkIsFollowing } from '../api/follow'
 import { fetchFriendStatus, sendFriendRequest, respondToFriendRequest, type FriendStatus } from '../api/friends'
 import { CHARACTERS } from '../data/characterLore'
+import { bestImage, getPublicProfile, type PublicProfile } from '../identity/api'
+import { displayName } from '../identity/archetypes'
+import { useMemberGate } from '../identity/gate'
+
 import { CommentSection } from '../components/CommentSection'
 
-type RemoteProfile = { character: string; title?: string; portraitDataUrl?: string } | null
-
-async function fetchRemoteProfile(wallet: string): Promise<RemoteProfile> {
-  try {
-    const r = await fetch(`/profiles/${encodeURIComponent(wallet)}`)
-    return r.ok ? r.json() : null
-  } catch { return null }
-}
+type RemoteProfile = PublicProfile | null
+const fetchRemoteProfile = getPublicProfile
 
 interface Props {
   wallet: string
-  address: string | null
   onBack: () => void
   onOpenDetail?: (meme: Meme) => void
   onOpenProfile?: (wallet: string) => void
   onOpenMessages?: (wallet: string) => void
 }
 
-export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenProfile, onOpenMessages }: Props) {
+export function PublicProfile({ wallet, onBack, onOpenDetail, onOpenProfile, onOpenMessages }: Props) {
+  const gate = useMemberGate()
+  const address = gate.wallet
   const [profile,      setProfile]      = useState<RemoteProfile | undefined>(undefined)
   const [memes,        setMemes]        = useState<Meme[]>([])
   const [studioMemes,  setStudioMemes]  = useState<StudioMeme[]>([])
@@ -48,8 +47,8 @@ export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenPro
     }).finally(() => setMemesLoading(false))
     fetchFollowStats(wallet).then(s => { setFollowers(s.followers); setFollowing(s.following) })
     if (address) {
-      checkIsFollowing(address, wallet).then(setIsFollowing)
-      fetchFriendStatus(address, wallet).then(r => { setFriendStatus(r.status); setFriendRequestId(r.request_id) })
+      checkIsFollowing(wallet).then(setIsFollowing)
+      fetchFriendStatus(wallet).then(r => { setFriendStatus(r.status); setFriendRequestId(r.request_id) })
     }
   }, [wallet, address])
 
@@ -63,7 +62,7 @@ export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenPro
     if (!address || followPending) return
     setFollowPending(true)
     try {
-      const result = await toggleFollow(address, wallet)
+      const result = await toggleFollow(wallet)
       setIsFollowing(result.is_following)
       setFollowers(result.follower_count)
     } catch { /* ignore */ } finally { setFollowPending(false) }
@@ -74,7 +73,7 @@ export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenPro
     setFriendPending(true)
     try {
       if (friendStatus === 'none' || friendStatus === undefined) {
-        const r = await sendFriendRequest(address, wallet)
+        const r = await sendFriendRequest(wallet)
         setFriendStatus(r.status)
         setFriendRequestId(r.request_id)
       } else if (friendStatus === 'pending_received' && friendRequestId) {
@@ -84,12 +83,10 @@ export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenPro
     } catch { /* ignore */ } finally { setFriendPending(false) }
   }
 
-  const charData     = profile ? CHARACTERS.find(c => c.key === profile.character) ?? null : null
-  const stockSrc     = charData
-    ? `/assets/chars/${charData.file}.${charData.ext}`
-    : profile ? `/assets/chars/${profile.character}.png` : null
-  const baseCharName = charData?.name ?? profile?.character ?? null
-  const charName = baseCharName && profile?.title ? `${profile.title} ${baseCharName}` : baseCharName
+  const charData  = profile ? CHARACTERS.find(c => c.key === profile.archetype) ?? null : null
+  // The hero shows the full character art; the round portrait is for chips and avatars
+  const avatar    = profile ? profile.avatarUrl ?? bestImage(profile) : null
+  const charName  = profile ? (charData && !profile.title ? charData.name : displayName(profile)) : null
 
   return (
     <div className="pub-profile-page">
@@ -106,22 +103,7 @@ export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenPro
           {profile === undefined ? (
             <div className="pub-profile-avatar-pulse" />
           ) : profile ? (
-            <img
-              src={`/profiles/${encodeURIComponent(wallet)}/portrait/full`}
-              alt={charName ?? ''}
-              className="pub-profile-avatar-img"
-              onError={e => {
-                const img = e.currentTarget
-                if (!img.dataset.triedPfp) {
-                  img.dataset.triedPfp = '1'
-                  img.onerror = () => { img.onerror = null; if (stockSrc) img.src = stockSrc }
-                  img.src = `/profiles/${encodeURIComponent(wallet)}/portrait`
-                } else {
-                  img.onerror = null
-                  if (stockSrc) img.src = stockSrc
-                }
-              }}
-            />
+            <img src={avatar ?? ''} alt={charName ?? ''} className="pub-profile-avatar-img" />
           ) : (
             <div className="pub-profile-avatar-fallback">{wallet.slice(0, 2).toUpperCase()}</div>
           )}
@@ -162,19 +144,20 @@ export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenPro
           </div>
 
           {/* ── Follow / Friend / Message actions ── */}
-          {address ? (
-            <div className="pub-profile-actions">
+          <div className="pub-profile-actions">
               <button
                 className={`pub-profile-follow-btn ${isFollowing ? 'pub-profile-follow-btn--following' : ''}`}
-                onClick={handleFollow}
-                disabled={followPending}
+                {...gate.lockProps('follow')}
+                onClick={gate.guard(handleFollow, 'follow')}
+                disabled={!gate.locked && followPending}
               >
                 {followPending ? '…' : isFollowing ? '✓ Following' : '+ Follow'}
               </button>
               <button
                 className={`pub-profile-friend-btn ${friendStatus === 'friends' ? 'pub-profile-friend-btn--active' : ''}`}
-                onClick={handleFriendAction}
-                disabled={friendPending || friendStatus === 'pending_sent' || friendStatus === 'friends'}
+                {...gate.lockProps('add friends')}
+                onClick={gate.guard(handleFriendAction, 'add friends')}
+                disabled={!gate.locked && (friendPending || friendStatus === 'pending_sent' || friendStatus === 'friends')}
               >
                 {friendPending ? '…'
                   : friendStatus === 'friends' ? '✓ Friends'
@@ -183,14 +166,15 @@ export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenPro
                   : '🤝 Add Friend'}
               </button>
               {onOpenMessages && (
-                <button className="pub-profile-message-btn" onClick={() => onOpenMessages(wallet)}>
+                <button
+                  className="pub-profile-message-btn"
+                  {...gate.lockProps('message')}
+                  onClick={gate.guard(() => onOpenMessages(wallet), 'message')}
+                >
                   ✉️ Message
                 </button>
               )}
-            </div>
-          ) : (
-            <span className="pub-profile-follow-hint">Connect wallet to follow</span>
-          )}
+          </div>
         </div>
       </div>
 
@@ -242,7 +226,7 @@ export function PublicProfile({ wallet, address, onBack, onOpenDetail, onOpenPro
       {/* ── Wall ── */}
       <div className="profile-section">
         <h3 className="profile-section-title">Wall</h3>
-        <CommentSection jobId={wallet} source="profile" address={address} onOpenProfile={onOpenProfile} />
+        <CommentSection source="profile" memeId={wallet} onOpenProfile={onOpenProfile} />
       </div>
 
     </div>

@@ -1,3 +1,8 @@
+import { api } from './client'
+
+// Reading the forum is public (your_like is filled in for members); posting and liking act as
+// the signed-in member.
+
 export const ADMIN_WALLET = 'VVCAdmin'
 
 export interface ForumBoard {
@@ -73,125 +78,53 @@ export interface ForumTopThread {
 }
 
 export async function fetchBoards(): Promise<ForumBoard[]> {
-  try {
-    const res = await fetch('/api/forum/boards')
-    if (!res.ok) return []
-    return res.json()
-  } catch {
-    return []
-  }
+  try { return await api('/api/forum/boards') } catch { return [] }
 }
 
 export async function fetchStats(): Promise<ForumStats | null> {
-  try {
-    const res = await fetch('/api/forum/stats')
-    if (!res.ok) return null
-    return res.json()
-  } catch {
-    return null
-  }
+  try { return await api('/api/forum/stats') } catch { return null }
 }
 
 export async function fetchThreads(
   page = 1,
-  wallet?: string,
   sort: 'latest' | 'top' | 'unanswered' = 'latest',
   q?: string,
   boardId?: string,
 ): Promise<{ items: ForumThread[]; has_more: boolean }> {
   try {
     const params = new URLSearchParams({ page: String(page), limit: '20', sort })
-    if (wallet)  params.set('wallet', wallet)
     if (q)       params.set('q', q)
     if (boardId) params.set('board_id', boardId)
-    const res = await fetch(`/api/forum/threads?${params}`)
-    if (!res.ok) return { items: [], has_more: false }
-    return res.json()
+    return await api(`/api/forum/threads?${params}`)
   } catch {
     return { items: [], has_more: false }
   }
 }
 
-export async function fetchThread(id: string, wallet?: string): Promise<ForumThreadDetail | null> {
-  try {
-    const q = wallet ? `?wallet=${encodeURIComponent(wallet)}` : ''
-    const res = await fetch(`/api/forum/threads/${encodeURIComponent(id)}${q}`)
-    if (!res.ok) return null
-    return res.json()
-  } catch {
-    return null
-  }
+export async function fetchThread(id: string): Promise<ForumThreadDetail | null> {
+  try { return await api(`/api/forum/threads/${encodeURIComponent(id)}`) } catch { return null }
 }
 
-export async function createThread(
-  wallet: string,
-  title: string,
-  body: string,
-  tags: string[] = [],
-  boardId = 'general',
-): Promise<ForumThread> {
-  const res = await fetch('/api/forum/threads', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet, title, body, tags, board_id: boardId }),
-  })
-  if (!res.ok) throw new Error('Failed to create thread')
-  return res.json()
+export function createThread(title: string, body: string, tags: string[] = [], boardId = 'general'): Promise<ForumThread> {
+  return api('/api/forum/threads', { method: 'POST', body: { title, body, tags, board_id: boardId } })
 }
 
-export async function postReply(
-  threadId: string,
-  wallet: string,
-  body: string,
-  parentId?: string | null,
-): Promise<ForumReply> {
-  const res = await fetch('/api/forum/replies', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ thread_id: threadId, wallet, body, parent_id: parentId ?? null }),
-  })
-  if (!res.ok) throw new Error('Failed to post reply')
-  return res.json()
+export function postReply(threadId: string, body: string, parentId?: string | null): Promise<ForumReply> {
+  return api('/api/forum/replies', { method: 'POST', body: { thread_id: threadId, body, parent_id: parentId ?? null } })
 }
 
-export async function likeThread(id: string, wallet: string): Promise<{ like_count: number; your_like: boolean }> {
-  const res = await fetch(`/api/forum/threads/${encodeURIComponent(id)}/like`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) throw new Error('Failed to like thread')
-  return res.json()
+export function likeThread(id: string): Promise<{ like_count: number; your_like: boolean }> {
+  return api(`/api/forum/threads/${encodeURIComponent(id)}/like`, { method: 'POST' })
 }
 
-export async function likeReply(id: string, wallet: string): Promise<{ like_count: number; your_like: boolean }> {
-  const res = await fetch(`/api/forum/replies/${encodeURIComponent(id)}/like`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) throw new Error('Failed to like reply')
-  return res.json()
+export function likeReply(id: string): Promise<{ like_count: number; your_like: boolean }> {
+  return api(`/api/forum/replies/${encodeURIComponent(id)}/like`, { method: 'POST' })
 }
 
 export async function fetchTopMembers(boardId?: string): Promise<ForumMember[]> {
-  try {
-    const q = boardId ? `?board_id=${encodeURIComponent(boardId)}` : ''
-    const res = await fetch(`/api/forum/top-members${q}`)
-    if (!res.ok) return []
-    return res.json()
-  } catch {
-    return []
-  }
+  try { return await api(`/api/forum/top-members${boardId ? `?board_id=${encodeURIComponent(boardId)}` : ''}`) } catch { return [] }
 }
 
 export async function fetchTopThreads(boardId?: string): Promise<ForumTopThread[]> {
-  try {
-    const q = boardId ? `?board_id=${encodeURIComponent(boardId)}` : ''
-    const res = await fetch(`/api/forum/top-threads${q}`)
-    if (!res.ok) return []
-    return res.json()
-  } catch {
-    return []
-  }
+  try { return await api(`/api/forum/top-threads${boardId ? `?board_id=${encodeURIComponent(boardId)}` : ''}`) } catch { return [] }
 }

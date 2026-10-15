@@ -1,4 +1,5 @@
-const VVC_API_KEY = ''
+import { api } from './client'
+
 const MODEL       = 'nano-banana-pro-preview'
 
 const GEMINI_KEY_STORAGE = 'vvc_gemini_key'
@@ -17,9 +18,10 @@ export function hasUserGeminiKey(): boolean {
   return !!k && k.length > 0
 }
 
-function getActiveKey(): string {
-  return getUserGeminiKey() ?? VVC_API_KEY
-}
+// Without your own key, image calls run on memestudio-backend: Studio's credit charge
+// (deductCredits) returns a ticket good for that many images, and each call spends one.
+let aiTicket: string | null = null
+export function setAiTicket(ticket: string | null) { aiTicket = ticket }
 
 export const LEGENDARY_CHARS = new Set(['gad', 'zad', 'bad', 'gizzard', 'wizard', 'grandwizard', 'wraith'])
 
@@ -376,6 +378,15 @@ export async function generativeExpand(
 // ─── Gemini image call ────────────────────────────────────────────────────────
 
 async function callGeminiImage(base64: string, mimeType: string, prompt: string): Promise<string> {
+  const ownKey = getUserGeminiKey()
+  if (!ownKey) {
+    if (!aiTicket) throw new Error('No credits charged for this image')
+    const out = await api<{ mime_type: string; data: string }>('/api/ai/image', {
+      method: 'POST', body: { ticket: aiTicket, prompt, image: { mime_type: mimeType, data: base64 } },
+    })
+    return base64ToBlobUrl(out.data, out.mime_type)
+  }
+
   const body = JSON.stringify({
     contents: [{
       parts: [
@@ -387,7 +398,7 @@ async function callGeminiImage(base64: string, mimeType: string, prompt: string)
   })
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${getActiveKey()}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${ownKey}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
   )
 
@@ -405,11 +416,14 @@ async function callGeminiImage(base64: string, mimeType: string, prompt: string)
   if (!imgPart) throw new Error('No image in Gemini response')
 
   const imgData  = imgPart.inlineData ?? imgPart.inline_data
-  const byteChars = atob(imgData.data)
+  return base64ToBlobUrl(imgData.data, imgData.mimeType ?? imgData.mime_type)
+}
+
+function base64ToBlobUrl(data: string, mimeType: string): string {
+  const byteChars = atob(data)
   const byteArr  = new Uint8Array(byteChars.length)
   for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i)
-  const outBlob  = new Blob([byteArr], { type: imgData.mimeType ?? imgData.mime_type })
-  return URL.createObjectURL(outBlob)
+  return URL.createObjectURL(new Blob([byteArr], { type: mimeType }))
 }
 
 // ─── Portrait prompts (PFP generation — white BG, no removal needed) ─────────

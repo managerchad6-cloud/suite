@@ -3,13 +3,14 @@ import {
   fetchConversations, fetchThread, sendMessage, markThreadRead,
   type Conversation, type DirectMessage,
 } from '../api/messages'
-import { loadProfilesBatch } from '../lib/quizLog'
+import { getPublicProfiles, type PublicProfile } from '../identity/api'
+import { displayName } from '../identity/archetypes'
+import { useIdentity } from '../identity/IdentityProvider'
 import './ChatWidget.css'
 
 const POLL_MS = 6000
 
 interface Props {
-  address: string
   open: boolean
   partner: string | null
   anchorRect?: DOMRect | null
@@ -17,9 +18,11 @@ interface Props {
   onPartnerChange: (partner: string | null) => void
 }
 
-export function ChatWidget({ address, open, partner, anchorRect, onOpenChange, onPartnerChange }: Props) {
+// Your direct messages (rendered for members only)
+export function ChatWidget({ open, partner, anchorRect, onOpenChange, onPartnerChange }: Props) {
+  const address = useIdentity().memberWallet ?? ''
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [profiles, setProfiles] = useState<Record<string, { character?: string; title?: string; portraitDataUrl?: string }>>({})
+  const [profiles, setProfiles] = useState<Record<string, PublicProfile>>({})
   const [thread, setThread] = useState<DirectMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -42,13 +45,13 @@ export function ChatWidget({ address, open, partner, anchorRect, onOpenChange, o
   useEffect(() => {
     let stop = false
     const load = () => {
-      fetchConversations(address).then(async d => {
+      fetchConversations().then(async d => {
         if (stop) return
         setConversations(d.items)
         setUnreadTotal(d.unread_total)
         const wallets = d.items.map(i => i.partner)
         if (partner && !wallets.includes(partner)) wallets.push(partner)
-        if (wallets.length) setProfiles(await loadProfilesBatch(wallets))
+        if (wallets.length) setProfiles(await getPublicProfiles(wallets))
       })
     }
     load()
@@ -61,10 +64,10 @@ export function ChatWidget({ address, open, partner, anchorRect, onOpenChange, o
     if (!open || !partner) return
     let stop = false
     const load = () => {
-      fetchThread(address, partner).then(rows => { if (!stop) setThread(rows) })
+      fetchThread(partner).then(rows => { if (!stop) setThread(rows) })
     }
     load()
-    markThreadRead(address, partner).catch(() => {})
+    markThreadRead(partner)
     const id = setInterval(load, POLL_MS)
     return () => { stop = true; clearInterval(id) }
   }, [address, partner, open])
@@ -77,7 +80,7 @@ export function ChatWidget({ address, open, partner, anchorRect, onOpenChange, o
     if (!partner || !draft.trim() || sending) return
     setSending(true)
     try {
-      const msg = await sendMessage(address, partner, draft.trim())
+      const msg = await sendMessage(partner, draft.trim())
       setThread(prev => [...prev, msg])
       setDraft('')
     } catch { /* ignore */ } finally { setSending(false) }
@@ -85,7 +88,7 @@ export function ChatWidget({ address, open, partner, anchorRect, onOpenChange, o
 
   function profileFor(wallet: string) {
     const p = profiles[wallet]
-    return p?.character ? `${p.title ? `${p.title} ` : ''}${p.character}` : `${wallet.slice(0, 6)}…${wallet.slice(-4)}`
+    return p ? displayName(p) : `${wallet.slice(0, 6)}…${wallet.slice(-4)}`
   }
 
   if (!open) return null

@@ -1,49 +1,32 @@
+import { api } from './client'
+
+// Follower counts and lists are public; following someone and "do I follow them?" are yours (session).
+
 export interface FollowStats {
   followers: number
   following: number
 }
 
 export async function fetchFollowStats(wallet: string): Promise<FollowStats> {
-  try {
-    const r = await fetch(`/api/follow/stats/${encodeURIComponent(wallet)}`)
-    return r.ok ? r.json() : { followers: 0, following: 0 }
-  } catch { return { followers: 0, following: 0 } }
+  try { return await api(`/api/follow/stats/${encodeURIComponent(wallet)}`) } catch { return { followers: 0, following: 0 } }
 }
 
 export async function fetchFollowing(wallet: string): Promise<string[]> {
-  try {
-    const r = await fetch(`/api/follow/following/${encodeURIComponent(wallet)}`)
-    return r.ok ? r.json() : []
-  } catch { return [] }
+  try { return await api(`/api/follow/following/${encodeURIComponent(wallet)}`) } catch { return [] }
 }
 
 export async function fetchFollowers(wallet: string): Promise<string[]> {
-  try {
-    const r = await fetch(`/api/follow/followers/${encodeURIComponent(wallet)}`)
-    return r.ok ? r.json() : []
-  } catch { return [] }
+  try { return await api(`/api/follow/followers/${encodeURIComponent(wallet)}`) } catch { return [] }
 }
 
-export async function toggleFollow(
-  follower: string,
-  following: string,
-): Promise<{ is_following: boolean; follower_count: number }> {
-  const r = await fetch('/api/follow', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ follower, following }),
-  })
-  if (!r.ok) throw new Error('Follow request failed')
-  return r.json()
+/** Follow or unfollow `wallet` as the signed-in member. */
+export function toggleFollow(wallet: string): Promise<{ is_following: boolean; follower_count: number }> {
+  return api('/api/follow', { method: 'POST', body: { following: wallet } })
 }
 
-export async function checkIsFollowing(follower: string, following: string): Promise<boolean> {
+/** Whether you follow `wallet` (false for guests). */
+export async function checkIsFollowing(wallet: string): Promise<boolean> {
   try {
-    const r = await fetch(
-      `/api/follow/check?follower=${encodeURIComponent(follower)}&following=${encodeURIComponent(following)}`,
-    )
-    if (!r.ok) return false
-    const data = await r.json()
-    return data.is_following
+    return (await api<{ is_following: boolean }>(`/api/follow/check?following=${encodeURIComponent(wallet)}`)).is_following
   } catch { return false }
 }
