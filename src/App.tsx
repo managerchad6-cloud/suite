@@ -25,6 +25,13 @@ import { profileImage } from './identity/api'
 
 type View = 'live' | 'memes' | 'factory' | 'vote' | 'characters' | 'quiz' | 'profile' | 'prizes' | 'studio' | 'brackets'
 
+// Deep links from other VVC sites, e.g. the viewer's "Vote in the VVC Suite" → ?view=vote
+const PUBLIC_VIEWS: View[] = ['live', 'memes', 'factory', 'vote', 'characters', 'prizes', 'studio', 'brackets']
+function initialView(): View {
+  const v = new URLSearchParams(window.location.search).get('view') as View | null
+  return v && PUBLIC_VIEWS.includes(v) ? v : 'live'
+}
+
 function NavIdentity({ playerState, onOpenProfile, active }: {
   playerState: PlayerState | null
   onOpenProfile: () => void
@@ -69,7 +76,7 @@ function NavIdentity({ playerState, onOpenProfile, active }: {
 
 export default function App() {
   const { status, wallet, memberWallet } = useIdentity()
-  const [view,          setView]          = useState<View>('live')
+  const [view,          setView]          = useState<View>(initialView)
   const [playerState,   setPlayerState]   = useState<PlayerState | null>(null)
   const [rankUp,        setRankUp]        = useState<{ from: string; to: string; direction: string } | null>(null)
   const [unifiedDetail, setUnifiedDetail] = useState<UnifiedMemeItem | null>(null)
