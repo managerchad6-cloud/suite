@@ -10,3 +10,4 @@ public/assets/cast/
 
 # Local env (Vite): never committed
 *.local
+.env.production
