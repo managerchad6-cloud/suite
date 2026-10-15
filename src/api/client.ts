@@ -10,10 +10,13 @@
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
-  constructor(status: number, code: string, message: string) {
+  /** The server's whole error body, for endpoints that send more (e.g. 402 {required, balance}) */
+  readonly data: Record<string, unknown>
+  constructor(status: number, code: string, message: string, data: Record<string, unknown> = {}) {
     super(message)
     this.status = status
     this.code = code
+    this.data = data
   }
 }
 
@@ -53,7 +56,7 @@ async function toError(res: Response): Promise<ApiError> {
   // Services disagree on the field name: identity {message}, memestudio/MF {detail}, livestream {error}
   const data = await res.json().catch(() => null) as { code?: string; message?: string; detail?: string; error?: string } | null
   const message = data?.message ?? data?.detail ?? data?.error ?? `Request failed (${res.status})`
-  return new ApiError(res.status, data?.code ?? `http_${res.status}`, message)
+  return new ApiError(res.status, data?.code ?? `http_${res.status}`, message, (data ?? {}) as Record<string, unknown>)
 }
 
 /** JSON request to one of our own services. Resolves with the parsed body (undefined for 204). */

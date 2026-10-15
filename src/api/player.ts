@@ -1,3 +1,5 @@
+import { api } from './client'
+
 export interface PlayerState {
   wallet: string
   chad_xp: number
@@ -40,16 +42,15 @@ export async function fetchPlayerTimeline(wallet: string, limit = 30): Promise<A
   return res.json()
 }
 
-export async function recordLogin(wallet: string): Promise<{
+/** Daily login for the signed-in member (idempotent per day). */
+export async function recordLogin(): Promise<{
   already_logged?: boolean
   streak?: number
   xp_awarded?: number
   rank?: string
   ranked_up?: boolean
 }> {
-  const res = await fetch(`/api/player/${encodeURIComponent(wallet)}/login`, { method: 'POST' })
-  if (!res.ok) return {}
-  return res.json()
+  try { return await api('/api/player/login', { method: 'POST' }) } catch { return {} }
 }
 
 export const RANK_DISPLAY: Record<string, { label: string; color: string; bg: string }> = {

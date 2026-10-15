@@ -1,3 +1,5 @@
+import { api } from './client'
+
 export interface Character {
   id: string
   name: string
@@ -32,30 +34,15 @@ export const RARITY_COLOR: Record<string, string> = {
   legendary: '#FFD700',
 }
 
-export async function fetchCharacters(wallet?: string): Promise<Character[]> {
-  const url = `/api/characters${wallet ? `?wallet=${encodeURIComponent(wallet)}` : ''}`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('Failed to fetch characters')
-  return res.json()
+/** The roster; for a signed-in member it includes their collection state. */
+export function fetchCharacters(): Promise<Character[]> {
+  return api('/api/characters')
 }
 
-export async function unlockCharacter(id: string, wallet: string): Promise<void> {
-  const res = await fetch(`/api/characters/${encodeURIComponent(id)}/unlock`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Unlock failed')
-  }
+export async function unlockCharacter(id: string): Promise<void> {
+  await api(`/api/characters/${encodeURIComponent(id)}/unlock`, { method: 'POST' })
 }
 
-export async function setMainCharacter(id: string, wallet: string): Promise<void> {
-  const res = await fetch(`/api/characters/${encodeURIComponent(id)}/main`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) throw new Error('Failed to set main')
+export async function setMainCharacter(id: string): Promise<void> {
+  await api(`/api/characters/${encodeURIComponent(id)}/main`, { method: 'POST' })
 }

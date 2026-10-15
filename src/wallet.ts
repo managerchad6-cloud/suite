@@ -71,6 +71,22 @@ export async function tryAutoConnect(): Promise<string | null> {
 }
 
 export function getActiveProvider(): SolanaProvider | null { return _activeProvider }
+
+/**
+ * Provider to sign a payment as `wallet` (the signed-in member). Credits go to the session's
+ * wallet and the server only accepts transactions it signed, so another account is refused here
+ * with a clear message instead of failing later.
+ */
+export async function getSigningProvider(wallet: string): Promise<SolanaProvider> {
+  if (_activeProvider?.publicKey?.toString() !== wallet) await tryAutoConnect().catch(() => null)
+  const p = _activeProvider
+  if (!p) throw new Error('Unlock your wallet extension to pay.')
+  if (p.publicKey?.toString() !== wallet) {
+    throw new Error(`Switch your wallet to ${truncateAddress(wallet)} (the account you joined with) to pay.`)
+  }
+  return p
+}
+
 export function getActiveType():     WalletType | null     { return _activeType }
 
 export function truncateAddress(addr: string): string {

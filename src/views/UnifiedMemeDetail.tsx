@@ -281,7 +281,7 @@ export function UnifiedMemeDetail({ item, onBack }: Props) {
 
           {/* Comments — for studio and factory; reddit links to thread */}
           {item.type !== 'reddit' ? (
-            <CommentSection jobId={item.sourceId} />
+            <CommentSection source={item.type} memeId={item.sourceId} />
           ) : item.redditPermalink ? (
             <a className="smd-reddit-thread-link" href={item.redditPermalink} target="_blank" rel="noopener noreferrer">
               View discussion on Reddit ↗

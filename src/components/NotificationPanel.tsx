@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { api } from '../api/client'
+import { useIdentity } from '../identity/IdentityProvider'
 import { createPortal } from 'react-dom'
 import './NotificationPanel.css'
 
@@ -45,9 +47,9 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-interface Props { wallet: string }
-
-export function NotificationBell({ wallet }: Props) {
+// Member-only (rendered in the member nav): the session decides whose notifications these are
+export function NotificationBell() {
+  const { memberWallet: wallet } = useIdentity()
   const [open,   setOpen]   = useState(false)
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [unread, setUnread] = useState(0)
@@ -57,8 +59,7 @@ export function NotificationBell({ wallet }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   const load = () => {
-    fetch(`/api/notifications/${encodeURIComponent(wallet)}?limit=20`)
-      .then(r => r.ok ? r.json() : { items: [], unread: 0 })
+    api<{ items: Notification[]; unread: number }>('/api/notifications?limit=20')
       .then(d => { setNotifs(d.items ?? []); setUnread(d.unread ?? 0) })
       .catch(() => {})
   }
@@ -90,11 +91,7 @@ export function NotificationBell({ wallet }: Props) {
   }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function markAll() {
-    await fetch('/api/notifications/read_all', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet }),
-    })
+    await api('/api/notifications/read_all', { method: 'POST' }).catch(() => {})
     setUnread(0)
     setNotifs(prev => prev.map(n => ({ ...n, read: 1 })))
   }

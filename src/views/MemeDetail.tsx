@@ -247,7 +247,7 @@ export function MemeDetail({ meme, onBack, onNavigate, onOpenCharacter, onOpenPr
       </div>
 
       {/* ── Comments ── */}
-      <CommentSection jobId={meme.job_id} onOpenProfile={onOpenProfile} />
+      <CommentSection source="factory" memeId={meme.job_id} onOpenProfile={onOpenProfile} />
 
       {onNavigate && (
         <RelatedStrip

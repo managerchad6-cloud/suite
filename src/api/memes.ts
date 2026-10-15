@@ -1,3 +1,5 @@
+import { api } from './client'
+
 const BASE = '';
 
 export interface JobStatus {
@@ -122,8 +124,9 @@ export async function publishHandmade(params: {
   titles?: string[];
   labels?: string[];
   labelLinks?: { text: string; charKey: string | null }[];
-  wallet: string;
-
+  draftId?: string;
+  remixedFrom?: string;
+  draftPayloadInline?: unknown;
 }): Promise<{ job_id: string }> {
   const res = await fetch(`${BASE}/publish/handmade`, {
     method: 'POST',
@@ -247,38 +250,21 @@ export interface DraftPayload extends DraftMeta {
   inActionHasSnapshot: Record<string, boolean>
 }
 
-export async function saveDraft(payload: DraftPayload): Promise<{ id: string }> {
-  const res = await fetch(`${BASE}/drafts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || `Save draft failed: ${res.status}`)
-  }
-  return res.json()
+// Drafts are the signed-in member's own: no wallet in requests, the session decides.
+export function saveDraft(payload: Omit<DraftPayload, 'wallet'> & { wallet?: string }): Promise<{ id: string }> {
+  return api(`${BASE}/drafts`, { method: 'POST', body: payload })
 }
 
-export async function listDrafts(wallet: string): Promise<DraftMeta[]> {
-  const res = await fetch(`${BASE}/drafts?wallet=${encodeURIComponent(wallet)}`)
-  if (!res.ok) throw new Error(`List drafts failed: ${res.status}`)
-  return res.json()
+export function listDrafts(): Promise<DraftMeta[]> {
+  return api(`${BASE}/drafts`)
 }
 
-export async function fetchDraft(id: string, wallet: string): Promise<DraftPayload> {
-  const res = await fetch(`${BASE}/drafts/${encodeURIComponent(id)}?wallet=${encodeURIComponent(wallet)}`)
-  if (!res.ok) throw new Error(`Load draft failed: ${res.status}`)
-  return res.json()
+export function fetchDraft(id: string): Promise<DraftPayload> {
+  return api(`${BASE}/drafts/${encodeURIComponent(id)}`)
 }
 
-export async function deleteDraftById(id: string, wallet: string): Promise<void> {
-  const res = await fetch(`${BASE}/drafts/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet }),
-  })
-  if (!res.ok) throw new Error(`Delete draft failed: ${res.status}`)
+export async function deleteDraftById(id: string): Promise<void> {
+  await api(`${BASE}/drafts/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 // ─── parseMemeId ─────────────────────────────────────────────────────────────

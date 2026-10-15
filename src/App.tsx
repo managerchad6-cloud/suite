@@ -60,8 +60,8 @@ function NavIdentity({ playerState, onOpenProfile, active }: {
           {playerState && <RankBadge rank={playerState.current_rank} size="xs" />}
         </div>
       </button>
-      <CreditBalance wallet={memberWallet} />
-      <NotificationBell wallet={memberWallet} />
+      <CreditBalance />
+      <NotificationBell />
       <button className="suite-nav-disconnect" onClick={signOut}>Sign out</button>
     </>
   )
@@ -92,7 +92,7 @@ export default function App() {
     if (!memberWallet) { setPlayerState(null); return }
     refreshPlayer(memberWallet)
     // Record daily login and handle rank-up
-    recordLogin(memberWallet).then(r => {
+    recordLogin().then(r => {
       if (r.ranked_up && r.rank) {
         const prev = playerState?.current_rank ?? 'basic'
         handleRankUp(prev, r.rank, playerState?.rank_direction ?? 'neutral')

@@ -137,7 +137,7 @@ function CharacterDetail({ char, onBack, onOpenDetail, colState, onCollectionCha
   async function handleUnlock() {
     if (!wallet || busy) return
     setBusy(true)
-    try { await unlockCharacter(char.key, wallet); onCollectionChange?.() }
+    try { await unlockCharacter(char.key); onCollectionChange?.() }
     catch (e: unknown) { alert((e as Error).message) }
     finally { setBusy(false) }
   }
@@ -145,7 +145,7 @@ function CharacterDetail({ char, onBack, onOpenDetail, colState, onCollectionCha
   async function handleSetMain() {
     if (!wallet || busy) return
     setBusy(true)
-    try { await setMainCharacter(char.key, wallet); onCollectionChange?.() }
+    try { await setMainCharacter(char.key); onCollectionChange?.() }
     finally { setBusy(false) }
   }
 
@@ -326,7 +326,7 @@ export function Characters({ onOpenDetail, initialChar }: {
 
   const loadCollection = () => {
     if (!address) return
-    fetchCharacters(address).then(chars => {
+    fetchCharacters().then(chars => {
       setStateMap(Object.fromEntries(chars.map(c => [c.id, c])))
     }).catch(() => {})
   }

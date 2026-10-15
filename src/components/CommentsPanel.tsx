@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { truncateAddress } from '../wallet'
+import { api } from '../api/client'
 import { MemberGate, useMemberGate } from '../identity/gate'
 import type { UnifiedMemeItem } from '../types/unified'
 import './CommentsPanel.css'
@@ -94,8 +95,8 @@ export function CommentsPanel({ item, onClose }: Props) {
 
   const load = useCallback(() => {
     setLoading(true)
-    fetch(`/api/comments/${encodeURIComponent(item.type)}/${encodeURIComponent(item.sourceId)}?${wallet ? `wallet=${encodeURIComponent(wallet)}&` : ''}limit=100`)
-      .then(r => r.ok ? r.json() : { items: [] })
+    // your_like comes from the session when a member is signed in
+    api<{ items: Comment[] }>(`/api/comments/${encodeURIComponent(item.type)}/${encodeURIComponent(item.sourceId)}?limit=100`)
       .then(d => setComments(d.items ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -108,17 +109,11 @@ export function CommentsPanel({ item, onClose }: Props) {
     if (!body || posting) return
     setPosting(true)
     try {
-      const res = await fetch('/api/comments', {
+      const newComment = await api<Comment>('/api/comments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          meme_id: item.sourceId, meme_source: item.type,
-          wallet, body,
-          parent_id: replyTo?.id ?? null,
-        }),
-      })
-      if (!res.ok) return
-      const newComment: Comment = await res.json()
+        body: { meme_id: item.sourceId, meme_source: item.type, body, parent_id: replyTo?.id ?? null },
+      }).catch(() => null)
+      if (!newComment) return
       if (replyTo) {
         setComments(prev => prev.map(c =>
           c.id === replyTo.id ? { ...c, replies: [...c.replies, newComment] } : c
@@ -132,13 +127,9 @@ export function CommentsPanel({ item, onClose }: Props) {
   }
 
   async function handleLike(id: string) {
-    const res = await fetch(`/api/comments/${id}/like`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet }),
-    })
-    if (!res.ok) return
-    const { likes, your_like } = await res.json()
+    const r = await api<{ likes: number; your_like: boolean }>(`/api/comments/${encodeURIComponent(id)}/like`, { method: 'POST' }).catch(() => null)
+    if (!r) return
+    const { likes, your_like } = r
     const update = (c: Comment): Comment => c.id === id
       ? { ...c, likes, your_like }
       : { ...c, replies: c.replies.map(update) }
@@ -146,11 +137,7 @@ export function CommentsPanel({ item, onClose }: Props) {
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/comments/${id}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet }),
-    })
+    await api(`/api/comments/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {})
     const remove = (list: Comment[]): Comment[] =>
       list.filter(c => c.id !== id).map(c => ({ ...c, replies: remove(c.replies) }))
     setComments(prev => remove(prev))

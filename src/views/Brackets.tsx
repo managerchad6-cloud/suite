@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { api } from '../api/client'
 import { useMemberGate } from '../identity/gate'
 import './Brackets.css'
 
@@ -60,13 +61,10 @@ function MatchupCard({
     if (!address || voting || ended || myVote === meme_id) return
     setVoting(true)
     try {
-      const res = await fetch('/api/brackets/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ matchup_id: matchup.id, vote: meme_id, wallet: address }),
-      })
-      if (!res.ok) return
-      const data = await res.json()
+      const data = await api<{ votes_a: number; votes_b: number }>('/api/brackets/vote', {
+        method: 'POST', body: { matchup_id: matchup.id, vote: meme_id },
+      }).catch(() => null)
+      if (!data) return
       setVotesA(data.votes_a)
       setVotesB(data.votes_b)
       setMyVote(meme_id)

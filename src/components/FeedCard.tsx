@@ -50,7 +50,7 @@ export function FeedCard({ item, onOpen }: Props) {
 
         {/* ── Image ── */}
         <div className="fc-img-wrap" onClick={() => {
-          if (memberWallet) trackFeedAction(memberWallet, item.sourceId, item.type, 'detail', Date.now() - dwellStart.current)
+          if (memberWallet) trackFeedAction(item.sourceId, item.type, 'detail', Date.now() - dwellStart.current)
           onOpen(item)
         }}>
           <img
@@ -82,7 +82,7 @@ export function FeedCard({ item, onOpen }: Props) {
               className="fc-share-btn"
               onClick={() => {
                 navigator.clipboard?.writeText(window.location.href).catch(() => {})
-                if (memberWallet) trackFeedAction(memberWallet, item.sourceId, item.type, 'share')
+                if (memberWallet) trackFeedAction(item.sourceId, item.type, 'share')
               }}
               title="Share"
             >↗</button>

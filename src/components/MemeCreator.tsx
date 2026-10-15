@@ -9,7 +9,7 @@ import {
   buildTweetUrl,
   type JobMetadata,
 } from '../api/memes'
-import { getActiveProvider, getActiveType } from '../wallet'
+import { getSigningProvider, getActiveType } from '../wallet'
 import { useMemberGate } from '../identity/gate'
 import { fetchCreditBalance, issueMemeToken } from '../api/credits'
 
@@ -90,7 +90,7 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
 
     useEffect(() => {
       if (!address) return
-      fetchCreditBalance(address).then(d => {
+      fetchCreditBalance().then(d => {
         setCreditBalance(d.balance)
         if (d.balance >= MEME_CREDIT_COST) setPaymentMode('credits')
       }).catch(() => {})
@@ -190,7 +190,7 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
         if (paymentMode === 'credits') {
           // ── Credits path: deduct from Studio backend, get signed token ────
           setPhase('building')
-          const token = await issueMemeToken(address)
+          const token = await issueMemeToken()
           setCreditBalance(b => b !== null ? b - MEME_CREDIT_COST : null)
           window.dispatchEvent(new CustomEvent('vvc:credits-changed'))
 
@@ -237,8 +237,7 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
 
           const walletName = getActiveType() ?? 'wallet'
           setPhase('approving')
-          const provider = getActiveProvider()
-          if (!provider) throw new Error('No Solana wallet connected. Only Phantom, Solflare, and Backpack can sign transactions.')
+          const provider = await getSigningProvider(address!)
           const signedTx = await provider.signTransaction(tx)
 
           setPhase('confirming')

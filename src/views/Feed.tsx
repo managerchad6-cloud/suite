@@ -121,7 +121,8 @@ export function Feed({ onOpenItem, onOpenProfile }: Props) {
   // Load tier state from backend and update cache + items
   const loadTierData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/feed?${wallet ? `wallet=${encodeURIComponent(wallet)}&` : ''}sort=top&limit=200`)
+      // Personalised by the session when a member is signed in
+      const res = await fetch('/api/feed?sort=top&limit=200', { credentials: 'same-origin', cache: 'no-store' })
       if (!res.ok) return
       const data: { items: TierRow[] } = await res.json()
       data.items.forEach(row => {
@@ -279,7 +280,7 @@ export function Feed({ onOpenItem, onOpenProfile }: Props) {
     const newYourVote: 1 | -1 | null = prevYourVote === dir ? null : dir
     setLocalVote(prev => prev ? { ...prev, voting: true } : prev)
     try {
-      const result = await castVote(currentItem.sourceId, currentItem.type, dir, wallet)
+      const result = await castVote(currentItem.sourceId, currentItem.type, dir)
       setLocalVote({ upVotes: result.up_votes, downVotes: result.down_votes, yourVote: newYourVote, tier: result.tier, voting: false })
       setItems(prev => prev.map(item =>
         item.key === currentItem.key

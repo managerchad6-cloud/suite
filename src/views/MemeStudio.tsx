@@ -765,9 +765,9 @@ export function MemeStudio({ onPublished }: { onPublished?: (id: string) => void
     // If user has their own Gemini key, skip credit deduction entirely
     if (hasUserGeminiKey()) { await fn(); return }
     try {
-      await deductCredits(address, action)
+      await deductCredits(action)
     } catch (e: any) {
-      if (e?.status === 402) { setShowBuyModal({ required: e.required ?? e.cost ?? 1, balance: e.balance }); return }
+      if (e?.status === 402) { setShowBuyModal({ required: e.data?.required ?? 1, balance: e.data?.balance }); return }
       throw e
     }
     await fn()
@@ -868,7 +868,7 @@ export function MemeStudio({ onPublished }: { onPublished?: (id: string) => void
   // ─── Auto-restore from IndexedDB on mount ──────────────────────────────────
   useEffect(() => {
     if (!address) return
-    void claimSignupBonus(address)
+    void claimSignupBonus()
     loadSession(address).then(snapshot => {
       if (snapshot) void handleLoadDraft(snapshot)
     }).catch(() => { /* no stored session */ })
@@ -3491,9 +3491,9 @@ export function MemeStudio({ onPublished }: { onPublished?: (id: string) => void
           text:    m.text,
           charKey: m.linkedCharId ? (charLayersRef.current[m.linkedCharId]?.charKey ?? null) : null,
         }))
-      const result = await publishHandmade({ imageDataUrl, characters, titles, labels, labelLinks, wallet: address })
+      const result = await publishHandmade({ imageDataUrl, characters, titles, labels, labelLinks })
       if (currentDraftId) {
-        deleteDraftById(currentDraftId, address).catch(() => {})
+        deleteDraftById(currentDraftId).catch(() => {})
         setCurrentDraftId(null)
       }
       setPublishedMemeId(result.job_id)

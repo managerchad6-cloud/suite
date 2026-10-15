@@ -33,7 +33,7 @@ export function StudioHome({ onNew, onOpenDraft, onImportVvc }: Props) {
       setPublished([]); setPubLoading(false)
       return
     }
-    listDrafts(address)
+    listDrafts()
       .then(setDrafts)
       .catch(() => setDrafts([]))
       .finally(() => setDraftsLoading(false))
@@ -48,7 +48,7 @@ export function StudioHome({ onNew, onOpenDraft, onImportVvc }: Props) {
     if (openingId || !address) return
     setOpeningId(id)
     try {
-      const payload = await fetchDraft(id, address)
+      const payload = await fetchDraft(id)
       onOpenDraft(payload)
     } catch (err) {
       console.error('Failed to open draft:', err)
@@ -62,7 +62,7 @@ export function StudioHome({ onNew, onOpenDraft, onImportVvc }: Props) {
     if (!address || deletingId || !confirm('Delete this draft?')) return
     setDeletingId(id)
     try {
-      await deleteDraftById(id, address)
+      await deleteDraftById(id)
       setDrafts(prev => prev.filter(d => d.id !== id))
     } catch (err) {
       console.error('Failed to delete draft:', err)
@@ -76,7 +76,7 @@ export function StudioHome({ onNew, onOpenDraft, onImportVvc }: Props) {
     if (!address || deletingPubId || !confirm('Delete this published meme? This cannot be undone.')) return
     setDeletingPubId(id)
     try {
-      await deleteStudioMeme(id, address)
+      await deleteStudioMeme(id)
       setPublished(prev => prev.filter(m => m.id !== id))
     } catch (err) {
       console.error('Failed to delete meme:', err)
