@@ -208,7 +208,9 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   const [tweetUrl,    setTweetUrl]    = useState('')
   const [tweetId,     setTweetId]     = useState<string | null>(null)
   const [xHandle,     setXHandle]     = useState<string | null>(null)
-  const shareItemRef = useRef<UnifiedMemeItem | null>(null)
+  const [shareInCommunity, setShareInCommunity] = useState(false)
+  const shareItemRef   = useRef<UnifiedMemeItem | null>(null)
+  const tweetTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [myShares,    setMyShares]    = useState<TweetShare[]>([])
   const xMetrics = useXMetrics(address || null)
   const [followingSet,  setFollowingSet]  = useState<Set<string>>(new Set())
@@ -247,7 +249,10 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   const wheelAccum    = useRef(0)
   const wheelIdleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const touchY        = useRef(0)
-  const tierCache   = useRef<Map<string, TierRow>>(new Map())
+  const tierCache          = useRef<Map<string, TierRow>>(new Map())
+  const charPickerBarRef   = useRef<HTMLDivElement>(null)
+  const charPickerRowRef   = useRef<HTMLDivElement>(null)
+  const charPickerInnerRef = useRef<HTMLDivElement>(null)
 
   // Always-fresh ref for save-on-unmount (avoids stale closure in cleanup)
   const latestRef = useRef({ items, idx, sort, topPeriod, filter, filterChars, heroActive })
@@ -483,6 +488,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
   }
 
   const advance = useCallback((dir: 1 | -1) => {
+    window.dispatchEvent(new CustomEvent('vvc:feed-advance', { detail: dir }))
     if (heroActive) {
       if (dir === 1) {
         setHeroLeaving(true)
@@ -543,6 +549,73 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [advance])
+
+  // Character picker — hover-driven slide + drag
+  useEffect(() => {
+    const bar   = charPickerBarRef.current
+    const row   = charPickerRowRef.current
+    const inner = charPickerInnerRef.current
+    if (!bar || !row || !inner) return
+
+    // Sum each chip's own offsetWidth — unaffected by any parent overflow/BFC.
+    // This is the only reliable measure when all the CSS overflow tricks fail.
+    const getOverflow = () => {
+      const chips = Array.from(inner.children) as HTMLElement[]
+      if (!chips.length) return 0
+      const totalW = chips.reduce((s, c, i) => s + c.offsetWidth + (i > 0 ? 6 : 0), 0)
+      return Math.max(0, totalW - row.offsetWidth)
+    }
+    const clampTX     = (tx: number) => Math.min(0, Math.max(-getOverflow(), tx))
+    const setTX       = (tx: number) => { inner.style.transform = `translateX(${tx}px)` }
+    const currentTX   = () => {
+      const m = inner.style.transform.match(/translateX\((-?[\d.]+)px\)/)
+      return m ? parseFloat(m[1]) : 0
+    }
+
+    let dragging   = false
+    let dragStartX = 0
+    let dragStartT = 0
+    let didDrag    = false
+
+    const onMouseDown = (e: MouseEvent) => {
+      dragging   = true
+      didDrag    = false
+      dragStartX = e.clientX
+      dragStartT = currentTX()
+      row.style.cursor     = 'grabbing'
+      row.style.userSelect = 'none'
+    }
+
+    const onMouseUp = () => {
+      if (didDrag) row.addEventListener('click', e => e.stopPropagation(), { once: true, capture: true })
+      dragging = false
+      row.style.cursor     = ''
+      row.style.userSelect = ''
+    }
+
+    const onMove = (e: MouseEvent) => {
+      if (dragging) {
+        const dx = dragStartX - e.clientX
+        if (!didDrag && Math.abs(dx) > 4) didDrag = true
+        if (didDrag) { setTX(clampTX(dragStartT - dx)); return }
+      }
+      const barRect = bar.getBoundingClientRect()
+      if (e.clientY < barRect.top || e.clientY > barRect.bottom) return
+      const relX     = Math.max(0, Math.min(1, (e.clientX - barRect.left) / barRect.width))
+      const overflow = getOverflow()
+      if (overflow <= 0) return
+      setTX(-relX * overflow)
+    }
+
+    row.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      row.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
 
   function toggleFilter(t: MemeSourceType) {
     setFilter(prev => {
@@ -769,11 +842,32 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
     )
   }
 
+  // Lock body scroll while any share modal is open
+  useEffect(() => {
+    if (!shareModal) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [shareModal])
+
+  // Resize textarea to fit pre-populated content whenever the compose modal opens
+  useEffect(() => {
+    if (shareModal !== 'compose') return
+    const el = tweetTextareaRef.current
+    if (!el) return
+    const maxH = 320
+    el.style.height = 'auto'
+    const next = Math.min(el.scrollHeight, maxH)
+    el.style.height = next + 'px'
+    el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden'
+  }, [shareModal])
+
   const handleShareClick = async (item: UnifiedMemeItem) => {
     shareItemRef.current = item
     setShareItem(item)
-    setTweetText(`${item.title}\n\n#VirginVsChad #Memes $VVC`)
+    setTweetText(`${item.title}\n\nhttps://virginvschad.vip/memes/${item.type}/${item.sourceId}\n\n#VirginVsChad #Memes $VVC`)
     setTweetUrl('')
+    setShareInCommunity(false)
     if (!address) return
     const status = await fetchXStatus(address).catch(() => ({ connected: false as const }))
     if (status.connected && status.handle) {
@@ -816,6 +910,7 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
         meme_id: item.sourceId,
         meme_type: item.type,
         creator_wallet: item.wallet ?? undefined,
+        share_in_community: shareInCommunity,
       })
       setTweetUrl(result.tweet_url)
       setTweetId(result.tweet_id)
@@ -846,6 +941,10 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
         <div
           className="feed-share-backdrop"
           onClick={shareModal === 'posting' ? undefined : () => setShareModal(null)}
+          onWheel={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+          onTouchMove={e => e.stopPropagation()}
+          onTouchEnd={e => e.stopPropagation()}
         >
           {shareModal === 'success' && <XConfetti />}
           <div
@@ -876,9 +975,18 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
                   <div className="feed-xcompose-right">
                     <div className="feed-xcompose-handle">@{xHandle}</div>
                     <textarea
+                      ref={tweetTextareaRef}
                       className="feed-xcompose-textarea"
                       value={tweetText}
-                      onChange={e => setTweetText(e.target.value.slice(0, 280))}
+                      onChange={e => {
+                        const el = e.target
+                        const maxH = 320
+                        el.style.height = 'auto'
+                        const next = Math.min(el.scrollHeight, maxH)
+                        el.style.height = next + 'px'
+                        el.style.overflowY = el.scrollHeight > maxH ? 'auto' : 'hidden'
+                        setTweetText(e.target.value.slice(0, 280))
+                      }}
                       autoFocus
                     />
                     {shareItem?.imageUrl && (
@@ -888,6 +996,14 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
                     )}
                   </div>
                 </div>
+                <label className="feed-xcompose-community">
+                  <input
+                    type="checkbox"
+                    checked={shareInCommunity}
+                    onChange={e => setShareInCommunity(e.target.checked)}
+                  />
+                  Share in the VvC community
+                </label>
                 <div className="feed-xcompose-footer">
                   <span className={`feed-xcompose-counter${tweetText.length > 260 ? ' feed-xcompose-counter--warn' : ''}`}>
                     {280 - tweetText.length}
@@ -1005,29 +1121,31 @@ export function Feed({ address, onOpenItem, onOpenProfile, onRemix, onOpenStudio
         {visible.length > 0 && (
           <span className="feed-counter">{idx + 1} / {visible.length}</span>
         )}
-        <div className="feed-char-picker-bar">
+        <div className="feed-char-picker-bar" ref={charPickerBarRef}>
           <span className="feed-char-picker-label">Filter by character</span>
-          <div className="feed-char-picker-row">
-          {CHARACTERS.map(char => {
-            const active = filterChars.has(char.key)
-            return (
-              <button
-                key={char.key}
-                className={`feed-char-picker-chip ${active ? 'feed-char-picker-chip--active' : ''}`}
-                onClick={() => {
-                  setFilterChars(prev => {
-                    const n = new Set(prev)
-                    active ? n.delete(char.key) : n.add(char.key)
-                    return n
-                  })
-                  setIdx(0)
-                }}
-              >
-                <img src={`/assets/chars/${char.file}.${char.ext ?? 'png'}`} alt={char.name} className="feed-char-picker-chip-avatar" />
-                <span className="feed-char-picker-chip-name">{char.name}</span>
-              </button>
-            )
-          })}
+          <div className="feed-char-picker-row" ref={charPickerRowRef}>
+            <div className="feed-char-picker-inner" ref={charPickerInnerRef}>
+            {CHARACTERS.map(char => {
+              const active = filterChars.has(char.key)
+              return (
+                <button
+                  key={char.key}
+                  className={`feed-char-picker-chip ${active ? 'feed-char-picker-chip--active' : ''}`}
+                  onClick={() => {
+                    setFilterChars(prev => {
+                      const n = new Set(prev)
+                      active ? n.delete(char.key) : n.add(char.key)
+                      return n
+                    })
+                    setIdx(0)
+                  }}
+                >
+                  <img src={`/assets/chars/${char.file}.${char.ext ?? 'png'}`} alt={char.name} className="feed-char-picker-chip-avatar" />
+                  <span className="feed-char-picker-chip-name">{char.name}</span>
+                </button>
+              )
+            })}
+            </div>
           </div>
         </div>
       </div>

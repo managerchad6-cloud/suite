@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { sendChat } from '../api/livestream'
 
-export function ChatInput({ address: _address }: { address: string }) {
+export function ChatInput({ address }: { address: string }) {
   const [msg, setMsg] = useState('')
   const [sending, setSending] = useState(false)
 
@@ -10,7 +10,7 @@ export function ChatInput({ address: _address }: { address: string }) {
     if (!text || sending) return
     setSending(true)
     try {
-      await sendChat(text)
+      await sendChat(text, address)
       setMsg('')
     } catch { /* silent */ } finally {
       setSending(false)

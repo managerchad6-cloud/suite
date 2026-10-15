@@ -1,0 +1,164 @@
+.chatw-panel {
+  position: fixed;
+  left: var(--chatw-left, 188px);
+  top: var(--chatw-top, 0px);
+  width: 300px;
+  height: calc(100vh - var(--chatw-top, 0px));
+  background: #141414;
+  border-right: 1px solid #242424;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.55);
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: chatw-in 0.16s ease;
+}
+
+@keyframes chatw-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Popup mode — anchored below the trigger button, no sidebar positioning */
+.chatw-panel--popup {
+  left: unset;
+  top: unset;
+  height: unset;
+  border-radius: 12px;
+  border: 1px solid #2a2a2a;
+  animation: chatw-popup-in 0.16s ease;
+}
+
+@keyframes chatw-popup-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+.chatw-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 14px;
+  border-bottom: 1px solid #1e1e1e;
+  flex-shrink: 0;
+}
+.chatw-header-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chatw-back,
+.chatw-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.chatw-back:hover,
+.chatw-close:hover { color: #fff; }
+
+.chatw-list { flex: 1; overflow-y: auto; }
+.chatw-empty { padding: 20px 14px; font-size: 12px; color: #444; text-align: center; margin: 0; }
+
+.chatw-convo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 9px 14px;
+  font-family: inherit;
+  color: inherit;
+  border-bottom: 1px solid #1a1a1a;
+}
+.chatw-convo:hover { background: #1a1a1a; }
+.chatw-convo-name { font-size: 12px; font-weight: 700; color: #eee; text-transform: capitalize; flex-shrink: 0; }
+.chatw-convo-preview { flex: 1; min-width: 0; font-size: 11px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chatw-convo-unread {
+  background: #F0A020;
+  color: #000;
+  font-size: 9px;
+  font-weight: 800;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chatw-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chatw-bubble-msg {
+  max-width: 80%;
+  align-self: flex-start;
+  background: #1e1e1e;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #ddd;
+  word-wrap: break-word;
+}
+.chatw-bubble-msg--mine {
+  align-self: flex-end;
+  background: #1a1200;
+  border-color: #5a3a00;
+  color: #fff;
+}
+
+.chatw-composer {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid #1a1a1a;
+  flex-shrink: 0;
+}
+.chatw-input {
+  flex: 1;
+  background: #0e0e0e;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #eee;
+  font-size: 12px;
+  font-family: inherit;
+  min-width: 0;
+}
+.chatw-input:focus { outline: none; border-color: #444; }
+.chatw-send-btn {
+  background: #F0A020;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.chatw-send-btn:disabled { opacity: 0.5; cursor: default; }
+
+@media (max-width: 860px) {
+  .suite-shell:not(.suite-shell--top) .chatw-panel { left: 56px; }
+}

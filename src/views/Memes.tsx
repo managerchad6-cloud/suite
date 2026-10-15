@@ -46,6 +46,7 @@ export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, o
 }) {
   const [creatorOpen, setCreatorOpen] = useState(false)
   const [heroCreatorOpen, setHeroCreatorOpen] = useState(false)
+  const [doneImageUrl, setDoneImageUrl] = useState<string | null>(null)
   const [selectedMeme, setSelectedMeme] = useState<Meme | null>(null)
   const [selectedMeta, setSelectedMeta] = useState<JobMetadata | null>(null)
   const [lightbox, setLightbox] = useState<{ jobId: string; virgin: string; chad: string } | null>(null)
@@ -118,6 +119,8 @@ export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, o
                   address={address}
                   onNeedConnect={() => {}}
                   variant="flat"
+                  onDone={(url) => setDoneImageUrl(url)}
+                  onReset={() => setDoneImageUrl(null)}
                 />
               ) : selectedMeme && heroParsed ? (
                 <MemeCreator
@@ -139,6 +142,11 @@ export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, o
 
             {/* Right — meme image or template */}
             {heroCreatorOpen ? (
+              doneImageUrl ? (
+                <div className="hero-img-wrap">
+                  <img className="gallery-hero-img" src={doneImageUrl} alt="Generated meme" />
+                </div>
+              ) : (
               <div className="hero-img-wrap hero-template-wrap">
                 <div className="template-placeholder">
                   <div className="template-frame">
@@ -161,6 +169,7 @@ export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, o
                   <p className="template-caption">Give it a contrast. The AI fills in the rest.</p>
                 </div>
               </div>
+              )
             ) : (
               <div className="hero-img-wrap" onClick={handleHeroClick}>
                 <img
@@ -179,7 +188,7 @@ export function Memes({ address, onOpenDetail, onOpenProfile, characterFilter, o
       <MemeGallery
         address={address}
         onAutoSelect={(m) => { setSelectedMeme(m) }}
-        onSelectMeme={(m) => { setSelectedMeme(m); setHeroCreatorOpen(false) }}
+        onSelectMeme={(m) => { setSelectedMeme(m); setHeroCreatorOpen(false); setDoneImageUrl(null) }}
         onOpenDetail={onOpenDetail}
         onOpenProfile={onOpenProfile}
         characterFilter={characterFilter}

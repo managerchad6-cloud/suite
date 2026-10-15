@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchPlayerBadges, type PlayerBadge } from '../api/player'
+import { fetchPlayerBadges, fetchBadges, type PlayerBadge, type BadgeDef } from '../api/player'
 import './BadgeGrid.css'
 
 const CATEGORIES = [
@@ -41,23 +41,25 @@ function rarityColor(rarity: string) {
   }
 }
 
-function BadgeCard({ badge }: { badge: PlayerBadge }) {
+function BadgeCard({ badge, locked }: { badge: PlayerBadge | BadgeDef; locked?: boolean }) {
   const color = rarityColor(badge.rarity)
   const glow  = rarityGlow(badge.rarity)
-  const date  = new Date(badge.unlocked_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const date  = !locked && 'unlocked_at' in badge
+    ? new Date(badge.unlocked_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : null
 
   return (
-    <div className={`bg-card bg-card--${badge.rarity}`} style={{ boxShadow: glow }}>
-      <div className="bg-card-icon">{badge.icon}</div>
+    <div className={`bg-card bg-card--${badge.rarity} ${locked ? 'bg-card--locked' : ''}`} style={{ boxShadow: locked ? 'none' : glow }}>
+      <div className="bg-card-icon">{locked ? '🔒' : badge.icon}</div>
       <div className="bg-card-body">
         <span className="bg-card-name">{badge.name}</span>
         <span className="bg-card-desc">{badge.description}</span>
         <div className="bg-card-footer">
-          <span className="bg-card-xp" style={{ color }}>+{badge.xp_reward} XP</span>
-          <span className="bg-card-date">{date}</span>
+          <span className="bg-card-xp" style={{ color: locked ? undefined : color }}>+{badge.xp_reward} XP</span>
+          {date && <span className="bg-card-date">{date}</span>}
         </div>
       </div>
-      <div className="bg-card-rarity" style={{ color }}>{badge.rarity.toUpperCase()}</div>
+      <div className="bg-card-rarity" style={{ color: locked ? undefined : color }}>{badge.rarity.toUpperCase()}</div>
     </div>
   )
 }
@@ -67,25 +69,35 @@ interface Props {
 }
 
 export function BadgeGrid({ wallet }: Props) {
-  const [badges, setBadges]   = useState<PlayerBadge[]>([])
-  const [totalXp, setTotalXp] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter]   = useState('all')
+  const [badges, setBadges]       = useState<PlayerBadge[]>([])
+  const [allBadges, setAllBadges] = useState<BadgeDef[]>([])
+  const [totalXp, setTotalXp]     = useState(0)
+  const [loading, setLoading]     = useState(true)
+  const [filter, setFilter]       = useState('all')
+  const [showUnearned, setShowUnearned] = useState(false)
 
   useEffect(() => {
     setLoading(true)
     setBadges([])
-    fetchPlayerBadges(wallet)
-      .then(({ badges: b, total_xp }) => { setBadges(b); setTotalXp(total_xp) })
+    Promise.all([fetchPlayerBadges(wallet), fetchBadges()])
+      .then(([{ badges: b, total_xp }, all]) => { setBadges(b); setTotalXp(total_xp); setAllBadges(all) })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [wallet])
 
-  const filtered = filter === 'all' ? badges : badges.filter(b => b.category === filter)
+  const earnedIds = new Set(badges.map(b => b.badge_id))
+  const locked    = allBadges.filter(b => !earnedIds.has(b.id))
 
+  const visible: { badge: PlayerBadge | BadgeDef; locked: boolean }[] = showUnearned
+    ? [...badges.map(b => ({ badge: b, locked: false })), ...locked.map(b => ({ badge: b, locked: true }))]
+    : badges.map(b => ({ badge: b, locked: false }))
+
+  const filtered = filter === 'all' ? visible : visible.filter(v => v.badge.category === filter)
+
+  const categorySource = showUnearned ? [...badges, ...locked] : badges
   const availableCategories = CATEGORIES.filter(c => {
     if (c.id === 'all') return true
-    return badges.some(b => b.category === c.id)
+    return categorySource.some(b => b.category === c.id)
   })
 
   return (
@@ -95,8 +107,19 @@ export function BadgeGrid({ wallet }: Props) {
         <div className="bg-stats">
           <span className="bg-count">{badges.length} badge{badges.length !== 1 ? 's' : ''} unlocked</span>
           <span className="bg-xp">⚡ {totalXp.toLocaleString()} XP</span>
+          {allBadges.length > 0 && (
+            <label className="bg-toggle">
+              <input
+                type="checkbox"
+                checked={showUnearned}
+                onChange={e => setShowUnearned(e.target.checked)}
+              />
+              <span className="bg-toggle-track"><span className="bg-toggle-thumb" /></span>
+              <span className="bg-toggle-label">Show unearned badges</span>
+            </label>
+          )}
         </div>
-        {badges.length > 0 && (
+        {visible.length > 0 && (
           <div className="bg-filters">
             {availableCategories.map(c => (
               <button
@@ -106,7 +129,7 @@ export function BadgeGrid({ wallet }: Props) {
               >
                 {c.label}
                 {c.id !== 'all' && (
-                  <span className="bg-filter-count">{badges.filter(b => b.category === c.id).length}</span>
+                  <span className="bg-filter-count">{visible.filter(v => v.badge.category === c.id).length}</span>
                 )}
               </button>
             ))}
@@ -125,7 +148,9 @@ export function BadgeGrid({ wallet }: Props) {
         </div>
       ) : (
         <div className="bg-grid">
-          {filtered.map(b => <BadgeCard key={b.badge_id} badge={b} />)}
+          {filtered.map(({ badge, locked }) => (
+            <BadgeCard key={'badge_id' in badge ? badge.badge_id : badge.id} badge={badge} locked={locked} />
+          ))}
         </div>
       )}
     </div>

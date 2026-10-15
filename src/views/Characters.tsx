@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MALE, FEMALE, DEITIES, CHARACTERS, type CharData, type Rarity } from '../data/characterLore'
+import { MALE, FEMALE, DEITIES, CHARACTERS, EXTENDED_CAST, type CharData, type Rarity } from '../data/characterLore'
 import { fetchMemes, fetchStudioMemesByCharacter, parseMemeId, imageUrl, handmadeImageUrl, type Meme } from '../api/memes'
 import { studioMemeImageUrl } from '../api/studio'
 import type { UnifiedMemeItem } from '../types/unified'
@@ -146,6 +146,41 @@ function TaggedMemes({ charName, charKey, onOpenDetail, onOpenUnifiedItem }: {
   )
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function charImgSrc(char: CharData) {
+  if (char.group === 'extended') return `/assets/cast/${char.file}.${char.ext ?? 'png'}`
+  return `/assets/chars/${char.file}.${char.ext ?? 'png'}`
+}
+
+const STAT_LABELS: Record<string, string> = {
+  height: 'Height', weight: 'Weight', physique: 'Physique',
+  bulge_size: 'Bulge Size', cup_size: 'Cup Size',
+  chadliness: 'Chadliness', staciness: 'Staciness',
+  age_range: 'Age', birthday: 'Birthday',
+  iq: 'IQ', profession: 'Profession',
+  country_of_origin: 'Origin', date_created: 'Created',
+  rank: 'Official Rank', canon: 'Canon',
+  classification: 'Classification', sex: 'Sex', subtype: 'Subtype',
+}
+
+function StatsTable({ stats }: { stats: Record<string, string> }) {
+  const entries = Object.entries(stats)
+  if (entries.length === 0) return null
+  return (
+    <table className="char-stats-table">
+      <tbody>
+        {entries.map(([k, v]) => (
+          <tr key={k}>
+            <th>{STAT_LABELS[k] ?? k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</th>
+            <td>{v}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 // ── Character detail ──────────────────────────────────────────────────────────
 
 function CharacterDetail({ char, onBack, onOpenDetail, onOpenUnifiedItem, colState, wallet, onCollectionChange }: {
@@ -165,7 +200,7 @@ function CharacterDetail({ char, onBack, onOpenDetail, onOpenUnifiedItem, colSta
     return () => window.removeEventListener('keydown', onKey)
   }, [onBack])
 
-  const src      = `/assets/chars/${char.file}.${char.ext ?? 'png'}`
+  const src      = charImgSrc(char)
   const unlocked = true
   const isMain   = colState?.is_main
 
@@ -223,10 +258,14 @@ function CharacterDetail({ char, onBack, onOpenDetail, onOpenUnifiedItem, colSta
         <div className="char-detail-identity">
           <h1 className="char-detail-name">{char.name}</h1>
           <div className="char-detail-tier">{char.tier}</div>
-          <p className="char-detail-tagline">"{char.tagline}"</p>
+          {char.tagline && <p className="char-detail-tagline">"{char.tagline}"</p>}
+          {char.stats && Object.keys(char.stats).length > 0 && (
+            <StatsTable stats={char.stats} />
+          )}
           <p className="char-detail-lore">{char.lore}</p>
+          {char.extraLore && <p className="char-detail-lore char-detail-lore--extra">{char.extraLore}</p>}
 
-          {unlocked && colState && (
+          {unlocked && colState && char.group !== 'extended' && (
             <div className="char-detail-mastery">
               <div className="char-detail-mastery-label">
                 Mastery · <strong>{MASTERY_LEVELS[colState.mastery_level ?? 0]?.name}</strong>
@@ -287,9 +326,9 @@ function CharCard({ char, onSelect, colState }: {
   const isMain     = colState?.is_main
   const masteryLvl = colState?.mastery_level ?? 0
 
-  const imgSrc = hovered && !templateFailed
-    ? `/assets/chars/${char.file}_template.png`
-    : `/assets/chars/${char.file}.${char.ext ?? 'png'}`
+  const baseSrc     = charImgSrc(char)
+  const templateSrc = char.group !== 'extended' ? `/assets/chars/${char.file}_template.png` : baseSrc
+  const imgSrc      = hovered && !templateFailed ? templateSrc : baseSrc
 
   return (
     <div
@@ -357,8 +396,9 @@ export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar, addre
   initialChar?: string | null
   address?: string | null
 }) {
+  const ALL_CHARS = [...CHARACTERS, ...EXTENDED_CAST]
   const findChar = (nameOrKey: string) =>
-    CHARACTERS.find(c => c.name === nameOrKey || c.key === nameOrKey ||
+    ALL_CHARS.find(c => c.name === nameOrKey || c.key === nameOrKey ||
       c.name.toLowerCase() === nameOrKey.toLowerCase() ||
       c.key.toLowerCase() === nameOrKey.toLowerCase()) ?? null
 
@@ -435,6 +475,19 @@ export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar, addre
         </div>
         <div className="char-row char-row--deities">
           {DEITIES.map(c => (
+            <CharCard key={c.key} char={c} onSelect={() => setSelected(c)} colState={stateMap[c.key]} />
+          ))}
+        </div>
+      </div>
+
+      <div className="characters-section characters-section--extended">
+        <div className="characters-section-header">
+          <h2 className="characters-section-title">Extended Cast</h2>
+          <span className="characters-section-count">{EXTENDED_CAST.length} characters</span>
+        </div>
+        <span className="characters-section-sub">Spin-offs, deities, and deep lore from the wider Chadiverse</span>
+        <div className="char-row char-row--extended">
+          {EXTENDED_CAST.map(c => (
             <CharCard key={c.key} char={c} onSelect={() => setSelected(c)} colState={stateMap[c.key]} />
           ))}
         </div>

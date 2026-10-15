@@ -74,6 +74,11 @@ export function dispatchBadges(badges: BadgeDef[] | undefined) {
   }
 }
 
+export function dispatchXP(amount: number, alignment: 'chad' | 'virgin' | 'neutral' = 'neutral') {
+  if (amount > 0)
+    window.dispatchEvent(new CustomEvent('vvc:xp-awarded', { detail: { amount, alignment } }))
+}
+
 export async function trackBadgeCounter(wallet: string, counter: string, amount = 1): Promise<BadgeDef[]> {
   const res = await fetch('/api/badges/track', {
     method: 'POST',

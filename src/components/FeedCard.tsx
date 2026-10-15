@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { trackFeedAction } from '../api/votes'
 import type { UnifiedMemeItem } from '../types/unified'
+import { UserChip } from './UserChip'
 import './FeedCard.css'
 
 const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
@@ -74,7 +75,10 @@ export function FeedCard({ item, address, onOpen }: Props) {
             {tier !== 'fresh' && TIER_CHIP[tier] && (
               <span className={TIER_CHIP[tier]}>{TIER_LABEL[tier]}</span>
             )}
-            <span className="fc-creator">{item.meta}</span>
+            {item.wallet
+              ? <UserChip wallet={item.wallet} size="sm" className="fc-creator-chip" />
+              : <span className="fc-creator">{item.meta}</span>
+            }
             <span className="fc-spacer" />
             <span className="fc-date">
               {new Date(item.dateIso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

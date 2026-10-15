@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { fetchMyShares, fetchXStatus, refreshMetrics, type TweetShare, type XStatus } from '../api/twitter'
+import { fetchMyShares, fetchXStatus, refreshMetrics, fetchCreatorShares, type TweetShare, type XStatus, type MemeShareItem } from '../api/twitter'
 import { useXMetrics } from '../hooks/useXMetrics'
 import './XTimeline.css'
 
@@ -147,20 +147,23 @@ function TweetCard({ share, xMetrics, fallbackHandle, profileImageUrl }: TweetCa
 interface Props { wallet: string }
 
 export function XTimeline({ wallet }: Props) {
-  const [shares,      setShares]      = useState<TweetShare[]>([])
-  const [xStatus,     setXStatus]     = useState<XStatus | null>(null)
-  const [loading,     setLoading]     = useState(true)
-  const [refreshing,  setRefreshing]  = useState(false)
-  const [lastRefresh, setLastRefresh] = useState<number | null>(null)
+  const [shares,        setShares]        = useState<TweetShare[]>([])
+  const [xStatus,       setXStatus]       = useState<XStatus | null>(null)
+  const [loading,       setLoading]       = useState(true)
+  const [refreshing,    setRefreshing]    = useState(false)
+  const [lastRefresh,   setLastRefresh]   = useState<number | null>(null)
+  const [creatorShares, setCreatorShares] = useState<MemeShareItem[]>([])
   const xMetrics = useXMetrics(wallet)
 
   const load = useCallback(async () => {
-    const [sh, status] = await Promise.all([
+    const [sh, status, cs] = await Promise.all([
       fetchMyShares(wallet).catch(() => [] as TweetShare[]),
       fetchXStatus(wallet).catch(() => null as XStatus | null),
+      fetchCreatorShares(wallet).catch(() => [] as MemeShareItem[]),
     ])
     setShares(sh)
     setXStatus(status)
+    setCreatorShares(cs)
     setLoading(false)
   }, [wallet])
 
@@ -198,7 +201,7 @@ export function XTimeline({ wallet }: Props) {
 
   if (loading) return <div className="xtml-loading">Loading…</div>
 
-  if (tracked.length === 0) {
+  if (tracked.length === 0 && creatorShares.length === 0) {
     return (
       <div className="xtml-empty">
         <div className="xtml-empty-logo">𝕏</div>
@@ -290,6 +293,56 @@ export function XTimeline({ wallet }: Props) {
           />
         ))}
       </div>
+
+      {/* ── Your memes shared by others ── */}
+      {creatorShares.length > 0 && (
+        <div className="xtml-creator-section">
+          <div className="xtml-section-label" style={{ marginTop: 8 }}>YOUR MEMES, SHARED BY OTHERS</div>
+          <div className="xtml-timeline">
+            {creatorShares.map(s => (
+              <div key={s.id} className="xtml-tweet">
+                <div className="xtml-tweet-aside">
+                  <div className="xtml-tweet-avatar">{s.x_handle?.[0]?.toUpperCase() ?? '𝕏'}</div>
+                  <div className="xtml-tweet-thread-line" />
+                </div>
+                <div className="xtml-tweet-body">
+                  <div className="xtml-tweet-header">
+                    {s.x_handle && <span className="xtml-tweet-handle">@{s.x_handle}</span>}
+                    {s.x_handle && <span className="xtml-tweet-dot">·</span>}
+                    <span className="xtml-tweet-time">{timeAgo(s.created_at)}</span>
+                    {(s.tweet_url ?? (s.tweet_id ? `https://x.com/i/web/status/${s.tweet_id}` : null)) && (
+                      <a
+                        className="xtml-tweet-ext"
+                        href={s.tweet_url ?? `https://x.com/i/web/status/${s.tweet_id}`}
+                        target="_blank" rel="noopener noreferrer"
+                      >↗</a>
+                    )}
+                  </div>
+                  {s.tweet_text && <p className="xtml-tweet-text">{s.tweet_text}</p>}
+                  {(() => {
+                    const imgUrl = s.meme_type === 'studio'
+                      ? `/handmade/${s.meme_id}/image`
+                      : s.meme_type === 'factory' ? `/jobs/${s.meme_id}/image` : null
+                    return imgUrl ? (
+                      <div className="xtml-tweet-img-wrap">
+                        <img src={imgUrl} alt="meme" className="xtml-tweet-img" loading="lazy" />
+                      </div>
+                    ) : null
+                  })()}
+                  <div className="xtml-tweet-metrics">
+                    <span className="xtml-tweet-metric"><span className="xtml-tweet-metric-icon">💬</span>{fmt(s.reply_count ?? 0)}</span>
+                    <span className="xtml-tweet-metric"><span className="xtml-tweet-metric-icon">🔁</span>{fmt(s.retweet_count ?? 0)}</span>
+                    <span className="xtml-tweet-metric xtml-tweet-metric--likes"><span className="xtml-tweet-metric-icon">❤</span>{fmt(s.like_count ?? 0)}</span>
+                    {(s.impression_count ?? 0) > 0 && (
+                      <span className="xtml-tweet-metric xtml-tweet-metric--views"><span className="xtml-tweet-metric-icon">👁</span>{fmt(s.impression_count ?? 0)}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   )

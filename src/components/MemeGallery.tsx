@@ -391,6 +391,16 @@ export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
       load(1, true)
     }, [load])
 
+    useEffect(() => {
+      const h = (e: Event) => {
+        if ((e as CustomEvent<{ success: boolean }>).detail?.success) {
+          setTimeout(() => load(1, true), 2000)
+        }
+      }
+      window.addEventListener('vvc:job-done', h)
+      return () => window.removeEventListener('vvc:job-done', h)
+    }, [load])
+
     const handleLoadMore = () => {
       setLoadingMore(true)
       load(page + 1, false)

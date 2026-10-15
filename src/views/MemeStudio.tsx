@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CHARACTERS, type CharData } from '../data/characterLore'
-import { editCharacter, editLayer, inActionCharacter, reskinCharacterInScene } from '../api/pfp'
+import { CHARACTERS, EXTENDED_CAST, type CharData } from '../data/characterLore'
+import { editCharacter, editLayer, inActionCharacter, reskinCharacterInScene, generativeExpand } from '../api/pfp'
 import { publishHandmade, saveDraft, deleteDraftById, type DraftPayload } from '../api/memes'
+import { fetchXStatus, postXTweet } from '../api/twitter'
 import { fetchRemixDraft } from '../api/studio'
 import { saveSkin, fetchCharSkins, skinImageUrl, type SkinRecord } from '../api/skins'
 import { signAction, truncateAddress } from '../wallet'
@@ -39,7 +40,7 @@ type HistoryEntry =
   | { type: 'pixel'; layerId: string; before: ImageData }
   | { type: 'structure'; layers: Layer[]; transforms: Record<string, LayerTransform>; bboxes: Record<string, BBox>; textLayers: Record<string, TextMeta>; charLayers: Record<string, CharMeta>; polyLayers: Record<string, PolygonMeta> }
 interface CharMeta {
-  charKey: string; charName: string; charFile: string
+  charKey: string; charName: string; charFile: string; charGroup?: string
   dropX?: number; dropY?: number; dropW?: number; dropH?: number
 }
 
@@ -85,6 +86,13 @@ interface MagicLabelSet {
 }
 
 interface TextDrag { x: number; y: number; x2: number; y2: number }
+
+const ALL_CHARS = [...CHARACTERS, ...EXTENDED_CAST]
+
+function charImgSrc(char: CharData): string {
+  const folder = char.group === 'extended' ? '/assets/cast' : '/assets/chars'
+  return `${folder}/${char.file}.${char.ext ?? 'png'}`
+}
 
 const IDENTITY_TF: LayerTransform = { tx: 0, ty: 0, scaleX: 1, scaleY: 1, rotation: 0 }
 const DEFAULT_W = 1200
@@ -760,11 +768,25 @@ export function MemeStudio({ address, onPublished, remixSourceId }: { address: s
     handle: GrabHandle; layerId: string
     startMx: number; startMy: number
     initTf: LayerTransform
+    initTfsMap: Record<string, LayerTransform>
     displayCx: number; displayCy: number
     initAngle: number
     bboxW: number; bboxH: number
   } | null>(null)
   const [grabHover, setGrabHover] = useState<GrabHandle | null>(null)
+
+  // ── Grab settings: snap, multi-select ─────────────────────────────────────
+  const [snapEnabled, setSnapEnabled] = useState(true)
+  const snapEnabledRef = useRef(true)
+  useEffect(() => { snapEnabledRef.current = snapEnabled }, [snapEnabled])
+  const [snapLines, setSnapLines] = useState<{ axis: 'h'|'v'; pos: number }[]>([])
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
+  const multiSelectModeRef = useRef(false)
+  useEffect(() => { multiSelectModeRef.current = multiSelectMode }, [multiSelectMode])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const selectedIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => { selectedIdsRef.current = selectedIds }, [selectedIds])
+  const ctrlDownRef = useRef(false)
 
   // Zoom & pan
   const [zoom, setZoom] = useState(1)
@@ -817,7 +839,10 @@ export function MemeStudio({ address, onPublished, remixSourceId }: { address: s
   }
   const [editPrompt,    setEditPrompt]    = useState('')
   const editPromptRef = useRef('')
-  const [charAction,      setCharAction]      = useState<null | 'reskin' | 'edit' | 'ai-edit' | 'in-action' | 'skins'>(null)
+  const [charAction,      setCharAction]      = useState<null | 'reskin' | 'edit' | 'ai-edit' | 'in-action' | 'skins' | 'gen-expand'>(null)
+  const [expandOffsets,   setExpandOffsets]   = useState({ top: 0, right: 0, bottom: 0, left: 0 })
+  const expandDragRef = useRef<{ handle: string; startX: number; startY: number; startOffsets: { top: number; right: number; bottom: number; left: number } } | null>(null)
+  useEffect(() => { if (charAction !== 'gen-expand') setExpandOffsets({ top: 0, right: 0, bottom: 0, left: 0 }) }, [charAction])
   useEffect(() => { charActionRef.current = charAction }, [charAction])
   const [artAiPrompt,     setArtAiPrompt]     = useState('')
   const artAiPromptRef = useRef('')
@@ -893,6 +918,12 @@ export function MemeStudio({ address, onPublished, remixSourceId }: { address: s
   const [publishing,      setPublishing]      = useState(false)
   const [publishMsg,      setPublishMsg]      = useState<{ ok: boolean; text: string } | null>(null)
   const [publishedMemeId, setPublishedMemeId] = useState<string | null>(null)
+  // Post-publish X share state
+  const [pubShareStage,   setPubShareStage]   = useState<null | 'compose' | 'posting' | 'done'>(null)
+  const [pubTweetText,    setPubTweetText]     = useState('')
+  const [pubTweetUrl,     setPubTweetUrl]      = useState('')
+  const [pubXHandle,      setPubXHandle]       = useState('')
+  const [pubShareInCommunity, setPubShareInCommunity] = useState(false)
   // Remix state
   const [remixChanged,    setRemixChanged]    = useState(false)
   const remixChangedRef = useRef(false)
@@ -1490,7 +1521,7 @@ export function MemeStudio({ address, onPublished, remixSourceId }: { address: s
   // ─── Magic Labels ────────────────────────────────────────────────────────────
 
   async function generateMagicLabels(charKey: string, title: string): Promise<string[]> {
-    const lore: CharData | undefined = CHARACTERS.find(c => c.key === charKey)
+    const lore: CharData | undefined = ALL_CHARS.find(c => c.key === charKey)
     const charName = lore?.name ?? charKey
     const prompt = `You are writing annotation labels for a "Virgin vs Chad" style internet meme.
 
@@ -1543,9 +1574,8 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
 
   function handleMagicLabelDragStart(e: React.DragEvent, charId: string) {
     const set = magicLabelSets[charId]
-    if (!set || set.used >= set.labels.length) return
-    const remaining = set.labels.slice(set.used)
-    e.dataTransfer.setData('application/vvc-magic-label', JSON.stringify({ labels: remaining, linkedCharId: charId }))
+    if (!set || set.labels.length === 0) return
+    e.dataTransfer.setData('application/vvc-magic-label', JSON.stringify({ labels: set.labels, linkedCharId: charId }))
     e.dataTransfer.effectAllowed = 'copy'
   }
 
@@ -1793,26 +1823,30 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     }
   }
 
-  function addTextAt(cx: number, cy: number, subtype: 'title' | 'label', linkedCharId?: string, prefillText?: string) {
+  function addTextAt(cx: number, cy: number, subtype: 'title' | 'label', linkedCharId?: string, prefillText?: string, centered?: boolean, overrideW?: number) {
     setGrabMenu(null)
     const ff = subtype === 'title' ? titleDefFontFamilyRef.current : labelDefFontFamilyRef.current
     const fs = subtype === 'title' ? titleDefFontSizeRef.current   : labelDefFontSizeRef.current
     const fc = subtype === 'title' ? titleDefColorRef.current      : labelDefColorRef.current
-    const fa = subtype === 'title' ? titleDefTextAlignRef.current  : labelDefTextAlignRef.current
+    const fa = centered ? 'center' : (subtype === 'title' ? titleDefTextAlignRef.current  : labelDefTextAlignRef.current)
     const fb = subtype === 'title' ? titleDefBgColorRef.current    : labelDefBgColorRef.current
     fontFamilyRef.current = ff; fontSizeRef.current = fs; colorRef.current = fc; textAlignRef.current = fa
     setFontFamily(ff); setFontSize(fs); setColor(fc); setTextAlign(fa); setTextBgColor(fb)
     const el = displayRef.current!
     const rect = el.getBoundingClientRect()
     const ratio = rect.width / el.width
-    const defaultW = fs * 12
+    const w = overrideW ?? fs * 12
+    const { w: canvasW } = dimsRef.current
+    const xLeft = Math.max(0, Math.min(canvasW - w, centered ? cx - w / 2 : cx))
+    const oneLineH = fs * 1.3
     setTextInput({
-      x: cx, y: cy,
-      screenX: rect.left + cx * ratio,
+      x: xLeft, y: cy,
+      screenX: rect.left + xLeft * ratio,
       screenY: rect.top  + cy * ratio,
       value: prefillText ?? '',
-      w: defaultW,
-      screenW: defaultW * ratio,
+      w,
+      screenW: w * ratio,
+      screenH: centered ? oneLineH * ratio : undefined,
       screenFontSize: fs * ratio,
       textAlign: fa,
       subtype,
@@ -1829,9 +1863,12 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     const corners = bboxCorners(bbox, tf)
     const [tl, tr, br, bl] = corners
     if (subtype === 'title') {
-      const cx = (tl[0] + tr[0]) / 2
-      const cy = (tl[1] + tr[1]) / 2 - 60
-      addTextAt(cx, cy, 'title', charId)
+      const cx    = (tl[0] + tr[0]) / 2
+      const fs    = titleDefFontSizeRef.current
+      const titleW = fs * 12                          // ~4 words at default size
+      const topY  = Math.min(...corners.map(p => p[1]))
+      const cy    = topY - fs * 2.5                   // one line height + gap above character
+      addTextAt(cx, cy, 'title', charId, undefined, true, titleW)
     } else {
       const cx = (tl[0] + tr[0] + br[0] + bl[0]) / 4
       const cy = (tl[1] + tr[1] + br[1] + bl[1]) / 4
@@ -1874,9 +1911,115 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     return null
   }
 
+  // ─── Snap computation ─────────────────────────────────────────────────────
+  function computeSnap(
+    layerId: string,
+    rawTx: number, rawTy: number,
+  ): { tx: number; ty: number; lines: { axis: 'h'|'v'; pos: number }[] } {
+    const THRESHOLD = 6
+    const bbox = bboxesRef.current[layerId]
+    if (!bbox) return { tx: rawTx, ty: rawTy, lines: [] }
+    const tf = transformsRef.current[layerId] ?? IDENTITY_TF
+    const cx  = bbox.x + bbox.w / 2 + rawTx
+    const cy  = bbox.y + bbox.h / 2 + rawTy
+    const hw  = (bbox.w / 2) * Math.abs(tf.scaleX)
+    const hh  = (bbox.h / 2) * Math.abs(tf.scaleY)
+    const candX = [cx - hw, cx, cx + hw]
+    const candY = [cy - hh, cy, cy + hh]
+    const { w: cW, h: cH } = dimsRef.current
+    const targX = [0, cW / 2, cW]
+    const targY = [0, cH / 2, cH]
+    for (const layer of layersRef.current) {
+      if (layer.id === layerId || layer.id === 'bg' || !layer.visible) continue
+      if (selectedIdsRef.current.has(layer.id)) continue
+      const ob = bboxesRef.current[layer.id]; if (!ob) continue
+      const otf = transformsRef.current[layer.id] ?? IDENTITY_TF
+      const ocx = ob.x + ob.w / 2 + otf.tx, ocy = ob.y + ob.h / 2 + otf.ty
+      const ohw = (ob.w / 2) * Math.abs(otf.scaleX), ohh = (ob.h / 2) * Math.abs(otf.scaleY)
+      targX.push(ocx - ohw, ocx, ocx + ohw)
+      targY.push(ocy - ohh, ocy, ocy + ohh)
+    }
+    const lines: { axis: 'h'|'v'; pos: number }[] = []
+    let snappedTx = rawTx, snappedTy = rawTy
+    let bestDx = THRESHOLD + 1, snapTX: number | null = null, snapCX: number | null = null
+    for (const c of candX) for (const t of targX) { const d = Math.abs(c - t); if (d < bestDx) { bestDx = d; snapTX = t; snapCX = c } }
+    if (snapTX !== null && snapCX !== null) { snappedTx = rawTx + (snapTX - snapCX); lines.push({ axis: 'v', pos: snapTX }) }
+    let bestDy = THRESHOLD + 1, snapTY: number | null = null, snapCY: number | null = null
+    for (const c of candY) for (const t of targY) { const d = Math.abs(c - t); if (d < bestDy) { bestDy = d; snapTY = t; snapCY = c } }
+    if (snapTY !== null && snapCY !== null) { snappedTy = rawTy + (snapTY - snapCY); lines.push({ axis: 'h', pos: snapTY }) }
+    return { tx: snappedTx, ty: snappedTy, lines }
+  }
+
+  // ─── Alignment helpers ────────────────────────────────────────────────────
+  function alignToCanvas(edge: 'left'|'centerH'|'right'|'top'|'centerV'|'bottom') {
+    const id = activeIdRef.current; if (id === 'bg') return
+    saveStructure()
+    const bbox = bboxesRef.current[id]; if (!bbox) return
+    const tf = transformsRef.current[id] ?? IDENTITY_TF
+    const { w: cW, h: cH } = dimsRef.current
+    const rawCx = bbox.x + bbox.w / 2, rawCy = bbox.y + bbox.h / 2
+    const hw = (bbox.w / 2) * Math.abs(tf.scaleX), hh = (bbox.h / 2) * Math.abs(tf.scaleY)
+    const newTf = { ...tf }
+    if (edge === 'left')    newTf.tx = -rawCx + hw
+    if (edge === 'centerH') newTf.tx = cW / 2 - rawCx
+    if (edge === 'right')   newTf.tx = cW - rawCx - hw
+    if (edge === 'top')     newTf.ty = -rawCy + hh
+    if (edge === 'centerV') newTf.ty = cH / 2 - rawCy
+    if (edge === 'bottom')  newTf.ty = cH - rawCy - hh
+    setTransforms(prev => ({ ...prev, [id]: newTf }))
+    transformsRef.current = { ...transformsRef.current, [id]: newTf }
+    composite()
+  }
+
+  function alignSelection(alignment: 'left'|'centerH'|'right'|'top'|'centerV'|'bottom'|'distH'|'distV') {
+    const ids = [...selectedIdsRef.current].filter(id => id !== 'bg' && bboxesRef.current[id])
+    if (ids.length < 2) return
+    saveStructure()
+    const bounds = ids.map(id => {
+      const bbox = bboxesRef.current[id]!
+      const tf = transformsRef.current[id] ?? IDENTITY_TF
+      const rawCx = bbox.x + bbox.w / 2, rawCy = bbox.y + bbox.h / 2
+      const eCx = rawCx + tf.tx, eCy = rawCy + tf.ty
+      const hw = (bbox.w / 2) * Math.abs(tf.scaleX), hh = (bbox.h / 2) * Math.abs(tf.scaleY)
+      return { id, tf, rawCx, rawCy, eCx, eCy, hw, hh,
+        left: eCx - hw, right: eCx + hw, top: eCy - hh, bottom: eCy + hh }
+    })
+    const newTfs: Record<string, LayerTransform> = {}
+    if (alignment === 'left') {
+      const t = Math.min(...bounds.map(b => b.left))
+      bounds.forEach(b => { newTfs[b.id] = { ...b.tf, tx: t + b.hw - b.rawCx } })
+    } else if (alignment === 'centerH') {
+      const t = (Math.min(...bounds.map(b => b.left)) + Math.max(...bounds.map(b => b.right))) / 2
+      bounds.forEach(b => { newTfs[b.id] = { ...b.tf, tx: t - b.rawCx } })
+    } else if (alignment === 'right') {
+      const t = Math.max(...bounds.map(b => b.right))
+      bounds.forEach(b => { newTfs[b.id] = { ...b.tf, tx: t - b.hw - b.rawCx } })
+    } else if (alignment === 'top') {
+      const t = Math.min(...bounds.map(b => b.top))
+      bounds.forEach(b => { newTfs[b.id] = { ...b.tf, ty: t + b.hh - b.rawCy } })
+    } else if (alignment === 'centerV') {
+      const t = (Math.min(...bounds.map(b => b.top)) + Math.max(...bounds.map(b => b.bottom))) / 2
+      bounds.forEach(b => { newTfs[b.id] = { ...b.tf, ty: t - b.rawCy } })
+    } else if (alignment === 'bottom') {
+      const t = Math.max(...bounds.map(b => b.bottom))
+      bounds.forEach(b => { newTfs[b.id] = { ...b.tf, ty: t - b.hh - b.rawCy } })
+    } else if (alignment === 'distH' && ids.length >= 3) {
+      const sorted = [...bounds].sort((a, b) => a.eCx - b.eCx)
+      const step = (sorted[sorted.length-1].eCx - sorted[0].eCx) / (sorted.length - 1)
+      sorted.forEach((b, i) => { newTfs[b.id] = { ...b.tf, tx: sorted[0].eCx + i * step - b.rawCx } })
+    } else if (alignment === 'distV' && ids.length >= 3) {
+      const sorted = [...bounds].sort((a, b) => a.eCy - b.eCy)
+      const step = (sorted[sorted.length-1].eCy - sorted[0].eCy) / (sorted.length - 1)
+      sorted.forEach((b, i) => { newTfs[b.id] = { ...b.tf, ty: sorted[0].eCy + i * step - b.rawCy } })
+    }
+    setTransforms(prev => ({ ...prev, ...newTfs }))
+    transformsRef.current = { ...transformsRef.current, ...newTfs }
+    composite()
+  }
+
   // ─── Character drop ────────────────────────────────────────────────────────
 
-  async function dropCharacter(charKey: string, charName: string, charFile: string, cx: number, cy: number) {
+  async function dropCharacter(charKey: string, charName: string, charFile: string, cx: number, cy: number, charGroup?: string) {
     saveStructure()
     const id = `char_${charKey}_${Date.now()}`
     const { w, h } = dimsRef.current
@@ -1889,13 +2032,16 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     activeIdRef.current = id
     let dropX = 0, dropY = 0, dropW = DROP_SIZE, dropH = DROP_SIZE
     try {
-      const img = await loadImage(`/assets/chars/${charFile}.png`)
+      const charData = ALL_CHARS.find(ch => ch.key === charKey)
+      const folder = (charGroup === 'extended' || charData?.group === 'extended') ? '/assets/cast' : '/assets/chars'
+      const ext = charData?.ext ?? 'png'
+      const img = await loadImage(`${folder}/${charFile}.${ext}`)
       const scale = Math.min(DROP_SIZE / img.width, DROP_SIZE / img.height, 1)
       dropW = img.width * scale; dropH = img.height * scale
       dropX = cx - dropW / 2;   dropY  = cy - dropH / 2
       c.getContext('2d')!.drawImage(img, dropX, dropY, dropW, dropH)
     } catch { /* leave blank */ }
-    const meta: CharMeta = { charKey, charName, charFile, dropX, dropY, dropW, dropH }
+    const meta: CharMeta = { charKey, charName, charFile, charGroup, dropX, dropY, dropW, dropH }
     setCharLayers(prev => ({ ...prev, [id]: meta }))
     charLayersRef.current = { ...charLayersRef.current, [id]: meta }
 
@@ -2079,6 +2225,61 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
   }
 
   // ─── Re-skin ───────────────────────────────────────────────────────────────
+
+  async function doGenExpand() {
+    const id   = activeIdRef.current
+    const c    = offscreen.current[id]
+    const bbox = bboxesRef.current[id]
+    if (!c || !bbox || loadingLayerIds.has(id)) return
+    const { top, right, bottom, left } = expandOffsets
+    if (top === 0 && right === 0 && bottom === 0 && left === 0) return
+
+    const newX = bbox.x - left
+    const newY = bbox.y - top
+    const newW = bbox.w + left + right
+    const newH = bbox.h + top + bottom
+
+    const origDataUrl = extractCharacterCrop(id)
+
+    // Detect transparent background by sampling the full perimeter of the bbox
+    // (every 10% along each edge). Corner-only checks miss transparency when the
+    // character (e.g. motorcycle wheels) happens to reach the exact bbox corners.
+    const hasTransp = (() => {
+      const ctx = c.getContext('2d')!
+      const { x, y, w, h } = bbox
+      for (let t = 0; t <= 10; t++) {
+        const fx = Math.floor(w * t / 10)
+        const fy = Math.floor(h * t / 10)
+        if (ctx.getImageData(x + fx,     y,         1, 1).data[3] < 100) return true
+        if (ctx.getImageData(x + fx,     y + h - 1, 1, 1).data[3] < 100) return true
+        if (ctx.getImageData(x,          y + fy,    1, 1).data[3] < 100) return true
+        if (ctx.getImageData(x + w - 1,  y + fy,    1, 1).data[3] < 100) return true
+      }
+      return false
+    })()
+
+    await withCredits('studio_reskin', async () => {
+      setLayerLoading(id, true)
+      try {
+        const resultUrl = await generativeExpand(origDataUrl, newW, newH, left, top, hasTransp)
+        const ctx = c.getContext('2d')!
+        // Clear the full expanded area (not just the old bbox)
+        ctx.clearRect(newX - 2, newY - 2, newW + 4, newH + 4)
+        const img = await loadImage(resultUrl)
+        ctx.drawImage(img, newX, newY, newW, newH)
+        const newBbox = { x: newX, y: newY, w: newW, h: newH }
+        setBboxes(prev => ({ ...prev, [id]: newBbox }))
+        bboxesRef.current = { ...bboxesRef.current, [id]: newBbox }
+        markLayerDirty(id)
+        refreshLayer(id)
+        composite()
+        setExpandOffsets({ top: 0, right: 0, bottom: 0, left: 0 })
+        setCharAction(null)
+      } finally {
+        setLayerLoading(id, false)
+      }
+    })
+  }
 
   async function doReskin() {
     const id = activeIdRef.current
@@ -2469,6 +2670,14 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
       if (tf && bbox) ctx.restore()
     } else {
       const lc = offscreen.current[id]
+      // bg layer with no image yet: use full white canvas as base for generation
+      if (!lc && id === 'bg') {
+        const { w, h } = dimsRef.current
+        const blank = makeCanvas(w, h)
+        blank.getContext('2d')!.fillStyle = '#ffffff'
+        blank.getContext('2d')!.fillRect(0, 0, w, h)
+        return blank.toDataURL('image/png')
+      }
       if (!lc) return null
       if (tf && bbox) {
         const cx = bbox.x + bbox.w / 2, cy = bbox.y + bbox.h / 2
@@ -2522,6 +2731,11 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
         }
       }
 
+      // Ensure bg layer has an offscreen canvas to receive the result
+      if (!offscreen.current[id] && id === 'bg') {
+        const { w, h } = dimsRef.current
+        offscreen.current[id] = makeCanvas(w, h)
+      }
       const canvas = offscreen.current[id]
       if (canvas) {
         const ctx = canvas.getContext('2d')!
@@ -2781,6 +2995,7 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     // ── Grab tool ──
     if (t === 'grab') {
       const id = activeIdRef.current
+      const isMulti = e.ctrlKey || e.metaKey || multiSelectModeRef.current
 
       // Polygon vertex / body drag — handled before grabHitTest
       const polyMeta = polyLayersRef.current[id]
@@ -2826,6 +3041,93 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
         return
       }
 
+      // Shared grab drag starter (used for both group and single layer)
+      const startGrabDrag = (dragId: string, h: GrabHandle) => {
+        saveStructure()
+        const bb = bboxesRef.current[dragId]!
+        const tf2 = transformsRef.current[dragId] ?? IDENTITY_TF
+        const dcx = bb.x + bb.w / 2 + tf2.tx
+        const dcy = bb.y + bb.h / 2 + tf2.ty
+        const curSel = selectedIdsRef.current
+        const initTfsMap: Record<string, LayerTransform> = {}
+        if (curSel.size >= 2) {
+          for (const sid of curSel) initTfsMap[sid] = { ...(transformsRef.current[sid] ?? IDENTITY_TF) }
+        } else {
+          initTfsMap[dragId] = { ...tf2 }
+        }
+        grabDragRef.current = {
+          handle: h, layerId: dragId, startMx: x, startMy: y,
+          initTf: { ...tf2 }, initTfsMap,
+          displayCx: dcx, displayCy: dcy,
+          initAngle: Math.atan2(y - dcy, x - dcx),
+          bboxW: bb.w, bboxH: bb.h,
+        }
+        const onMove = (ev: MouseEvent) => {
+          if (!grabDragRef.current) return
+          const { handle: hh, layerId: lid, startMx: sx, startMy: sy, initTf: itf,
+                  initTfsMap: tfMap, displayCx: dc_x, displayCy: dc_y,
+                  initAngle: ia, bboxW: bw, bboxH: bh } = grabDragRef.current
+          const pos = canvasCoordsFromClient(ev.clientX, ev.clientY)
+          const mx2 = pos.x, my2 = pos.y
+          if (hh === 'move') {
+            let dx = mx2 - sx, dy = my2 - sy
+            if (snapEnabledRef.current) {
+              const snap = computeSnap(lid, tfMap[lid].tx + dx, tfMap[lid].ty + dy)
+              dx = snap.tx - tfMap[lid].tx; dy = snap.ty - tfMap[lid].ty
+              setSnapLines(snap.lines)
+            } else {
+              setSnapLines([])
+            }
+            const newTfs: Record<string, LayerTransform> = {}
+            for (const [sid2, stf] of Object.entries(tfMap)) newTfs[sid2] = { ...stf, tx: stf.tx + dx, ty: stf.ty + dy }
+            setTransforms(prev => ({ ...prev, ...newTfs }))
+            transformsRef.current = { ...transformsRef.current, ...newTfs }
+          } else if (hh === 'rotate') {
+            const ca = Math.atan2(my2 - dc_y, mx2 - dc_x)
+            const nt = { ...itf, rotation: itf.rotation + (ca - ia) }
+            setTransforms(prev => ({ ...prev, [lid]: nt })); transformsRef.current = { ...transformsRef.current, [lid]: nt }
+          } else if (hh === 'n' || hh === 's') {
+            const r = itf.rotation
+            const proj = (mx2 - dc_x) * Math.sin(r) - (my2 - dc_y) * Math.cos(r)
+            const nt = { ...itf, scaleY: Math.max(0.05, hh === 'n' ? proj / (bh / 2) : -proj / (bh / 2)) }
+            setTransforms(prev => ({ ...prev, [lid]: nt })); transformsRef.current = { ...transformsRef.current, [lid]: nt }
+          } else if (hh === 'e' || hh === 'w') {
+            const r = itf.rotation
+            const proj = (mx2 - dc_x) * Math.cos(r) + (my2 - dc_y) * Math.sin(r)
+            const nt = { ...itf, scaleX: Math.max(0.05, hh === 'e' ? proj / (bw / 2) : -proj / (bw / 2)) }
+            setTransforms(prev => ({ ...prev, [lid]: nt })); transformsRef.current = { ...transformsRef.current, [lid]: nt }
+          } else {
+            const sd = Math.hypot(sx - dc_x, sy - dc_y), cd = Math.hypot(mx2 - dc_x, my2 - dc_y)
+            const sc = sd === 0 ? 1 : cd / sd
+            const nt = { ...itf, scaleX: Math.max(0.05, itf.scaleX * sc), scaleY: Math.max(0.05, itf.scaleY * sc) }
+            setTransforms(prev => ({ ...prev, [lid]: nt })); transformsRef.current = { ...transformsRef.current, [lid]: nt }
+          }
+          composite()
+        }
+        const onUp = () => {
+          grabDragRef.current = null; setSnapLines([])
+          window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp)
+        }
+        window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp)
+      }
+
+      // If a multi-selection is active, check if cursor hits any selected layer first
+      const curSel = selectedIdsRef.current
+      if (curSel.size >= 2) {
+        const orderedSel = [...layersRef.current].reverse()
+          .map(l => l.id).filter(lid => curSel.has(lid) && layersRef.current.find(l => l.id === lid)?.visible)
+        for (const selId of orderedSel) {
+          const h = grabHitTest(x, y, selId)
+          if (h) {
+            setActiveId(selId); activeIdRef.current = selId
+            startGrabDrag(selId, h)
+            return
+          }
+        }
+        // Cursor missed all selected layers
+        if (!isMulti) { setSelectedIds(new Set()); selectedIdsRef.current = new Set() }
+      }
+
       const handle = id !== 'bg' ? grabHitTest(x, y, id) : null
 
       if (!handle) {
@@ -2834,75 +3136,30 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
         for (const layer of reversed) {
           if (layer.id === id || layer.id === 'bg' || !layer.visible) continue
           if (grabHitTest(x, y, layer.id)) {
-            setActiveId(layer.id)
-            activeIdRef.current = layer.id
+            if (isMulti) {
+              const nxt = new Set(selectedIdsRef.current); nxt.add(layer.id)
+              setSelectedIds(nxt); selectedIdsRef.current = nxt
+            } else {
+              setSelectedIds(new Set()); selectedIdsRef.current = new Set()
+            }
+            setActiveId(layer.id); activeIdRef.current = layer.id
             syncTextControls(layer.id)
             return
           }
         }
         // No layer hit — deselect
-        setActiveId('bg')
-        activeIdRef.current = 'bg'
+        if (!isMulti) { setSelectedIds(new Set()); selectedIdsRef.current = new Set() }
+        setActiveId('bg'); activeIdRef.current = 'bg'
         return
       }
 
-      // Start drag on active layer
-      saveStructure()
-      const bbox = bboxesRef.current[id]!
-      const tf   = transformsRef.current[id] ?? IDENTITY_TF
-      const displayCx = bbox.x + bbox.w / 2 + tf.tx
-      const displayCy = bbox.y + bbox.h / 2 + tf.ty
-      grabDragRef.current = {
-        handle, layerId: id,
-        startMx: x, startMy: y,
-        initTf: { ...tf },
-        displayCx, displayCy,
-        initAngle: Math.atan2(y - displayCy, x - displayCx),
-        bboxW: bbox.w, bboxH: bbox.h,
+      // Start drag on the active layer
+      if (isMulti) {
+        // Ctrl+click on active layer: add to selection but don't drag
+        const nxt = new Set(selectedIdsRef.current); nxt.add(id)
+        setSelectedIds(nxt); selectedIdsRef.current = nxt
       }
-      const onMove = (ev: MouseEvent) => {
-        if (!grabDragRef.current) return
-        const { handle: h, layerId, startMx, startMy, initTf, displayCx, displayCy, initAngle, bboxW, bboxH } = grabDragRef.current
-        const pos = canvasCoordsFromClient(ev.clientX, ev.clientY)
-        const mx = pos.x, my = pos.y
-        let newTf = { ...initTf }
-        if (h === 'move') {
-          newTf.tx = initTf.tx + (mx - startMx)
-          newTf.ty = initTf.ty + (my - startMy)
-        } else if (h === 'rotate') {
-          const currAngle = Math.atan2(my - displayCy, mx - displayCx)
-          newTf.rotation = initTf.rotation + (currAngle - initAngle)
-        } else if (h === 'n' || h === 's') {
-          // Project mouse onto local Y axis (rotated): N direction = (sin r, -cos r)
-          const r = initTf.rotation
-          const proj = (mx - displayCx) * Math.sin(r) - (my - displayCy) * Math.cos(r)
-          const raw = h === 'n' ? proj / (bboxH / 2) : -proj / (bboxH / 2)
-          newTf.scaleY = Math.max(0.05, raw)
-        } else if (h === 'e' || h === 'w') {
-          // Project mouse onto local X axis (rotated): E direction = (cos r, sin r)
-          const r = initTf.rotation
-          const proj = (mx - displayCx) * Math.cos(r) + (my - displayCy) * Math.sin(r)
-          const raw = h === 'e' ? proj / (bboxW / 2) : -proj / (bboxW / 2)
-          newTf.scaleX = Math.max(0.05, raw)
-        } else {
-          // Corner: proportional scale
-          const startDist = Math.hypot(startMx - displayCx, startMy - displayCy)
-          const currDist  = Math.hypot(mx - displayCx, my - displayCy)
-          const scale = startDist === 0 ? 1 : currDist / startDist
-          newTf.scaleX = Math.max(0.05, initTf.scaleX * scale)
-          newTf.scaleY = Math.max(0.05, initTf.scaleY * scale)
-        }
-        setTransforms(prev => ({ ...prev, [layerId]: newTf }))
-        transformsRef.current = { ...transformsRef.current, [layerId]: newTf }
-        composite()
-      }
-      const onUp = () => {
-        grabDragRef.current = null
-        window.removeEventListener('mousemove', onMove)
-        window.removeEventListener('mouseup', onUp)
-      }
-      window.addEventListener('mousemove', onMove)
-      window.addEventListener('mouseup', onUp)
+      startGrabDrag(id, handle)
       return
     }
 
@@ -3343,9 +3600,9 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     }
     const raw = e.dataTransfer.getData('application/vvc-char')
     if (!raw) return
-    const { charKey, charName, charFile } = JSON.parse(raw) as CharMeta
+    const { charKey, charName, charFile, charGroup } = JSON.parse(raw) as CharMeta
     const { x, y } = canvasCoords(e)
-    dropCharacter(charKey, charName, charFile, x, y)
+    dropCharacter(charKey, charName, charFile, x, y, charGroup)
   }
 
   // ─── Undo / Redo ───────────────────────────────────────────────────────────
@@ -3468,12 +3725,17 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.code === 'Space') { spaceDownRef.current = true; setSpaceDown(true); e.preventDefault(); return }
+      if (e.key === 'Control' || e.key === 'Meta') ctrlDownRef.current = true
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); actionsRef.current.undo(); return }
       if (mod && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); actionsRef.current.redo(); return }
       if (mod && e.key === 'd') { e.preventDefault(); actionsRef.current.clearSelection(); return }
       if (!mod) {
-        if (e.key === 'Escape') { setBrushMenu(null); editingTextLayerRef.current = null; setTextInput(null); actionsRef.current.clearSelection(); composite(); return }
+        if (e.key === 'Escape') {
+          setBrushMenu(null)
+          setSelectedIds(new Set()); selectedIdsRef.current = new Set()
+          editingTextLayerRef.current = null; setTextInput(null); actionsRef.current.clearSelection(); composite(); return
+        }
         if ((e.key === 'Delete' || e.key === 'Backspace') && activeIdRef.current !== 'bg') {
           e.preventDefault(); actionsRef.current.deleteLayer(activeIdRef.current); return
         }
@@ -3499,6 +3761,7 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     }
     function onKeyUp(e: KeyboardEvent) {
       if (e.code === 'Space') { spaceDownRef.current = false; setSpaceDown(false) }
+      if (e.key === 'Control' || e.key === 'Meta') ctrlDownRef.current = false
     }
     window.addEventListener('keydown', onKey)
     window.addEventListener('keyup', onKeyUp)
@@ -3798,12 +4061,58 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
         setCurrentDraftId(null)
       }
       setPublishedMemeId(result.job_id)
+      // Pre-fill tweet text so the compose box is ready
+      const t = titles[0] ?? 'Check out my new meme'
+      setPubTweetText(`${t}\n\nhttps://virginvschad.vip/memes/studio/${result.job_id}\n\n#VirginVsChad #Memes $VVC`)
     } catch (err) {
       setPublishMsg({ ok: false, text: String(err) })
     } finally {
       setPublishing(false)
     }
   }
+
+  async function handlePubShareClick() {
+    if (!publishedMemeId) return
+    const status = await fetchXStatus(address).catch(() => ({ connected: false as const }))
+    if (status.connected && status.handle) {
+      setPubXHandle(status.handle)
+      setPubShareStage('compose')
+    } else {
+      window.open(`/api/x/auth?wallet=${encodeURIComponent(address)}`, 'x-oauth')
+      const onMsg = (e: MessageEvent) => {
+        if (e.data?.type !== 'x_auth') return
+        window.removeEventListener('message', onMsg)
+        if (e.data.handle) {
+          setPubXHandle(e.data.handle)
+          setPubShareStage('compose')
+        }
+      }
+      window.addEventListener('message', onMsg)
+    }
+  }
+
+  async function handlePubPost() {
+    if (!publishedMemeId) return
+    setPubShareStage('posting')
+    try {
+      const imgUrl = new URL(`/handmade/${publishedMemeId}/image`, window.location.origin).href
+      const result = await postXTweet({
+        wallet: address,
+        text: pubTweetText,
+        image_url: imgUrl,
+        meme_id: publishedMemeId,
+        meme_type: 'studio',
+        creator_wallet: address,
+        share_in_community: pubShareInCommunity,
+      })
+      setPubTweetUrl(result.tweet_url)
+      setPubShareStage('done')
+    } catch (e) {
+      alert((e as Error).message)
+      setPubShareStage('compose')
+    }
+  }
+
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -3855,13 +4164,15 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     const corners = bboxCorners(bbox, tf)
     const cx = corners.reduce((s, p) => s + p[0], 0) / 4
     const cy = corners.reduce((s, p) => s + p[1], 0) / 4
-    const hasTitle = Object.values(textLayers).some(
+    const titleEntry = Object.values(textLayers).find(
       t => t.subtype === 'title' && t.linkedCharId === activeId
     )
+    const hasTitle = !!titleEntry
+    const titleText = titleEntry?.text ?? ''
     const magicSet = magicLabelSets[activeId] ?? null
     const magicGenerating = magicLabelGenerating.has(activeId)
     const magicRemaining = magicSet ? magicSet.labels.length - magicSet.used : 0
-    return { x: cx * zoom, y: cy * zoom, hasTitle, magicSet, magicGenerating, magicRemaining,
+    return { x: cx * zoom, y: cy * zoom, hasTitle, titleText, magicSet, magicGenerating, magicRemaining,
       charKey: charLayers[activeId].charKey, charName: charLayers[activeId].charName }
   })()
 
@@ -3905,9 +4216,10 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
   })()
 
   const pickerGroups: { label: string; chars: CharData[] }[] = [
-    { label: 'Male',    chars: CHARACTERS.filter(c => c.group === 'male')   },
-    { label: 'Female',  chars: CHARACTERS.filter(c => c.group === 'female') },
-    { label: 'Deities', chars: CHARACTERS.filter(c => c.group === 'deity')  },
+    { label: 'Male',     chars: CHARACTERS.filter(c => c.group === 'male')   },
+    { label: 'Female',   chars: CHARACTERS.filter(c => c.group === 'female') },
+    { label: 'Deities',  chars: CHARACTERS.filter(c => c.group === 'deity')  },
+    { label: 'Extended', chars: EXTENDED_CAST                                },
   ]
 
   const ALL_TOOLS = [
@@ -3942,6 +4254,7 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
   const showCropControls   = tool === 'crop'
   const showWandControls   = tool === 'wand' || tool === 'lasso' || tool === 'marquee'
   const showTextControls   = tool === 'text' || (tool === 'grab' && !!textLayers[activeId])
+  const showGrabControls   = tool === 'grab'
   const isActiveTextLayer = !!textLayers[activeId]
   const showFlipControls  = tool === 'flip'
   const activeCharMeta = charLayers[activeId]
@@ -4137,7 +4450,7 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                   {/* Hit area extends 400px beyond canvas so grab handles outside bounds are clickable */}
                   <div
                     className="mst-canvas-hit-area"
-                    style={{ cursor: canvasCursor }}
+                    style={{ cursor: canvasCursor, pointerEvents: charAction === 'gen-expand' ? 'none' : undefined }}
                     onMouseDown={onMouseDown}
                     onMouseMove={onMouseMove}
                     onMouseUp={onMouseUp}
@@ -4224,6 +4537,85 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                   </svg>
                 )}
 
+                {/* ── Gen-expand handles overlay ── */}
+                {charAction === 'gen-expand' && activeId && bboxes[activeId] && (() => {
+                  const bbox = bboxes[activeId]
+                  const tf   = transforms[activeId] ?? IDENTITY_TF
+                  const eo   = expandOffsets
+
+                  // Mirror how grabOverlay computes visible bounds: apply tx/ty + scale
+                  const cx = bbox.x + bbox.w / 2 + tf.tx
+                  const cy = bbox.y + bbox.h / 2 + tf.ty
+                  const hw = bbox.w / 2 * tf.scaleX
+                  const hh = bbox.h / 2 * tf.scaleY
+                  // Visual (transformed) bbox — same coordinate space as grabOverlay
+                  const vx = cx - hw
+                  const vy = cy - hh
+                  const vw = hw * 2
+                  const vh = hh * 2
+
+                  const ex = vx - eo.left
+                  const ey = vy - eo.top
+                  const ew = vw + eo.left + eo.right
+                  const eh = vh + eo.top  + eo.bottom
+
+                  const handles: Array<{ id: string; cx: number; cy: number; cursor: string }> = [
+                    { id: 'tl', cx: ex,        cy: ey,        cursor: 'nwse-resize' },
+                    { id: 't',  cx: ex + ew/2, cy: ey,        cursor: 'ns-resize'   },
+                    { id: 'tr', cx: ex + ew,   cy: ey,        cursor: 'nesw-resize' },
+                    { id: 'r',  cx: ex + ew,   cy: ey + eh/2, cursor: 'ew-resize'   },
+                    { id: 'br', cx: ex + ew,   cy: ey + eh,   cursor: 'nwse-resize' },
+                    { id: 'b',  cx: ex + ew/2, cy: ey + eh,   cursor: 'ns-resize'   },
+                    { id: 'bl', cx: ex,        cy: ey + eh,   cursor: 'nesw-resize' },
+                    { id: 'l',  cx: ex,        cy: ey + eh/2, cursor: 'ew-resize'   },
+                  ]
+
+                  return (
+                    <svg
+                      width={canvasW * zoom} height={canvasH * zoom}
+                      viewBox={`0 0 ${canvasW} ${canvasH}`}
+                      style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'all', cursor: 'default' }}
+                    >
+                      {/* Block canvas events while in expand mode */}
+                      <rect x={0} y={0} width={canvasW} height={canvasH} fill="transparent" />
+                      {/* Original visual bbox — faint reference (matches grab overlay position) */}
+                      <rect x={vx} y={vy} width={vw} height={vh}
+                        fill="none" stroke="#F0A020" strokeWidth="1" strokeDasharray="4,3" opacity="0.5" />
+                      {/* Expanded bbox */}
+                      <rect x={ex} y={ey} width={ew} height={eh}
+                        fill="rgba(96,210,255,0.04)" stroke="#60d2ff" strokeWidth="1.5" strokeDasharray="7,4" />
+                      {/* Drag handles */}
+                      {handles.map(h => (
+                        <rect key={h.id}
+                          x={h.cx - 6} y={h.cy - 6} width={12} height={12} rx={2}
+                          fill="#06131a" stroke="#60d2ff" strokeWidth="1.5"
+                          style={{ cursor: h.cursor, pointerEvents: 'all' }}
+                          onPointerDown={e => {
+                            e.stopPropagation()
+                            const { x, y } = canvasCoordsFromClient(e.clientX, e.clientY)
+                            expandDragRef.current = { handle: h.id, startX: x, startY: y, startOffsets: { ...expandOffsets } }
+                            ;(e.target as SVGElement).setPointerCapture(e.pointerId)
+                          }}
+                          onPointerMove={e => {
+                            if (!expandDragRef.current) return
+                            const { x, y } = canvasCoordsFromClient(e.clientX, e.clientY)
+                            const { handle, startX, startY, startOffsets: so } = expandDragRef.current
+                            const dx = x - startX
+                            const dy = y - startY
+                            setExpandOffsets({
+                              left:   handle.includes('l') ? Math.max(0, so.left   - dx) : so.left,
+                              right:  handle.includes('r') ? Math.max(0, so.right  + dx) : so.right,
+                              top:    handle.includes('t') ? Math.max(0, so.top    - dy) : so.top,
+                              bottom: handle.includes('b') ? Math.max(0, so.bottom + dy) : so.bottom,
+                            })
+                          }}
+                          onPointerUp={() => { expandDragRef.current = null }}
+                        />
+                      ))}
+                    </svg>
+                  )
+                })()}
+
                 {grabOverlay && (
                   <svg width={canvasW * zoom} height={canvasH * zoom} viewBox={`0 0 ${canvasW} ${canvasH}`}
                     style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible' }}>
@@ -4244,6 +4636,30 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                     ))}
                     <circle cx={grabOverlay.rhPt[0]} cy={grabOverlay.rhPt[1]} r="6"
                       fill="#1a1100" stroke="#F0A020" strokeWidth="1.5" />
+                  </svg>
+                )}
+
+                {/* Multi-select: dim outlines for non-active selected layers */}
+                {selectedIds.size >= 2 && [...selectedIds].filter(sid => sid !== activeId && bboxes[sid]).map(sid => {
+                  const sb = bboxes[sid]!, stf = transforms[sid] ?? IDENTITY_TF
+                  const sc = bboxCorners(sb, stf)
+                  return (
+                    <svg key={sid} width={canvasW * zoom} height={canvasH * zoom} viewBox={`0 0 ${canvasW} ${canvasH}`}
+                      style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible' }}>
+                      <polygon points={sc.map(([px, py]) => `${px},${py}`).join(' ')}
+                        fill="none" stroke="rgba(240,160,32,0.45)" strokeWidth="1.5" strokeDasharray="4,3" />
+                    </svg>
+                  )
+                })}
+
+                {/* Snap guide lines */}
+                {snapLines.length > 0 && (
+                  <svg width={canvasW * zoom} height={canvasH * zoom} viewBox={`0 0 ${canvasW} ${canvasH}`}
+                    style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible', zIndex: 20 }}>
+                    {snapLines.map((ln, i) => ln.axis === 'v'
+                      ? <line key={i} x1={ln.pos} y1={-2000} x2={ln.pos} y2={canvasH + 2000} stroke="#F0A020" strokeWidth="1" opacity="0.7" strokeDasharray="4,4" />
+                      : <line key={i} x1={-2000} y1={ln.pos} x2={canvasW + 2000} y2={ln.pos} stroke="#F0A020" strokeWidth="1" opacity="0.7" strokeDasharray="4,4" />
+                    )}
                   </svg>
                 )}
 
@@ -4348,18 +4764,30 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                         title="Add label (click or drag to place)"
                       ><span style={{fontSize:14}}>+</span><span>label</span></button>
                     </div>
-                    {/* Magic labels — shown while generating (pulsing) or ready (draggable) */}
-                    {(charTextBtns.magicGenerating || (charTextBtns.magicSet && charTextBtns.magicRemaining > 0)) && (
+                    {/* AI labels — centered below; hidden only when set is fully exhausted */}
+                    {(charTextBtns.magicGenerating || !charTextBtns.magicSet || charTextBtns.magicSet.labels.length > 0) && (
                       <div className="mst-char-text-btns-magic-row">
                         <button
                           className={`mst-char-text-btn mst-char-text-btn--magic${charTextBtns.magicGenerating ? ' mst-char-text-btn--magic-loading' : ''}`}
-                          draggable={!charTextBtns.magicGenerating}
-                          onDragStart={charTextBtns.magicGenerating ? undefined : e => handleMagicLabelDragStart(e, activeId)}
-                          title={charTextBtns.magicGenerating ? 'Generating AI labels…' : `Drag to place AI label (${charTextBtns.magicRemaining} left)`}
-                          style={{ cursor: charTextBtns.magicGenerating ? 'default' : 'grab' }}
+                          draggable={!charTextBtns.magicGenerating && !!charTextBtns.magicSet && charTextBtns.magicSet.labels.length > 0}
+                          onDragStart={(!charTextBtns.magicGenerating && !!charTextBtns.magicSet && charTextBtns.magicSet.labels.length > 0) ? e => handleMagicLabelDragStart(e, activeId) : undefined}
+                          onClick={() => {
+                            if (charTextBtns.magicGenerating) return
+                            if (!charTextBtns.hasTitle) { handleAddTextForChar('title'); return }
+                            if (!charTextBtns.magicSet) {
+                              triggerMagicLabels(activeId, charTextBtns.charKey, charTextBtns.titleText)
+                            }
+                          }}
+                          title={
+                            charTextBtns.magicGenerating ? 'Generating AI labels…' :
+                            charTextBtns.magicSet ? 'Drag to place an AI label' :
+                            !charTextBtns.hasTitle ? 'Click to set a title — AI labels will generate automatically' :
+                            'Generate AI labels'
+                          }
+                          style={{ cursor: charTextBtns.magicGenerating ? 'default' : charTextBtns.magicSet ? 'grab' : 'pointer' }}
                         >
-                          <span className="mst-magic-star">✦</span>
-                          <span>label</span>
+                          <span className="mst-magic-ai-text">AI</span>
+                          <span>labels</span>
                         </button>
                       </div>
                     )}
@@ -4386,7 +4814,7 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
           />
 
           {/* ── Right-side tool options panel — same column as publish buttons + joysticks ── */}
-          {(showBrushControls || showFillControls || showCropControls || showWandControls || showTextControls || showShapeControls || showFlipControls || (tool === 'grab' && !!polyLayers[activeId])) && (
+          {(showBrushControls || showFillControls || showCropControls || showWandControls || showTextControls || showShapeControls || showFlipControls || showGrabControls) && (
             <aside className="mst-options-panel">
 
               {showBrushControls && (<>
@@ -4541,6 +4969,57 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                 </div>
               </>)}
 
+              {showGrabControls && (() => {
+                const isMultiSel = selectedIds.size >= 2
+                const hasSingle  = activeId !== 'bg'
+                return (<>
+                  <div className="mst-label">Snap</div>
+                  <label className="mst-shape-toggle">
+                    <input type="checkbox" checked={snapEnabled}
+                      onChange={e => { setSnapEnabled(e.target.checked); snapEnabledRef.current = e.target.checked }} />
+                    <span>Snap to objects</span>
+                  </label>
+                  <div className="mst-label" style={{ marginTop: 10 }}>Selection</div>
+                  <label className="mst-shape-toggle">
+                    <input type="checkbox" checked={multiSelectMode}
+                      onChange={e => setMultiSelectMode(e.target.checked)} />
+                    <span>Select multiple</span>
+                  </label>
+                  <div className="mst-label" style={{ marginTop: 2, fontSize: 9, color: '#444', textTransform: 'none', letterSpacing: 0 }}>
+                    or hold Ctrl and click
+                  </div>
+                  {(isMultiSel || hasSingle) && (<>
+                    <div className="mst-label" style={{ marginTop: 10 }}>
+                      {isMultiSel ? `Align (${selectedIds.size} layers)` : 'Align to canvas'}
+                    </div>
+                    <div className="mst-grab-align-grid">
+                      <button className="mst-grab-align-btn" title={isMultiSel ? 'Align left edges' : 'Left'}
+                        onClick={() => isMultiSel ? alignSelection('left') : alignToCanvas('left')}>←</button>
+                      <button className="mst-grab-align-btn" title="Center horizontally"
+                        onClick={() => isMultiSel ? alignSelection('centerH') : alignToCanvas('centerH')}>↔</button>
+                      <button className="mst-grab-align-btn" title={isMultiSel ? 'Align right edges' : 'Right'}
+                        onClick={() => isMultiSel ? alignSelection('right') : alignToCanvas('right')}>→</button>
+                      <button className="mst-grab-align-btn" title={isMultiSel ? 'Align top edges' : 'Top'}
+                        onClick={() => isMultiSel ? alignSelection('top') : alignToCanvas('top')}>↑</button>
+                      <button className="mst-grab-align-btn" title="Center vertically"
+                        onClick={() => isMultiSel ? alignSelection('centerV') : alignToCanvas('centerV')}>↕</button>
+                      <button className="mst-grab-align-btn" title={isMultiSel ? 'Align bottom edges' : 'Bottom'}
+                        onClick={() => isMultiSel ? alignSelection('bottom') : alignToCanvas('bottom')}>↓</button>
+                      {isMultiSel && selectedIds.size >= 3 && (<>
+                        <button className="mst-grab-align-btn mst-grab-align-btn--wide" title="Distribute horizontally"
+                          onClick={() => alignSelection('distH')}>⇔ H</button>
+                        <button className="mst-grab-align-btn mst-grab-align-btn--wide" title="Distribute vertically"
+                          onClick={() => alignSelection('distV')}>⇕ V</button>
+                      </>)}
+                    </div>
+                  </>)}
+                  {/* Polygon shape controls if active layer is a polygon */}
+                  {!!polyLayers[activeId] && (
+                    <div className="mst-label" style={{ marginTop: 10, borderTop: '1px solid #222', paddingTop: 8 }}>Shape</div>
+                  )}
+                </>)
+              })()}
+
               {showShapeControls && (<>
                 {tool === 'polygon' && (<>
                   <div className="mst-label">Shape</div>
@@ -4639,7 +5118,7 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                 return (
                   <div key={layer.id}
                     className={`msl-item ${isActive ? 'active' : ''}`}
-                    onClick={() => { setActiveId(layer.id); syncTextControls(layer.id) }}>
+                    onClick={() => { setActiveId(layer.id); syncTextControls(layer.id); setSelectedIds(new Set()); selectedIdsRef.current = new Set() }}>
                     <div className="msl-name-row">
                       <span className="msl-name">{layer.name}</span>
                       {charMeta && <span className="msl-char-badge">★</span>}
@@ -4774,11 +5253,11 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
           <div className="mstudio-picker-tab-avatars">
             {CHARACTERS.slice(0, 5).map(char => (
               <div key={char.key} className="mstudio-picker-tab-avatar">
-                <img src={`/assets/chars/${char.file}.${char.ext ?? 'png'}`} alt="" />
+                <img src={charImgSrc(char)} alt="" />
               </div>
             ))}
           </div>
-          <span>Characters ({CHARACTERS.length})</span>
+          <span>Characters ({ALL_CHARS.length})</span>
           <span className="mstudio-picker-tab-chevron">▲</span>
         </button>
 
@@ -4796,13 +5275,13 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                       draggable
                       onDragStart={e => {
                         e.dataTransfer.setData('application/vvc-char', JSON.stringify({
-                          charKey: char.key, charName: char.name, charFile: char.file,
+                          charKey: char.key, charName: char.name, charFile: char.file, charGroup: char.group,
                         }))
                         e.dataTransfer.effectAllowed = 'copy'
                       }}
                       title={`Drag ${char.name} onto canvas`}
                     >
-                      <img src={`/assets/chars/${char.file}.${char.ext ?? 'png'}`} alt={char.name} />
+                      <img src={charImgSrc(char)} alt={char.name} />
                       <span className="mst-char-card-name">{char.name}</span>
                     </div>
                   ))}
@@ -4823,9 +5302,8 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
               addTextAt(magicLabelPicker.canvasX, magicLabelPicker.canvasY, 'label', magicLabelPicker.charId, label)
               setMagicLabelSets(prev => {
                 const set = prev[magicLabelPicker.charId]; if (!set) return prev
-                const usedIdx = set.labels.indexOf(label)
-                const usedCount = usedIdx >= set.used ? set.used + 1 : set.used
-                return { ...prev, [magicLabelPicker.charId]: { ...set, used: usedCount } }
+                const newLabels = set.labels.filter((_, idx) => idx !== i)
+                return { ...prev, [magicLabelPicker.charId]: { ...set, labels: newLabels } }
               })
               setMagicLabelPicker(null)
             }}>
@@ -4885,11 +5363,11 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                       onClick={() => {
                         const cp = charPicker
                         setCharPicker(null)
-                        dropCharacter(char.key, char.name, char.file, cp.canvasX, cp.canvasY)
+                        dropCharacter(char.key, char.name, char.file, cp.canvasX, cp.canvasY, char.group)
                       }}
                       title={char.name}
                     >
-                      <img src={`/assets/chars/${char.file}.${char.ext ?? 'png'}`} alt={char.name} />
+                      <img src={charImgSrc(char)} alt={char.name} />
                       <span className="mst-char-card-name">{char.name}</span>
                     </div>
                   ))}
@@ -4903,6 +5381,48 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
       {/* ── Floating layer action panel — only visible in grab mode ── */}
       {tool === 'grab' && activeId && displayRef.current && (() => {
         void scrollTick // consumed so scroll re-renders recompute rect
+
+        // ── Background layer: show AI BG panel anchored to canvas top ──
+        if (activeId === 'bg') {
+          const el = displayRef.current!
+          const rect = el.getBoundingClientRect()
+          const bgX = rect.left + rect.width / 2
+          const bgY = Math.min(rect.bottom + 10, window.innerHeight - 200)
+          const busy = loadingLayerIds.has('bg')
+          return (
+            <div className={`mst-char-action-float ${ownKeyActive ? 'mst-char-action-float--own-key' : ''}`} style={{ left: bgX, top: bgY }}>
+              <div className="mst-char-action-btns">
+                <button
+                  className={`mst-char-action-btn ${charAction === 'ai-edit' ? 'active' : ''}`}
+                  onClick={() => setCharAction(a => a === 'ai-edit' ? null : 'ai-edit')}
+                  title="AI edit/generate background"
+                >
+                  <span className="mst-char-action-icon">✦</span>
+                  <span className="mst-char-action-label">AI BG</span>
+                  <span className="mst-action-cost">⚡ 3</span>
+                </button>
+              </div>
+              {charAction === 'ai-edit' && (
+                <div className="mst-char-action-panel">
+                  <div className="mst-char-action-panel-hint">Describe the background to generate or edit.</div>
+                  <textarea
+                    className="mst-reskin-textarea"
+                    placeholder={`e.g. "neon city skyline at night"`}
+                    value={artAiPrompt}
+                    onChange={e => { setArtAiPrompt(e.target.value); artAiPromptRef.current = e.target.value }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doArtAi() } }}
+                    disabled={busy}
+                    autoFocus
+                  />
+                  <button className="mst-reskin-btn" onClick={doArtAi} disabled={!artAiPrompt.trim() || busy}>
+                    {busy ? '⟳ Generating…' : <span>Apply <span className="mst-reskin-btn-cost">· ⚡ 3</span></span>}
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        }
+
         const bbox = bboxesRef.current[activeId]
         const tf   = transformsRef.current[activeId] ?? IDENTITY_TF
         if (!bbox) return null
@@ -4957,6 +5477,15 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                     <span className="mst-char-action-icon">🖼</span>
                     <span className="mst-char-action-label">Skins</span>
                     <span className="mst-action-cost mst-action-cost--free">FREE</span>
+                  </button>
+                  <button
+                    className={`mst-char-action-btn mst-char-action-btn--expand ${charAction === 'gen-expand' ? 'active' : ''}`}
+                    onClick={() => setCharAction(a => a === 'gen-expand' ? null : 'gen-expand')}
+                    title="Generative expand — resize the bounding box then generate"
+                  >
+                    <span className="mst-char-action-icon">⤢</span>
+                    <span className="mst-char-action-label">Expand</span>
+                    <span className="mst-action-cost mst-action-cost--expand">⚡ 3</span>
                   </button>
                 </>)
               })()}
@@ -5225,6 +5754,39 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
                 )}
               </div>
             )}
+
+            {charAction === 'gen-expand' && (() => {
+              const bbox = activeId ? bboxes[activeId] : null
+              if (!bbox) return null
+              const eo = expandOffsets
+              const total = eo.top + eo.right + eo.bottom + eo.left
+              const MIN_EXPAND = 80  // px — below this Gemini has too little room
+              const tooSmall = total > 0 && Math.max(eo.top, eo.right, eo.bottom, eo.left) < MIN_EXPAND
+              return (
+                <div className="mst-char-action-panel mst-char-action-panel--expand">
+                  <p className="mst-expand-hint">Drag the handles to grow the canvas around the image, then generate.</p>
+                  <div className="mst-expand-stats">
+                    {['top','right','bottom','left'].map(s => (
+                      <span key={s} className="mst-expand-stat">
+                        {s[0].toUpperCase()}: <b>{Math.round((eo as any)[s])}px</b>
+                      </span>
+                    ))}
+                  </div>
+                  {tooSmall && (
+                    <p className="mst-expand-hint" style={{ color: '#f0a020', marginTop: 4 }}>
+                      Expand at least 80px on one side for better results.
+                    </p>
+                  )}
+                  <button
+                    className="mst-wand-btn"
+                    disabled={total === 0 || tooSmall || loadingLayerIds.has(activeId)}
+                    onClick={() => void doGenExpand()}
+                  >
+                    {loadingLayerIds.has(activeId) ? '⟳ Generating…' : '⤢ Generate Expand'}
+                  </button>
+                </div>
+              )
+            })()}
           </div>
         )
       })()}
@@ -5242,27 +5804,44 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
           <textarea
             ref={el => { textAreaFrameRef.current = el; if (el) autoResizeTextArea(el) }}
             className="mst-text-input mst-text-input--area mst-text-input--framed"
+            rows={1}
             style={{
               width: '100%',
-              minHeight: textInput.screenH,
               fontFamily: textInput.editingLayerId ? textLayers[textInput.editingLayerId]?.fontFamily ?? fontFamily : fontFamily,
               fontSize: textInput.screenFontSize ?? Math.max(10, fontSize * zoom),
               textAlign: textInput.textAlign ?? 'left',
+              color: textInput.editingLayerId ? (textLayers[textInput.editingLayerId]?.color ?? color) : color,
+              caretColor: textInput.editingLayerId ? (textLayers[textInput.editingLayerId]?.color ?? color) : color,
             }}
             value={textInput.value}
             onChange={e => {
               setTextInput(prev => prev ? { ...prev, value: e.target.value } : null)
               autoResizeTextArea(e.currentTarget)
             }}
-            onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); cancelTextEdit() } }}
+            onKeyDown={e => {
+              if (e.key === 'Escape') { e.preventDefault(); cancelTextEdit(); return }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                if (e.ctrlKey) {
+                  const ta = e.currentTarget
+                  const start = ta.selectionStart ?? ta.value.length
+                  const end   = ta.selectionEnd   ?? ta.value.length
+                  const next  = ta.value.slice(0, start) + '\n' + ta.value.slice(end)
+                  setTextInput(prev => prev ? { ...prev, value: next } : null)
+                  requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = start + 1; autoResizeTextArea(ta) })
+                } else {
+                  commitText()
+                }
+              }
+            }}
             onBlur={commitText}
             placeholder="Type here…"
             autoFocus
           />
-          {(['tl','tr','bl','br','ml','mr'] as const).map(h => (
+          {(['tl','tr','bl','br','mt','mb','ml','mr'] as const).map(h => (
             <div key={h}
               className={`mst-tb-handle mst-tb-handle--${h}`}
-              onMouseDown={e => startTextResize(e, h.includes('r') ? 'r' : 'l')}
+              onMouseDown={e => { if (h === 'ml' || h === 'mr') startTextResize(e, h === 'mr' ? 'r' : 'l') }}
             />
           ))}
         </div>
@@ -5310,7 +5889,11 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
     {/* ── Publish celebration modal ── */}
     {publishedMemeId && (
 
-      <div className="mst-pub-overlay" onClick={e => { if (e.target === e.currentTarget) setPublishedMemeId(null) }}>
+      <div className="mst-pub-overlay" onClick={e => {
+        if (e.target === e.currentTarget && pubShareStage !== 'posting') {
+          setPublishedMemeId(null); setPubShareStage(null)
+        }
+      }}>
         {Array.from({ length: 28 }).map((_, i) => (
           <span key={i} className="mst-confetti" style={{
             '--x': `${Math.random() * 100}vw`,
@@ -5321,13 +5904,70 @@ Example format: ["builds at 3am", "no car", "refuses to touch grass", ...]`
           } as React.CSSProperties} />
         ))}
         <div className="mst-pub-card">
-          <button className="mst-pub-close" onClick={() => setPublishedMemeId(null)}>×</button>
+          {pubShareStage !== 'posting' && (
+            <button className="mst-pub-close" onClick={() => { setPublishedMemeId(null); setPubShareStage(null) }}>×</button>
+          )}
           <div className="mst-pub-label">Meme Published!</div>
           <div className="mst-pub-img-wrap">
             <img src={`/handmade/${publishedMemeId}/image`} alt="Published meme" className="mst-pub-img" />
           </div>
           <div className="mst-pub-id">#{publishedMemeId.slice(0, 8)}</div>
-          <button className="mst-pub-done" onClick={() => { const id = publishedMemeId!; setPublishedMemeId(null); onPublished?.(id) }}>Nice 🔥</button>
+
+          {/* ── X share flow ── */}
+          {pubShareStage === null && (
+            <div className="mst-pub-actions">
+              <button className="mst-pub-share-btn" onClick={handlePubShareClick}>𝕏 Share</button>
+              <button className="mst-pub-done" onClick={() => { const id = publishedMemeId!; setPublishedMemeId(null); setPubShareStage(null); onPublished?.(id) }}>Nice 🔥</button>
+            </div>
+          )}
+
+          {pubShareStage === 'compose' && (
+            <div className="mst-pub-compose">
+              <div className="mst-pub-compose-header">
+                <div className="mst-pub-compose-avatar">{pubXHandle?.[0]?.toUpperCase() ?? '𝕏'}</div>
+                <span className="mst-pub-compose-handle">@{pubXHandle}</span>
+              </div>
+              <textarea
+                className="mst-pub-compose-textarea"
+                value={pubTweetText}
+                onChange={e => setPubTweetText(e.target.value.slice(0, 280))}
+                autoFocus
+              />
+              <label className="mst-pub-compose-community">
+                <input
+                  type="checkbox"
+                  checked={pubShareInCommunity}
+                  onChange={e => setPubShareInCommunity(e.target.checked)}
+                />
+                Share in community
+              </label>
+              <div className="mst-pub-compose-footer">
+                <span className={`mst-pub-compose-counter${pubTweetText.length > 260 ? ' mst-pub-compose-counter--warn' : ''}`}>
+                  {280 - pubTweetText.length}
+                </span>
+                <button
+                  className="mst-pub-compose-post"
+                  onClick={handlePubPost}
+                  disabled={!pubTweetText.trim()}
+                >Post</button>
+              </div>
+            </div>
+          )}
+
+          {pubShareStage === 'posting' && (
+            <p className="mst-pub-posting">Uploading & posting to 𝕏…</p>
+          )}
+
+          {pubShareStage === 'done' && (
+            <div className="mst-pub-actions">
+              {pubTweetUrl && (
+                <a className="mst-pub-view-tweet" href={pubTweetUrl} target="_blank" rel="noopener noreferrer">
+                  View on 𝕏 ↗
+                </a>
+              )}
+              <button className="mst-pub-done" onClick={() => { const id = publishedMemeId!; setPublishedMemeId(null); setPubShareStage(null); onPublished?.(id) }}>Nice 🔥</button>
+            </div>
+          )}
         </div>
       </div>
     )}

@@ -39,6 +39,8 @@ export interface MemeCreatorProps {
   variant?: 'card' | 'flat'
   readOnly?: boolean
   onCreateOwn?: () => void
+  onDone?: (url: string) => void
+  onReset?: () => void
 }
 
 function phaseLabel(elapsed: number, hasMetadata: boolean): string {
@@ -50,7 +52,7 @@ function phaseLabel(elapsed: number, hasMetadata: boolean): string {
 }
 
 export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
-  ({ address, onNeedConnect: _onNeedConnect, onClose, initialVirgn, initialChad, initialVirginLabels, initialChadLabels, initialFreetext, initialFormMode, variant = 'card', readOnly, onCreateOwn }, ref) => {
+  ({ address, onNeedConnect: _onNeedConnect, onClose, initialVirgn, initialChad, initialVirginLabels, initialChadLabels, initialFreetext, initialFormMode, variant = 'card', readOnly, onCreateOwn, onDone, onReset }, ref) => {
     const [freetext, setFreetext] = useState(initialFreetext ?? '')
     const [virgin, setVirgin] = useState(initialVirgn ?? '')
     const [chad, setChad] = useState(initialChad ?? '')
@@ -61,10 +63,20 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
     const [parsing, setParsing] = useState(false)
     const [parseError, setParseError] = useState<string | null>(null)
 
-    const [phase, setPhase] = useState<Phase>('idle')
-    const [jobId, setJobId] = useState<string | null>(null)
-    const [elapsed, setElapsed] = useState(0)
-    const [progress, setProgress] = useState(0)
+    // Resume an in-progress job if the user navigated away mid-generation
+    const _resumeJob = useRef((() => {
+      try { return JSON.parse(localStorage.getItem('vvc-tracked-job') ?? 'null') as { jobId: string; startedAt: number } | null }
+      catch { return null }
+    })())
+
+    const [phase, setPhase] = useState<Phase>(_resumeJob.current ? 'polling' : 'idle')
+    const [jobId, setJobId] = useState<string | null>(_resumeJob.current?.jobId ?? null)
+    const [elapsed, setElapsed] = useState(() =>
+      _resumeJob.current ? Math.min(Math.floor((Date.now() - _resumeJob.current.startedAt) / 1000), 240) : 0
+    )
+    const [progress, setProgress] = useState(() =>
+      _resumeJob.current ? fakeProgress(Math.min(Math.floor((Date.now() - _resumeJob.current.startedAt) / 1000), 240)) : 0
+    )
     const [metadata, setMetadata] = useState<JobMetadata | null>(null)
     const [finalImage, setFinalImage] = useState<string | null>(null)
     const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -87,6 +99,24 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
     }
 
     useEffect(() => () => clearAllTimers(), [])
+
+    useEffect(() => {
+      if (phase === 'done' && finalImage) onDone?.(finalImage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [phase, finalImage])
+
+    // Kick off polling for a job that was active when the user navigated away
+    useEffect(() => {
+      if (_resumeJob.current?.jobId) {
+        startPolling(_resumeJob.current.jobId)
+        // startPolling resets elapsed/progress to 0 — override with actual values.
+        // React batches all setState calls in this effect; these last calls win.
+        const actual = Math.min(Math.floor((Date.now() - _resumeJob.current.startedAt) / 1000), 240)
+        setElapsed(actual)
+        setProgress(fakeProgress(actual))
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     useEffect(() => {
       if (!address) return
@@ -145,6 +175,8 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
           clearAllTimers()
           setErrorMsg('Generation timed out. The server may have restarted mid-job. Please try again.')
           setPhase('error')
+          localStorage.removeItem('vvc-tracked-job')
+          window.dispatchEvent(new CustomEvent('vvc:job-done', { detail: { success: false } }))
           return
         }
         try {
@@ -155,11 +187,15 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
             setFinalImage(imageUrl(id))
             setProgress(100)
             setPhase('resolving')
+            localStorage.removeItem('vvc-tracked-job')
+            window.dispatchEvent(new CustomEvent('vvc:job-done', { detail: { success: true } }))
             resolveTimerRef.current = setTimeout(() => setPhase('done'), 550)
           } else if (status === 'failed') {
             clearAllTimers()
             setErrorMsg(error || 'Generation failed. Try again.')
             setPhase('error')
+            localStorage.removeItem('vvc-tracked-job')
+            window.dispatchEvent(new CustomEvent('vvc:job-done', { detail: { success: false } }))
           }
         } catch {
           consecutiveFailsRef.current += 1
@@ -289,6 +325,9 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
         setJobId(result.job_id)
         setPhase('polling')
         startPolling(result.job_id)
+        // Persist so the JobTrackerPill can track across navigation
+        localStorage.setItem('vvc-tracked-job', JSON.stringify({ jobId: result.job_id, startedAt: Date.now() }))
+        window.dispatchEvent(new CustomEvent('vvc:job-started', { detail: { jobId: result.job_id } }))
 
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Something went wrong.'
@@ -305,6 +344,7 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
       setElapsed(0); setProgress(0)
       setVirginLabels([]); setChadLabels([])
       consecutiveFailsRef.current = 0
+      onReset?.()
     }
 
     const handleDownload = () => {
@@ -339,7 +379,14 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
 
           {/* Form — shown when idle or error */}
           {showForm && (
-            <>
+            <div style={{ position: 'relative' }}>
+              {/* Invisible overlay: clicking any field in readOnly mode is equivalent to "CREATE MY OWN" */}
+              {readOnly && onCreateOwn && (
+                <div
+                  style={{ position: 'absolute', inset: 0, zIndex: 2, cursor: 'pointer' }}
+                  onClick={onCreateOwn}
+                />
+              )}
               {/* ── Freestyle section ── */}
               <div className="form-section">
                 <button
@@ -454,7 +501,7 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
                   </div>
                 )}
               </div>
-            </>
+            </div>
           )}
 
           {/* Payment flow states */}
@@ -497,29 +544,13 @@ export const MemeCreator = forwardRef<HTMLDivElement, MemeCreatorProps>(
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              {metadata && (
-                <div className="label-preview" style={{ marginTop: 8 }}>
-                  <div className="label-preview-side">
-                    <div className="label-preview-heading">Virgin {virgin || metadata.id}</div>
-                    <div className="label-chips">
-                      {metadata.virgin_labels.map((l) => <span key={l} className="label-chip">{l}</span>)}
-                    </div>
-                  </div>
-                  <div className="label-preview-side">
-                    <div className="label-preview-heading">Chad {chad}</div>
-                    <div className="label-chips">
-                      {metadata.chad_labels.map((l) => <span key={l} className="label-chip">{l}</span>)}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
-          {/* Done — show image inline */}
+          {/* Done — show image inline only when no parent display handler */}
           {phase === 'done' && finalImage && (
             <div className="creator-inline-result">
-              <img src={finalImage} alt={`Virgin ${virgin} vs Chad ${chad}`} />
+              {!onDone && <img src={finalImage} alt={`Virgin ${virgin} vs Chad ${chad}`} />}
               <div className="creator-result-actions">
                 <button className="btn-download" onClick={handleDownload}>↓ Download</button>
                 <button className="btn-tweet" onClick={handleShareTwitter}>𝕏 Share</button>

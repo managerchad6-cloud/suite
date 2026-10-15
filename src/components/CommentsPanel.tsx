@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { truncateAddress } from '../wallet'
-import { dispatchBadges } from '../api/player'
+import { dispatchBadges, dispatchXP } from '../api/player'
 import type { UnifiedMemeItem } from '../types/unified'
 import './CommentsPanel.css'
 
@@ -116,8 +116,9 @@ export function CommentsPanel({ item, address, onClose }: Props) {
         }),
       })
       if (!res.ok) return
-      const newComment: Comment & { new_badges?: unknown[] } = await res.json()
+      const newComment: Comment & { new_badges?: unknown[]; xp_awarded?: number } = await res.json()
       dispatchBadges(newComment.new_badges as never)
+      if (newComment.xp_awarded) dispatchXP(newComment.xp_awarded)
       if (replyTo) {
         setComments(prev => prev.map(c =>
           c.id === replyTo.id ? { ...c, replies: [...c.replies, newComment] } : c

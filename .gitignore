@@ -4,3 +4,6 @@ dist/
 tsconfig.tsbuildinfo
 public/assets/gallery/
 public/assets/chars/
+
+# Character art (media store: tools/media.py)
+public/assets/cast/

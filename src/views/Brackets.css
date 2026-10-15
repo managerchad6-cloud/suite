@@ -3,6 +3,82 @@
   background: #0a0a0a; color: #e0e0e0; overflow-y: auto;
 }
 
+/* ── Prizes & quests ── */
+.prizes-section { padding: 24px 32px 0; flex-shrink: 0; }
+.prizes-section-header { margin-bottom: 14px; }
+.prizes-section-title { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 0.04em; color: #fff; }
+.prizes-section-title--sm { font-size: 16px; }
+.prizes-section-sub { margin: 4px 0 0; font-size: 12px; color: #666; }
+
+.prizes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.prize-card {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: #111; border: 1px solid #2a2206; border-radius: 12px; padding: 14px;
+  box-shadow: 0 0 24px rgba(255,215,0,0.04);
+}
+.prize-card-icon { font-size: 22px; flex-shrink: 0; }
+.prize-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.prize-card-title { font-size: 13px; font-weight: 700; color: #eee; }
+.prize-card-desc  { font-size: 11px; color: #777; line-height: 1.45; }
+.prize-card-reward {
+  flex-shrink: 0; font-size: 14px; font-weight: 800; color: #FFD700;
+  background: #1a1200; border: 1px solid #a08020; border-radius: 8px;
+  padding: 4px 10px; white-space: nowrap;
+}
+
+.quests-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.quest-card {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 14px;
+}
+.quest-card-icon { font-size: 20px; flex-shrink: 0; }
+.quest-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.quest-card-title { font-size: 13px; font-weight: 700; color: #eee; }
+.quest-card-desc  { font-size: 11px; color: #777; line-height: 1.45; }
+.quest-card-tag {
+  flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+  color: #4acc7a; background: #0a1f10; border: 1px solid #2a7a44; border-radius: 4px;
+  padding: 3px 7px; height: fit-content;
+}
+
+/* ── Leaderboard ── */
+.lb-list { display: flex; flex-direction: column; gap: 6px; }
+
+.lb-row {
+  display: flex; align-items: center; gap: 12px;
+  background: #111; border: 1px solid #1e1e1e; border-radius: 10px;
+  padding: 8px 14px; width: 100%; text-align: left;
+  font-family: inherit; cursor: pointer; color: inherit;
+  transition: border-color 0.12s, background 0.12s;
+}
+.lb-row:hover { border-color: #333; background: #161616; }
+
+.lb-rank { width: 28px; flex-shrink: 0; font-size: 13px; font-weight: 800; color: #888; text-align: center; }
+.lb-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #1a1a1a; }
+.lb-avatar--placeholder { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #666; }
+.lb-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: capitalize; }
+
+.lb-rank-tier {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 4px; flex-shrink: 0;
+}
+.lb-rank-tier--chad   { color: #F0A020; background: #1a1200; border: 1px solid #5a3a00; }
+.lb-rank-tier--virgin { color: #4dc8ff; background: #001a26; border: 1px solid #00425a; }
+.lb-rank-tier--neutral{ color: #888; background: #1a1a1a; border: 1px solid #333; }
+
+.lb-xp     { font-size: 12px; font-weight: 700; color: #FFD700; flex-shrink: 0; min-width: 70px; text-align: right; }
+.lb-badges { font-size: 12px; font-weight: 700; color: #999; flex-shrink: 0; min-width: 48px; text-align: right; }
+
 .brackets-header {
   padding: 24px 32px 16px; border-bottom: 1px solid #1a1a1a; flex-shrink: 0;
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;

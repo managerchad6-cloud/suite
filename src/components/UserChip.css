@@ -1,0 +1,80 @@
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px 2px 2px;
+  border-radius: 20px;
+  transition: background 0.15s;
+  font-family: inherit;
+  max-width: 160px;
+  vertical-align: middle;
+}
+.user-chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.user-chip--admin {
+  color: var(--gold, #f5c842);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: default;
+  padding: 2px 4px;
+}
+
+/* ─── Avatar ─────────────────────────────────────────────── */
+.uc-av {
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #2a2a2a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.user-chip--sm .uc-av { width: 22px; height: 22px; }
+.user-chip--md .uc-av { width: 32px; height: 32px; }
+
+.uc-av-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.uc-av-fb {
+  font-size: 8px;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.uc-av-pulse {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #1e1e1e 25%, #2d2d2d 50%, #1e1e1e 75%);
+  background-size: 200% 100%;
+  animation: uc-shimmer 1.4s infinite linear;
+}
+
+@keyframes uc-shimmer {
+  0%   { background-position: 200% 0 }
+  100% { background-position: -200% 0 }
+}
+
+/* ─── Label ──────────────────────────────────────────────── */
+.uc-label {
+  font-size: 11px;
+  color: #888;
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+  transition: color 0.15s;
+}
+.user-chip:hover .uc-label {
+  color: #ccc;
+}

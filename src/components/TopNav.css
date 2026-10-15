@@ -1,0 +1,203 @@
+:root { --topnav-h: 54px; }
+
+.topnav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--topnav-h);
+  z-index: 500;
+  background: #0a0a0a;
+  border-bottom: 1px solid rgba(240, 160, 32, 0.35);
+  box-shadow: 0 1px 0 rgba(240, 160, 32, 0.08), 0 4px 24px rgba(0,0,0,0.6);
+  transform: translateY(0);
+  transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.topnav--hidden {
+  transform: translateY(-100%);
+}
+
+.topnav-inner {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 16px;
+  gap: 0;
+}
+
+/* Logo */
+.topnav-logo {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin-right: 12px;
+}
+.topnav-logo img {
+  height: 32px;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(240,160,32,0.4));
+  transition: filter 0.15s;
+}
+.topnav-logo:hover img { filter: drop-shadow(0 0 14px rgba(240,160,32,0.7)); }
+
+/* Nav items */
+.topnav-links {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.topnav-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255,255,255,0.4);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  cursor: pointer;
+  white-space: nowrap;
+  height: var(--topnav-h);
+  box-sizing: border-box;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.topnav-item:hover {
+  color: rgba(255,255,255,0.85);
+  background: rgba(255,255,255,0.04);
+}
+.topnav-item.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  background: rgba(240,160,32,0.06);
+}
+.topnav-item-icon { font-size: 14px; line-height: 1; }
+.topnav-item-label { text-transform: uppercase; }
+
+/* Right cluster */
+.topnav-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+/* Website link */
+.topnav-website {
+  font-size: 16px;
+  color: rgba(255,255,255,0.35);
+  text-decoration: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.topnav-website:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.06); }
+
+/* Profile chip */
+.topnav-profile {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 4px;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.topnav-profile:hover,
+.topnav-profile.active { border-color: var(--gold); background: rgba(240,160,32,0.06); }
+
+.topnav-avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.12);
+  flex-shrink: 0;
+}
+.topnav-avatar-placeholder {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--text-dim);
+  flex-shrink: 0;
+}
+.topnav-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+.topnav-wallet {
+  font-size: 9px;
+  font-family: 'Courier New', monospace;
+  color: var(--gold);
+  line-height: 1;
+}
+.topnav-xp {
+  font-size: 9px;
+  font-weight: 700;
+  color: #ffcc00;
+  line-height: 1;
+}
+
+/* Disconnect */
+.topnav-disconnect {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.3);
+  font-size: 10px;
+  padding: 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--font-ui);
+  letter-spacing: 0.04em;
+  transition: color 0.1s, border-color 0.1s;
+}
+.topnav-disconnect:hover { color: rgba(255,255,255,0.75); border-color: #666; }
+
+/* Override NotificationBell group inside topnav to be compact */
+.topnav-right .notif-btn-group {
+  width: auto;
+  gap: 4px;
+}
+.topnav-right .notif-bell,
+.topnav-right .notif-msg-btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+/* CreditBalance inside topnav */
+.topnav-right [data-zad-target="credits"] > * {
+  border-radius: 14px;
+  font-size: 10px;
+  padding: 4px 10px;
+}
+
+@media (max-width: 900px) {
+  .topnav-item-label { display: none; }
+  .topnav-item { padding: 6px 7px; gap: 0; }
+  .topnav-profile-info { display: none; }
+  .topnav-profile { padding: 4px; }
+  .topnav-disconnect { display: none; }
+}

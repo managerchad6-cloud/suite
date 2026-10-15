@@ -1,0 +1,56 @@
+.treasury-root {
+  height: 100%; overflow-y: auto;
+  background: #0a0a0a; color: #e0e0e0;
+}
+
+.treasury-header {
+  padding: 24px 32px 16px; border-bottom: 1px solid #1a1a1a;
+}
+.treasury-title { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: 0.04em; color: #fff; }
+.treasury-sub   { margin: 6px 0 0; font-size: 12px; color: #666; }
+
+.treasury-body {
+  padding: 32px; display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start;
+}
+
+.treasury-chart-wrap { flex-shrink: 0; }
+
+.treasury-donut {
+  width: 260px; height: 260px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 40px rgba(240,160,32,0.08);
+}
+.treasury-donut-hole {
+  width: 160px; height: 160px; border-radius: 50%;
+  background: #0a0a0a; border: 1px solid #1e1e1e;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.treasury-donut-label { font-size: 18px; font-weight: 800; color: #FFD700; letter-spacing: 0.04em; }
+.treasury-donut-sub   { font-size: 10px; color: #555; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; }
+
+.treasury-legend {
+  flex: 1; min-width: 280px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.treasury-legend-row {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 12px 14px;
+}
+.treasury-legend-row--tba { border-style: dashed; opacity: 0.75; }
+
+.treasury-legend-swatch {
+  width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; margin-top: 2px;
+}
+
+.treasury-legend-text { flex: 1; min-width: 0; }
+.treasury-legend-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.treasury-legend-label { font-size: 13px; font-weight: 700; color: #eee; }
+.treasury-legend-pct   { font-size: 13px; font-weight: 800; color: #F0A020; }
+.treasury-legend-detail { font-size: 11px; color: #777; margin-top: 4px; line-height: 1.4; }
+
+@media (max-width: 700px) {
+  .treasury-body { padding: 20px; gap: 24px; }
+  .treasury-donut { width: 200px; height: 200px; }
+  .treasury-donut-hole { width: 124px; height: 124px; }
+}

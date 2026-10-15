@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { respondToFriendRequest } from '../api/friends'
 import './NotificationPanel.css'
 
 interface Notification {
@@ -20,6 +21,11 @@ const TYPE_ICON: Record<string, string> = {
   pantheon_induction:  '👑',
   character_unlocked:  '🔓',
   achievement_unlocked:'🏆',
+  friend_request:           '🤝',
+  friend_request_accepted:  '✅',
+  friend_published:         '📣',
+  profile_comment:          '💬',
+  dm:                       '✉️',
   default:             '🔔',
 }
 
@@ -31,8 +37,17 @@ function formatNotif(n: Notification): string {
     case 'scout_payoff':       return `Scout bonus — your early vote paid off (+${p.xp} XP)`
     case 'character_unlocked': return `${p.name} unlocked!`
     case 'streak_warning':     return 'Your streak expires in 4 hours — log in!'
+    case 'friend_request':          return `${truncWallet(String(p.from))} sent you a friend request`
+    case 'friend_request_accepted': return `${truncWallet(String(p.by))} accepted your friend request`
+    case 'friend_published':        return `${truncWallet(String(p.wallet))} published a new meme`
+    case 'profile_comment':         return `${truncWallet(String(p.from))} commented on your profile`
+    case 'dm':                      return `${truncWallet(String(p.from))}: ${p.preview}`
     default:                   return n.type.replace(/_/g, ' ')
   }
+}
+
+function truncWallet(w: string): string {
+  return w && w.length > 10 ? `${w.slice(0, 4)}…${w.slice(-4)}` : w
 }
 
 function timeAgo(iso: string): string {
@@ -45,15 +60,21 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-interface Props { wallet: string }
+interface Props {
+  wallet: string
+  onNavigate?: (path: string) => void
+  onOpenChat?: (wallet: string) => void
+  onOpenMessages?: (rect: DOMRect) => void
+}
 
-export function NotificationBell({ wallet }: Props) {
+export function NotificationBell({ wallet, onNavigate, onOpenChat, onOpenMessages }: Props) {
   const [open,   setOpen]   = useState(false)
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [unread, setUnread] = useState(0)
-  // anchor = distance from viewport bottom/left so panel grows upward
-  const [pos, setPos] = useState({ bottom: 0, left: 0 })
+  const [resolving, setResolving] = useState<string | null>(null)
+  const [pos, setPos] = useState<React.CSSProperties>({})
   const bellRef  = useRef<HTMLButtonElement>(null)
+  const msgBtnRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
   const load = () => {
@@ -68,9 +89,15 @@ export function NotificationBell({ wallet }: Props) {
   function toggle() {
     if (!open && bellRef.current) {
       const r = bellRef.current.getBoundingClientRect()
-      // Panel grows upward from just above the button
-      const bottom = window.innerHeight - r.top + 8
-      setPos({ bottom: Math.max(8, bottom), left: r.right + 10 })
+      const inTopHalf = r.top < window.innerHeight / 2
+      if (inTopHalf) {
+        // Drop down from below the button; right-align to button's right edge
+        const right = window.innerWidth - r.right
+        setPos({ top: r.bottom + 8, right: Math.max(8, right) })
+      } else {
+        // Grow upward; appear to the right of the button
+        setPos({ bottom: Math.max(8, window.innerHeight - r.top + 8), left: r.right + 10 })
+      }
     }
     setOpen(o => !o)
   }
@@ -99,18 +126,65 @@ export function NotificationBell({ wallet }: Props) {
     setNotifs(prev => prev.map(n => ({ ...n, read: 1 })))
   }
 
+  function navPathFor(n: Notification): string | null {
+    const p = n.payload
+    switch (n.type) {
+      case 'friend_request_accepted': return `/u/${p.by}`
+      case 'friend_published':        return `/memes/${p.meme_source}/${p.meme_id}`
+      case 'profile_comment':         return '/profile'
+      default: return null
+    }
+  }
+
+  function handleItemClick(n: Notification) {
+    if (n.type === 'friend_request') return
+    if (n.type === 'dm') {
+      if (onOpenChat) { onOpenChat(String(n.payload.from)); setOpen(false) }
+      return
+    }
+    const path = navPathFor(n)
+    if (path && onNavigate) { onNavigate(path); setOpen(false) }
+  }
+
+  async function respond(n: Notification, action: 'accept' | 'decline') {
+    const requestId = n.payload.request_id as number | undefined
+    if (!requestId) return
+    setResolving(n.id)
+    try {
+      await respondToFriendRequest(requestId, action)
+      setNotifs(prev => prev.filter(x => x.id !== n.id))
+    } catch { /* leave it in the list, user can retry */ }
+    finally { setResolving(null) }
+  }
+
   return (
     <>
-      <button ref={bellRef} className="notif-bell" onClick={toggle} aria-label="Notifications">
-        🔔
-        {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
-      </button>
+      <div className="notif-btn-group">
+        <button ref={bellRef} className="notif-bell" onClick={toggle} aria-label="Notifications">
+          🔔
+          {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
+        </button>
+        <button
+          ref={msgBtnRef}
+          className="notif-msg-btn"
+          onClick={() => {
+            if (onOpenMessages && msgBtnRef.current) {
+              onOpenMessages(msgBtnRef.current.getBoundingClientRect())
+            } else if (onOpenChat) {
+              onOpenChat('')
+            }
+          }}
+          aria-label="Messages"
+        >
+          💬
+        </button>
+      </div>
 
       {open && createPortal(
         <div
           ref={panelRef}
           className="notif-panel"
-          style={{ bottom: pos.bottom, left: pos.left }}
+          style={pos}
         >
           <div className="notif-panel-header">
             <span className="notif-panel-title">Notifications</span>
@@ -122,11 +196,29 @@ export function NotificationBell({ wallet }: Props) {
             {notifs.length === 0 ? (
               <p className="notif-empty">Nothing yet.</p>
             ) : notifs.map(n => (
-              <div key={n.id} className={`notif-item ${!n.read ? 'notif-item--unread' : ''}`}>
+              <div
+                key={n.id}
+                className={`notif-item ${!n.read ? 'notif-item--unread' : ''} ${(navPathFor(n) || n.type === 'dm') ? 'notif-item--clickable' : ''}`}
+                onClick={() => handleItemClick(n)}
+              >
                 <span className="notif-icon">{TYPE_ICON[n.type] ?? TYPE_ICON.default}</span>
                 <div className="notif-body">
                   <span className="notif-text">{formatNotif(n)}</span>
                   <span className="notif-time">{timeAgo(n.created_at)}</span>
+                  {n.type === 'friend_request' && (
+                    <div className="notif-actions" onClick={e => e.stopPropagation()}>
+                      <button
+                        className="notif-action notif-action--accept"
+                        disabled={resolving === n.id}
+                        onClick={() => respond(n, 'accept')}
+                      >Accept</button>
+                      <button
+                        className="notif-action notif-action--decline"
+                        disabled={resolving === n.id}
+                        onClick={() => respond(n, 'decline')}
+                      >Decline</button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

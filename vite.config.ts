@@ -6,8 +6,8 @@ const QUIZ_LOGGER = 'http://localhost:3015'
 const STUDIO    = 'http://localhost:3016'
 const GENERATOR = 'http://93.127.214.75:8000'
 const RANKING   = 'http://93.127.214.75:3007'
-const CHAT      = 'http://94.130.36.242:3002'
-const ANIM      = 'http://94.130.36.242:3003'
+const CHAT      = 'http://62.83.40.113:3002'
+const ANIM      = 'http://62.83.40.113:3003'
 const X_BACKEND = 'http://localhost:3025'
 
 export default defineConfig({
@@ -18,9 +18,9 @@ export default defineConfig({
   server: {
     port: 5291,
     proxy: {
-'/api/quiz-log':  { target: QUIZ_LOGGER, changeOrigin: true },
-      '/profiles':     { target: QUIZ_LOGGER, changeOrigin: true },
-      '/comments':     { target: QUIZ_LOGGER, changeOrigin: true },
+'/api/quiz-log':  { target: STUDIO, changeOrigin: true },
+      '/profiles':     { target: STUDIO, changeOrigin: true },
+      '/comments':     { target: STUDIO, changeOrigin: true },
       '/generate':   { target: GENERATOR, changeOrigin: true },
       '/parse':      { target: GENERATOR, changeOrigin: true },
       '/jobs':       { target: GENERATOR, changeOrigin: true },
@@ -44,6 +44,9 @@ export default defineConfig({
       '/api/handmade':     { target: STUDIO, changeOrigin: true },
       '/api/forum':        { target: STUDIO, changeOrigin: true },
       '/api/follow':       { target: STUDIO, changeOrigin: true },
+      '/api/friends':      { target: STUDIO, changeOrigin: true },
+      '/api/messages':     { target: STUDIO, changeOrigin: true },
+      '/api/leaderboard':  { target: STUDIO, changeOrigin: true },
       '/api/twitter':      { target: STUDIO,     changeOrigin: true },
       '/api/x':            { target: X_BACKEND, changeOrigin: true },
       '/share':            { target: STUDIO, changeOrigin: true },
@@ -61,7 +64,7 @@ export default defineConfig({
       '/api/suggestions': { target: CHAT,  changeOrigin: true },
       '/api/yt-queue':    { target: ANIM,  changeOrigin: true },
       '/streams':    { target: ANIM,      changeOrigin: true },
-      '/ws/orchestrator': { target: 'ws://94.130.36.242:3003', ws: true, changeOrigin: true },
+      '/ws/orchestrator': { target: 'ws://62.83.40.113:3003', ws: true, changeOrigin: true },
     },
   },
   resolve: {

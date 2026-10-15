@@ -1,34 +1,44 @@
 export interface Comment {
-  id: number
-  job_id: string
+  id: string
   wallet: string
-  text: string
-  createdAt: string
-  like_count: number
-  parent_id: number | null
+  body: string
+  created_at: string
+  likes: number
+  parent_id: string | null
+  your_like: boolean
+  replies: Comment[]
 }
 
-export async function fetchComments(job_id: string): Promise<Comment[]> {
+export async function fetchComments(source: string, memeId: string, wallet?: string): Promise<Comment[]> {
   try {
-    const res = await fetch(`/comments/${encodeURIComponent(job_id)}`)
+    const q = wallet ? `?wallet=${encodeURIComponent(wallet)}` : ''
+    const res = await fetch(`/api/comments/${encodeURIComponent(source)}/${encodeURIComponent(memeId)}${q}`)
     if (!res.ok) return []
-    return res.json()
+    const data = await res.json()
+    return data.items ?? []
   } catch {
     return []
   }
 }
 
-export async function postComment(job_id: string, wallet: string, text: string, parentId?: number): Promise<void> {
-  const res = await fetch('/comments', {
+export async function postComment(
+  memeId: string,
+  source: string,
+  wallet: string,
+  body: string,
+  parentId?: string | null,
+): Promise<Comment> {
+  const res = await fetch('/api/comments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ job_id, wallet, text, parent_id: parentId ?? null }),
+    body: JSON.stringify({ meme_id: memeId, meme_source: source, wallet, body, parent_id: parentId ?? null }),
   })
   if (!res.ok) throw new Error('Failed to post comment')
+  return res.json()
 }
 
-export async function likeComment(commentId: number, wallet: string): Promise<{ like_count: number }> {
-  const res = await fetch(`/comments/${commentId}/like`, {
+export async function likeComment(commentId: string, wallet: string): Promise<{ likes: number }> {
+  const res = await fetch(`/api/comments/${encodeURIComponent(commentId)}/like`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ wallet }),

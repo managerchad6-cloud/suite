@@ -1,32 +1,32 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   disconnectWallet, tryAutoConnect, truncateAddress,
   detectWallets, connectWalletByType,
   type WalletType, type WalletInfo,
 } from '@mf/wallet'
-import { Live } from './views/Live'
-import { Memes } from './views/Memes'
-import { Vote } from './views/Vote'
-import { Characters } from './views/Characters'
-import { Quiz } from './views/Quiz'
-import { Profile } from './views/Profile'
-import { MemeStudio } from './views/MemeStudio'
-import { Gallery } from './views/Gallery'
-import { Feed } from './views/Feed'
-import { Brackets } from './views/Brackets'
-import { UnifiedMemeDetail } from './views/UnifiedMemeDetail'
-import { MemeDetail } from './views/MemeDetail'
-import { PublicProfile } from './views/PublicProfile'
 import { BadgeUnlockedToast } from './components/BadgeUnlockedToast'
+import { JobTrackerPill } from './components/JobTrackerPill'
+import ZadHelper from './components/ZadHelper/ZadHelper'
 import { NotificationBell } from './components/NotificationPanel'
+import { ChatWidget } from './components/ChatWidget'
 import { CreditBalance } from './components/CreditBalance'
-import { loadProfile, type UserProfile } from './lib/quizLog'
+import { TopNav } from './components/TopNav'
+import { loadProfile, ensurePortraitsOnServer, type UserProfile } from './lib/quizLog'
+import { primePortraitCache } from './components/UserChip'
 import { fetchPlayer, recordLogin, type PlayerState, type BadgeDef } from './api/player'
 import { claimSignupBonus } from './api/credits'
-import type { Meme } from './api/memes'
-import type { UnifiedMemeItem } from './types/unified'
 
-type View = 'live' | 'onboarding' | 'memes' | 'factory' | 'vote' | 'characters' | 'quiz' | 'profile' | 'studio' | 'brackets'
+const NAV_MODE = (import.meta.env.VITE_NAV_MODE ?? 'side') as 'side' | 'top'
+
+export type AppOutletContext = {
+  address: string
+  profile: UserProfile | null
+  setProfile: (p: UserProfile | null) => void
+  playerState: PlayerState | null
+  refreshPlayer: () => void
+  openChat: (wallet?: string) => void
+}
 
 const REEL_L = [
   'gizzard','bad','wraith','grandwizard','witch','wizard',
@@ -113,17 +113,45 @@ function WalletGate({ onConnect }: { onConnect: (addr: string) => void }) {
   )
 }
 
+const NAV_ITEMS = [
+  { path: '/live',    icon: '◉', label: 'LIVE',    zadTarget: 'live'    },
+  { path: '/pfp',     icon: '🎯', label: 'PFP',    zadTarget: 'pfp'     },
+  { path: '/memes',   icon: '🖼', label: 'MEMES',  zadTarget: 'memes'   },
+  { path: '/vote',    icon: '🗳', label: 'VOTE',   zadTarget: 'vote'    },
+  { path: '/cast',    icon: '⚡', label: 'CAST',   zadTarget: 'cast'    },
+  { path: '/prizes',  icon: '🏆', label: 'PRIZES', zadTarget: 'prizes'  },
+  { path: '/treasury',icon: '🏛', label: 'TREASURY',zadTarget: 'treasury' },
+  { path: '/studio',  icon: '🖌', label: 'STUDIO', zadTarget: 'studio'  },
+  { path: '/factory', icon: '🎭', label: 'FACTORY',zadTarget: 'factory' },
+  // VIDEO / VIDEOS hidden — feature not production-ready yet
+  { path: '/forum',   icon: '💬', label: 'FORUM',  zadTarget: 'forum'   },
+] as const
+
 export default function App() {
-  const [address,       setAddress]       = useState<string | null>(null)
-  const [view,          setView]          = useState<View>('live')
-  const [profile,       setProfile]       = useState<UserProfile | null | undefined>(undefined)
-  const [playerState,   setPlayerState]   = useState<PlayerState | null>(null)
-  const [newBadges,     setNewBadges]     = useState<BadgeDef[]>([])
-  const [unifiedDetail, setUnifiedDetail] = useState<UnifiedMemeItem | null>(null)
-  const [detailMeme,    setDetailMeme]    = useState<Meme | null>(null)
-  const [charTarget,    setCharTarget]    = useState<string | null>(null)
-  const [profileTarget, setProfileTarget] = useState<string | null>(null)
-  const [remixSourceId, setRemixSourceId] = useState<string | null>(null)
+  const [address,     setAddress]     = useState<string | null>(null)
+  const [profile,     setProfile]     = useState<UserProfile | null | undefined>(undefined)
+  const [playerState, setPlayerState] = useState<PlayerState | null>(null)
+  const [newBadges,   setNewBadges]   = useState<BadgeDef[]>([])
+  const [chatOpen,    setChatOpen]    = useState(false)
+  const [chatPartner, setChatPartner] = useState<string | null>(null)
+  const [chatAnchor,  setChatAnchor]  = useState<DOMRect | null>(null)
+
+  const openChat = useCallback((wallet?: string) => {
+    if (wallet) setChatPartner(wallet)
+    setChatAnchor(null)   // sidebar mode
+    setChatOpen(true)
+  }, [])
+
+  const openMessages = useCallback((rect: DOMRect) => {
+    // toggle if already open as popup
+    if (chatOpen && chatAnchor) { setChatOpen(false); setChatAnchor(null); return }
+    setChatPartner(null)
+    setChatAnchor(rect)
+    setChatOpen(true)
+  }, [chatOpen, chatAnchor])
+
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const refreshPlayer = useCallback(async (addr: string) => {
     try { setPlayerState(await fetchPlayer(addr)) } catch {}
@@ -140,24 +168,44 @@ export default function App() {
   }, [pushBadges])
 
   useEffect(() => {
+    const handler = () => { if (address) void refreshPlayer(address) }
+    window.addEventListener('vvc:xp-awarded', handler)
+    return () => window.removeEventListener('vvc:xp-awarded', handler)
+  }, [address, refreshPlayer])
+
+  useEffect(() => {
     tryAutoConnect().then((addr) => { if (addr) setAddress(addr) })
   }, [])
 
   useEffect(() => {
     if (!address) { setProfile(null); setPlayerState(null); return }
     setProfile(undefined)
-    loadProfile(address).then(p => setProfile(p ?? null))
+    loadProfile(address).then(p => {
+      setProfile(p ?? null)
+      if (p) {
+        // Prime the UserChip portrait cache so any chip showing this wallet
+        // immediately uses the local data URL while server portraits sync.
+        const localPortrait = p.portraitDataUrl ?? p.characterImageDataUrl
+        if (localPortrait) primePortraitCache(address, localPortrait)
+        // Fire-and-forget: upload portraits to server if not already there.
+        ensurePortraitsOnServer(address, p).catch(() => {})
+      }
+    })
     refreshPlayer(address)
-    // Claim signup bonus on every connect — server is idempotent (grants once only)
     claimSignupBonus(address).then(r => {
       if (r.granted > 0) window.dispatchEvent(new CustomEvent('vvc:credits-changed'))
     }).catch(() => {})
-    // Record daily login and show any badge unlocks
     recordLogin(address).then(r => {
       pushBadges(r.new_badges)
       refreshPlayer(address)
     })
   }, [address, pushBadges, refreshPlayer])
+
+  const setProfileAndPrime = useCallback((p: UserProfile | null) => {
+    setProfile(p)
+    const localPortrait = p?.portraitDataUrl ?? p?.characterImageDataUrl
+    if (address && localPortrait) primePortraitCache(address, localPortrait)
+  }, [address])
 
   if (!address) return <WalletGate onConnect={setAddress} />
   if (profile === undefined) return null
@@ -168,131 +216,114 @@ export default function App() {
     setProfile(null)
   }
 
-  const userProfile = profile
-  const avatar = userProfile?.portraitDataUrl ?? (userProfile?.character ? `/assets/chars/${userProfile.character}.png` : null)
+  // Server portrait URL is the source of truth. Pass local data URL as fallback so TopNav
+  // can display something while the server syncs or if upload hasn't happened yet.
+  const avatarSrc      = `/profiles/${encodeURIComponent(address)}/portrait`
+  const avatarFallback = profile?.portraitDataUrl
+    ?? profile?.characterImageDataUrl
+    ?? (profile?.character ? `/assets/chars/${profile.character}.png` : null)
 
-  // When Studio publishes, open the new meme in unified detail
-  function handlePublished(id: string) {
-    setUnifiedDetail({
-      key: `studio:${id}`, type: 'studio',
-      imageUrl: `/handmade/${id}/image`,
-      title: '', meta: '', dateIso: new Date().toISOString(),
-      sourceId: id,
-    })
-    setView('memes')
+  const ctx: AppOutletContext = {
+    address,
+    profile,
+    setProfile: setProfileAndPrime,
+    playerState,
+    refreshPlayer: () => refreshPlayer(address),
+    openChat,
   }
 
   return (
-    <div className="suite-shell">
+    <div className={`suite-shell${NAV_MODE === 'top' ? ' suite-shell--top' : ''}`}>
       <BadgeUnlockedToast
         badges={newBadges}
         onDismiss={id => setNewBadges(prev => prev.filter(b => b.id !== id))}
       />
-      <nav className="suite-nav">
-        <img src="/assets/logo.png" alt="Virgin VS Chad" className="suite-nav-brand" />
-        <div className="suite-nav-links">
-          {([
-            { id: 'live',       icon: '◉', label: 'LIVE'       },
-            { id: 'onboarding', icon: '🎯', label: 'PFP'         },
-            { id: 'memes',      icon: '🖼', label: 'MEMES'      },
-            { id: 'vote',       icon: '🗳', label: 'VOTE'       },
-            { id: 'characters', icon: '⚡', label: 'CAST'        },
-            { id: 'brackets',   icon: '🏆', label: 'PRIZES'     },
-            { id: 'studio',     icon: '🖌', label: 'STUDIO'     },
-            { id: 'factory',    icon: '🎭', label: 'FACTORY'    },
-          ] as { id: View; icon: string; label: string }[]).map(({ id, icon, label }) => (
-            <button
-              key={id}
-              className={`suite-nav-item ${view === id ? 'active' : ''}`}
-              onClick={() => {
-                setView(id)
-                setUnifiedDetail(null)
-                if (id !== 'characters') setCharTarget(null)
-              }}
-            >
-              <span className="nav-icon">{icon}</span>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-        <a
-          className="suite-nav-website"
-          href="https://virginvschad.vip"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <span className="nav-icon">🌐</span>
-          <span>WEBSITE</span>
-        </a>
-        <div className="suite-nav-footer">
-          <button
-            className={`suite-nav-profile-btn ${view === 'profile' ? 'active' : ''}`}
-            onClick={() => setView('profile')}
-            title="My Profile"
+      <JobTrackerPill />
+      <ZadHelper address={address} />
+
+      {NAV_MODE === 'top' ? (
+        <TopNav
+          address={address}
+          playerState={playerState}
+          avatar={avatarSrc}
+          avatarFallback={avatarFallback}
+          location={location}
+          navItems={NAV_ITEMS}
+          navigate={navigate}
+          onDisconnect={handleDisconnect}
+          onOpenChat={openChat}
+          onOpenMessages={openMessages}
+        />
+      ) : (
+        <nav className="suite-nav">
+          <img src="/assets/logo.png" alt="Virgin VS Chad" className="suite-nav-brand" />
+          <div className="suite-nav-links">
+            {NAV_ITEMS.map(({ path, icon, label, zadTarget }) => (
+              <button
+                key={path}
+                className={`suite-nav-item ${location.pathname.startsWith(path) ? 'active' : ''}`}
+                data-zad-target={zadTarget}
+                onClick={() => navigate(path)}
+              >
+                <span className="nav-icon">{icon}</span>
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+          <a
+            className="suite-nav-website"
+            href="https://virginvschad.vip"
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            {avatar
-              ? <img src={avatar} alt="profile" className="suite-nav-avatar" />
-              : <span className="suite-nav-avatar-placeholder">?</span>
-            }
-            <div className="suite-nav-profile-info">
-              <span className="suite-nav-wallet-label">{truncateAddress(address)}</span>
-              {playerState && (
-                <span className="suite-nav-xp">⚡ {(playerState.total_xp ?? 0).toLocaleString()} XP</span>
-              )}
+            <span className="nav-icon">🌐</span>
+            <span>WEBSITE</span>
+          </a>
+          <div className="suite-nav-footer">
+            <button
+              className={`suite-nav-profile-btn ${location.pathname === '/profile' ? 'active' : ''}`}
+              onClick={() => navigate('/profile')}
+              title="My Profile"
+            >
+              {avatarSrc
+                ? <img
+                    src={avatarSrc}
+                    alt="profile"
+                    className="suite-nav-avatar"
+                    onError={e => {
+                      if (avatarFallback) { e.currentTarget.onerror = null; e.currentTarget.src = avatarFallback }
+                      else e.currentTarget.style.display = 'none'
+                    }}
+                  />
+                : <span className="suite-nav-avatar-placeholder">?</span>
+              }
+              <div className="suite-nav-profile-info">
+                <span className="suite-nav-wallet-label">{truncateAddress(address)}</span>
+                {playerState && (
+                  <span className="suite-nav-xp">⚡ {(playerState.total_xp ?? 0).toLocaleString()} XP</span>
+                )}
+              </div>
+            </button>
+            <div data-zad-target="credits" style={{ display: 'contents' }}>
+              <CreditBalance wallet={address} />
             </div>
-          </button>
-          <CreditBalance wallet={address} />
-          <NotificationBell wallet={address} />
-          <button className="suite-nav-disconnect" onClick={handleDisconnect}>Disconnect</button>
-        </div>
-      </nav>
+            <NotificationBell wallet={address} onNavigate={navigate} onOpenChat={openChat} onOpenMessages={openMessages} />
+            <button className="suite-nav-disconnect" onClick={handleDisconnect}>Disconnect</button>
+          </div>
+        </nav>
+      )}
+
       <main className="suite-content">
-        {unifiedDetail ? (
-          <UnifiedMemeDetail
-            item={unifiedDetail}
-            address={address}
-            onBack={() => setUnifiedDetail(null)}
-            onOpenCharacter={name => { setUnifiedDetail(null); setView('characters'); setCharTarget(name) }}
-            onRemix={id => { setUnifiedDetail(null); setRemixSourceId(id); setView('studio') }}
-            onOpenSourceMeme={id => setUnifiedDetail({
-              key: `studio:${id}`, type: 'studio', sourceId: id,
-              imageUrl: `/handmade/${id}/image`,
-              title: '', meta: '', dateIso: '',
-            })}
-          />
-        ) : detailMeme ? (
-          <MemeDetail
-            meme={detailMeme}
-            address={address}
-            onBack={() => setDetailMeme(null)}
-            onNavigate={setDetailMeme}
-            onOpenCharacter={(name) => { setDetailMeme(null); setView('characters'); setCharTarget(name) }}
-            onOpenProfile={(w) => { setDetailMeme(null); setProfileTarget(w) }}
-          />
-        ) : profileTarget && profileTarget === address ? (
-          (() => { setView('profile'); setProfileTarget(null); return null })()
-        ) : profileTarget ? (
-          <PublicProfile
-            wallet={profileTarget}
-            onBack={() => setProfileTarget(null)}
-            onOpenDetail={(m) => { setProfileTarget(null); setDetailMeme(m) }}
-          />
-        ) : (
-          <>
-            {view === 'live'       && <Live address={address} />}
-            {view === 'onboarding' && <div style={{ height: '100%', overflow: 'auto' }}><Quiz address={address} onProfileUpdate={p => setProfile(p)} onComplete={() => setView('live')} /></div>}
-            {view === 'memes'      && <Feed address={address} onOpenItem={setUnifiedDetail} onOpenProfile={w => setProfileTarget(w)} onRemix={id => { setRemixSourceId(id); setView('studio') }} onOpenStudio={() => setView('studio')} onOpenFactory={() => setView('factory')} />}
-            {view === 'factory'    && <Memes address={address} onOpenDetail={setDetailMeme} onOpenProfile={(w) => setProfileTarget(w)} />}
-            {view === 'vote'       && <Vote address={address} />}
-            {view === 'characters' && <Characters onOpenDetail={setDetailMeme} onOpenUnifiedItem={setUnifiedDetail} initialChar={charTarget} address={address} />}
-            {view === 'quiz'       && <div style={{ height: '100%', overflow: 'auto' }}><Quiz address={address} onProfileUpdate={p => setProfile(p)} /></div>}
-            {view === 'brackets'   && <Brackets address={address} />}
-            {view === 'studio'     && <MemeStudio address={address} onPublished={id => { setRemixSourceId(null); handlePublished(id) }} remixSourceId={remixSourceId ?? undefined} />}
-            {view === 'profile'    && userProfile && <Profile address={address} profile={userProfile} onGoToOracle={() => setView('onboarding')} onOpenDetail={setDetailMeme} />}
-            {view === 'profile'    && !userProfile && <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}><p style={{ color: '#888', fontSize: 14 }}>No archetype yet. Complete the onboarding to get started.</p><button className="sh-new-btn" onClick={() => setView('onboarding')}>Go to Onboarding</button></div>}
-          </>
-        )}
+        <Outlet context={ctx} />
       </main>
+      <ChatWidget
+        address={address}
+        open={chatOpen}
+        partner={chatPartner}
+        anchorRect={chatAnchor}
+        onOpenChange={open => { setChatOpen(open); if (!open) setChatAnchor(null) }}
+        onPartnerChange={setChatPartner}
+      />
     </div>
   )
 }

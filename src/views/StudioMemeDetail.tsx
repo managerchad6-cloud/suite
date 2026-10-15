@@ -234,7 +234,7 @@ export function StudioMemeDetail({ id, address, onBack }: Props) {
 
             <div className="smd-divider" />
 
-            <CommentSection jobId={meme.id} address={address} />
+            <CommentSection jobId={meme.id} source="studio" address={address} />
 
           </div>
         </div>

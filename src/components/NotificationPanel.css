@@ -1,19 +1,31 @@
-/* Bell button — matches the nav footer's button style */
-.notif-bell {
+/* Wrapper row shared by bell + messages button */
+.notif-btn-group {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+/* Shared base for both icon buttons */
+.notif-bell,
+.notif-msg-btn {
+  flex: 1;
   background: none;
   border: 1px solid #282828;
   border-radius: 6px;
   color: rgba(255,255,255,0.5);
   font-size: 15px;
   cursor: pointer;
-  padding: 6px 10px;
+  padding: 6px 4px;
   position: relative;
-  width: 100%;
-  text-align: left;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   line-height: 1;
 }
-.notif-bell:hover { background: #1a1a1a; border-color: #444; color: rgba(255,255,255,0.85); }
+.notif-bell:hover,
+.notif-msg-btn:hover { background: #1a1a1a; border-color: #444; color: rgba(255,255,255,0.85); }
 
 .notif-badge {
   position: absolute;
@@ -80,6 +92,19 @@
 .notif-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .notif-text { font-size: 12px; color: #ccc; line-height: 1.35; }
 .notif-time { font-size: 10px; color: #555; }
+
+.notif-item--clickable { cursor: pointer; }
+
+.notif-actions { display: flex; gap: 6px; margin-top: 4px; }
+.notif-action {
+  font-size: 11px; font-weight: 700;
+  border-radius: 5px; padding: 4px 10px;
+  cursor: pointer; border: 1px solid transparent;
+  transition: opacity 0.12s;
+}
+.notif-action:disabled { opacity: 0.5; cursor: default; }
+.notif-action--accept  { background: #1a3a1a; border-color: #2a7a44; color: #4acc7a; }
+.notif-action--decline { background: #1a1a1a; border-color: #333; color: #999; }
 
 @keyframes notif-in {
   from { opacity: 0; transform: translateY(8px); }

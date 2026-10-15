@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { fetchStudioMeme, studioMemeImageUrl, type StudioMeme } from '../api/studio'
 import { fetchMetadata, type JobMetadata } from '../api/memes'
 import { truncateAddress } from '../wallet'
 import { CommentSection } from '../components/CommentSection'
+import { MemeTweetGallery } from '../components/MemeTweetGallery'
 import type { UnifiedMemeItem } from '../types/unified'
 import '../studio-meme-detail.css'
 
@@ -22,11 +24,16 @@ function getProfile(wallet: string): Promise<CachedProfile> {
 }
 
 function CreatorRow({ wallet }: { wallet: string }) {
+  const navigate = useNavigate()
   const [profile, setProfile] = useState<CachedProfile | undefined>(undefined)
   useEffect(() => { getProfile(wallet).then(setProfile) }, [wallet])
   const src = profile?.portraitDataUrl ?? (profile ? `/assets/chars/${profile.character}.png` : null)
   return (
-    <div className="smd-creator-row">
+    <div
+      className="smd-creator-row smd-creator-row--clickable"
+      onClick={() => navigate(`/u/${encodeURIComponent(wallet)}`)}
+      title={wallet}
+    >
       <div className="smd-creator-avatar">
         {profile === undefined
           ? <div className="smd-creator-avatar-placeholder">…</div>
@@ -119,21 +126,52 @@ interface Props {
 }
 
 export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRemix, onOpenSourceMeme }: Props) {
+  const navigate = useNavigate()
   const [studioMeta,  setStudioMeta]  = useState<StudioMeme | null>(null)
   const [factoryMeta, setFactoryMeta] = useState<JobMetadata | null>(null)
   const [imgLoaded,   setImgLoaded]   = useState(false)
+  const [imgError,    setImgError]    = useState(false)
+  const [notFound,    setNotFound]    = useState(false)
   const zoomImgRef = useRef<HTMLImageElement>(null)
+  // Track previous item key so StrictMode double-invocations don't reset image states
+  const prevItemKey = useRef('')
 
   useEffect(() => {
-    setStudioMeta(null)
-    setFactoryMeta(null)
-    setImgLoaded(false)
+    const keyChanged = prevItemKey.current !== item.key
+    prevItemKey.current = item.key
+    // Only wipe image/meta states when navigating to a truly different meme
+    if (keyChanged) {
+      setStudioMeta(null)
+      setFactoryMeta(null)
+      setImgLoaded(false)
+      setImgError(false)
+      setNotFound(false)
+    }
     if (item.type === 'studio') {
-      fetchStudioMeme(item.sourceId).then(setStudioMeta).catch(() => null)
+      fetchStudioMeme(item.sourceId).then(setStudioMeta).catch(() => setNotFound(true))
     } else if (item.type === 'factory') {
       fetchMetadata(item.sourceId).then(m => { if (m) setFactoryMeta(m) })
     }
   }, [item.key, item.type, item.sourceId])
+
+  // Fallback: if image hasn't loaded or errored after 8s, show unavailable
+  useEffect(() => {
+    if (imgLoaded || imgError) return
+    const timer = setTimeout(() => setImgError(true), 8000)
+    return () => clearTimeout(timer)
+  }, [item.key, imgLoaded, imgError])
+
+  // Catch the case where the browser serves the image from cache synchronously
+  // (fires onLoad before React attaches the handler — common in StrictMode remounts)
+  useLayoutEffect(() => {
+    if (imgLoaded || imgError) return
+    const img = zoomImgRef.current
+    if (!img) return
+    if (img.complete) {
+      if (img.naturalWidth > 0) setImgLoaded(true)
+      else setImgError(true)
+    }
+  }, [item.key, imgLoaded, imgError])
 
   function handleHeroMove(e: React.MouseEvent<HTMLDivElement>) {
     const img = zoomImgRef.current
@@ -150,6 +188,7 @@ export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRe
   // Resolve display values — prefer enriched, fall back to item
   const title = studioMeta?.titles?.[0] ?? item.title
   const wallet = studioMeta?.wallet ?? item.wallet
+  const dateIso = studioMeta?.created_at ?? item.dateIso
 
   // Characters
   const chars: string[] = studioMeta?.characters ?? []
@@ -174,6 +213,17 @@ export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRe
     virginLabels.length > 0 || chadLabels.length > 0 ||
     redditLeftLabels.length > 0 || redditRightLabels.length > 0
 
+  if (notFound) {
+    return (
+      <div className="smd-root">
+        <div className="smd-topbar">
+          <button className="smd-back" onClick={onBack}>← Back</button>
+        </div>
+        <div className="smd-state-fill">Meme not found.</div>
+      </div>
+    )
+  }
+
   return (
     <div className="smd-root">
       <div className="smd-topbar">
@@ -197,7 +247,8 @@ export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRe
 
         {/* ── Hero image ── */}
         <div className="smd-hero" onMouseMove={handleHeroMove}>
-          {!imgLoaded && <div className="smd-hero-loading">Loading…</div>}
+          {!imgLoaded && !imgError && <div className="smd-hero-loading">Loading…</div>}
+          {imgError && <div className="smd-hero-loading" style={{ color: '#666' }}>Image unavailable</div>}
           <img
             ref={zoomImgRef}
             className="smd-hero-img"
@@ -205,6 +256,7 @@ export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRe
             alt={title}
             style={{ display: imgLoaded ? 'block' : 'none' }}
             onLoad={() => setImgLoaded(true)}
+            onError={() => setImgError(true)}
           />
         </div>
 
@@ -300,7 +352,7 @@ export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRe
           <div className="smd-details">
             <div className="smd-detail-row">
               <span className="smd-detail-key">Created</span>
-              <span className="smd-detail-val">{formatDate(item.dateIso)}</span>
+              <span className="smd-detail-val">{dateIso ? formatDate(dateIso) : '—'}</span>
             </div>
             {item.redditScore != null && (
               <div className="smd-detail-row">
@@ -326,9 +378,21 @@ export function UnifiedMemeDetail({ item, address, onBack, onOpenCharacter, onRe
 
           <div className="smd-divider" />
 
+          {/* X tweet gallery — shows when anyone has shared this meme */}
+          {item.type !== 'reddit' && (
+            <MemeTweetGallery meme_id={item.sourceId} meme_type={item.type} />
+          )}
+
+          <div className="smd-divider" />
+
           {/* Comments — for studio and factory; reddit links to thread */}
           {item.type !== 'reddit' ? (
-            <CommentSection jobId={item.sourceId} address={address} />
+            <CommentSection
+              jobId={item.sourceId}
+              source={item.type}
+              address={address}
+              onOpenProfile={w => navigate(`/u/${encodeURIComponent(w)}`)}
+            />
           ) : item.redditPermalink ? (
             <a className="smd-reddit-thread-link" href={item.redditPermalink} target="_blank" rel="noopener noreferrer">
               View discussion on Reddit ↗

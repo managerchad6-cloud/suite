@@ -13,6 +13,7 @@ export interface QuizQuestion {
 export interface QuizResult {
   done: true
   character: string
+  title: string
   description: string
   attributes: Record<string, string>
 }
@@ -35,10 +36,16 @@ MALE
 - lad: Beer belly, socially loud, pub culture, lovable oaf.
 - boomer: Middle-aged dad energy. BBQ, proud, work-life balance.
 - brad: Tries too hard to be chad. Designer clothes, fake Rolex.
+- cad: Scheming finance-bro type. Runs petty schemes, 1920s con-man energy.
 - basic: Completely average in every dimension. Forgettable.
 - neckbeard: NEET, fedora, anime obsessed, no hygiene, lives online.
 - incel: Bitter, isolated, terminally online, blames the world.
+- coomer: Basement dweller between wizard and neckbeard, obsessed with cooming/PMO.
+- shlad: Epic but harmless obsessive — one weirdly specific hobby/devotion.
+- lshad: Petty antagonist energy. The "evil twin" who contradicts everyone.
 - wizard: Mysterious loner, detached from society, powerful in his own way.
+- grandwizard: Extreme recluse taken to its absolute, immobile endgame.
+- wraith: Reluctant, hideous-yet-irresistible outcast who succeeds despite himself.
 - virgin: Socially awkward, harmless, online, not quite incel.
 
 FEMALE
@@ -126,7 +133,16 @@ Close-ended (Phase 2 only, sparingly):
 {"done":false,"type":"multi","question":"...","options":["...","...","..."]}
 
 Final output:
-{"done":true,"character":"neckbeard","description":"Two monitors, zero productivity — PumpFun has been open since 3am and everything is red. The KFC bucket from Tuesday is still on the desk. The Iron Maiden shirt isn't a choice, it's a uniform. Last confirmed grass contact: disputed.","attributes":{"shirt":"faded Iron Maiden tee, pit stains and all","hair":"greasy curtains parted down the middle","grip":"phone permanently in hand, PumpFun open, everything red","desk":"KFC bucket from Tuesday still on the desk","energy":"the specific exhaustion of someone who last touched grass three weeks ago"}}
+{"done":true,"character":"neckbeard","title":"PumpFun Gremlin","description":"Two monitors, zero productivity — PumpFun has been open since 3am and everything is red. The KFC bucket from Tuesday is still on the desk. The Iron Maiden shirt isn't a choice, it's a uniform. Last confirmed grass contact: disputed.","attributes":{"shirt":"faded Iron Maiden tee, pit stains and all","hair":"greasy curtains parted down the middle","grip":"phone permanently in hand, PumpFun open, everything red","desk":"KFC bucket from Tuesday still on the desk","energy":"the specific exhaustion of someone who last touched grass three weeks ago"}}
+
+## Title rules
+
+The "title" is a 2–3 word personal epithet prefixed to the character name on the reveal screen (e.g. "PumpFun Gremlin Neckbeard", "Gym Destroyer Gigachad", "Monster-Gulper Lad"). It must:
+- Be drawn from one specific, concrete thing the user said — a number, an object, a habit, a brand, an activity. Generic flattery ("Cool Guy", "Big Chad") is a failure.
+- Be funny first, flattering a distant second — it should read like a nickname their friends would actually call them after hearing their answers.
+- Be 2–3 words, Title Case, no punctuation except an internal hyphen if natural (e.g. "Monster-Gulper").
+- NOT repeat the character name itself (the character name is appended separately — don't write "Neckbeard" inside the title).
+- Never be generic across users — if it could apply to anyone regardless of their answers, rewrite it.
 
 ## Description rules
 

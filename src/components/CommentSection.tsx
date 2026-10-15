@@ -18,7 +18,7 @@ function getProfile(wallet: string): Promise<CachedProfile> {
 type CommentNode = Comment & { replies: CommentNode[] }
 
 function buildTree(flat: Comment[]): CommentNode[] {
-  const map = new Map<number, CommentNode>()
+  const map = new Map<string, CommentNode>()
   const roots: CommentNode[] = []
   for (const c of flat) map.set(c.id, { ...c, replies: [] })
   for (const c of flat) {
@@ -32,7 +32,7 @@ function buildTree(flat: Comment[]): CommentNode[] {
   return roots
 }
 
-function getLikedKey(wallet: string, commentId: number) {
+function getLikedKey(wallet: string, commentId: string) {
   return `vvc_liked_comment_v1_${wallet}_${commentId}`
 }
 
@@ -46,7 +46,7 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
   const [liked, setLiked]     = useState(() =>
     address ? !!localStorage.getItem(getLikedKey(address, comment.id)) : false
   )
-  const [likeCount, setLikeCount] = useState(comment.like_count ?? 0)
+  const [likeCount, setLikeCount] = useState(comment.likes ?? 0)
   const [liking, setLiking]       = useState(false)
 
   useEffect(() => { getProfile(comment.wallet).then(setProfile) }, [comment.wallet])
@@ -61,7 +61,7 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
       const result = await likeComment(comment.id, address)
       localStorage.setItem(getLikedKey(address, comment.id), '1')
       setLiked(true)
-      setLikeCount(result.like_count)
+      setLikeCount(result.likes)
     } catch { /* already liked or failed */ } finally { setLiking(false) }
   }
 
@@ -83,10 +83,10 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
             onClick={() => onOpenProfile?.(comment.wallet)}
           >{truncateAddress(comment.wallet)}</span>
           <span className="md-comment-time">
-            {new Date(comment.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {new Date(comment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
         </div>
-        <p className="md-comment-text">{comment.text}</p>
+        <p className="md-comment-text">{comment.body}</p>
         {onReply && (
           <button className="md-comment-reply-btn" onClick={onReply}>Reply</button>
         )}
@@ -104,9 +104,10 @@ function CommentRow({ comment, address, onOpenProfile, onReply }: {
   )
 }
 
-function CommentThread({ node, jobId, address, depth = 0, onOpenProfile, onReplyPosted }: {
+function CommentThread({ node, jobId, source, address, depth = 0, onOpenProfile, onReplyPosted }: {
   node: CommentNode
   jobId: string
+  source: string
   address: string | null
   depth?: number
   onOpenProfile?: (wallet: string) => void
@@ -121,7 +122,7 @@ function CommentThread({ node, jobId, address, depth = 0, onOpenProfile, onReply
     if (!address || !replyText.trim() || posting) return
     setPosting(true)
     try {
-      await postComment(jobId, address, replyText.trim(), node.id)
+      await postComment(jobId, source, address, replyText.trim(), node.id)
       setReplyText('')
       setReplying(false)
       onReplyPosted()
@@ -159,6 +160,7 @@ function CommentThread({ node, jobId, address, depth = 0, onOpenProfile, onReply
               key={r.id}
               node={r}
               jobId={jobId}
+              source={source}
               address={address}
               depth={Math.min(depth + 1, 3)}
               onOpenProfile={onOpenProfile}
@@ -173,11 +175,12 @@ function CommentThread({ node, jobId, address, depth = 0, onOpenProfile, onReply
 
 interface Props {
   jobId: string
+  source: string
   address: string | null
   onOpenProfile?: (wallet: string) => void
 }
 
-export function CommentSection({ jobId, address, onOpenProfile }: Props) {
+export function CommentSection({ jobId, source, address, onOpenProfile }: Props) {
   const [comments, setComments]           = useState<Comment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(true)
   const [commentText, setCommentText]     = useState('')
@@ -187,19 +190,19 @@ export function CommentSection({ jobId, address, onOpenProfile }: Props) {
   useEffect(() => {
     setComments([])
     setCommentsLoading(true)
-    fetchComments(jobId)
+    fetchComments(source, jobId, address ?? undefined)
       .then(setComments)
       .finally(() => setCommentsLoading(false))
-  }, [jobId])
+  }, [jobId, source, address])
 
-  const reload = () => fetchComments(jobId).then(setComments)
+  const reload = () => fetchComments(source, jobId, address ?? undefined).then(setComments)
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!address || !commentText.trim() || posting) return
     setPosting(true)
     try {
-      await postComment(jobId, address, commentText.trim())
+      await postComment(jobId, source, address, commentText.trim())
       setCommentText('')
       await reload()
     } catch { /* ignore */ } finally { setPosting(false) }
@@ -240,6 +243,7 @@ export function CommentSection({ jobId, address, onOpenProfile }: Props) {
               key={node.id}
               node={node}
               jobId={jobId}
+              source={source}
               address={address}
               onOpenProfile={onOpenProfile}
               onReplyPosted={reload}

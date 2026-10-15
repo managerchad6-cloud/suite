@@ -41,14 +41,16 @@ export async function voteOnSuggestion(
 export const STREAM_URL = `${ANIM}/streams/live/stream.m3u8`
 export const WS_URL     = `wss://suite.virginvschad.vip/ws/orchestrator`
 
-export async function sendChat(message: string, voice?: 'chad' | 'virgin') {
+export async function sendChat(message: string, wallet?: string, voice: 'chad' | 'virgin' = 'chad') {
   const res = await fetch(`${CHAT}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, voice, mode: 'router' }),
+    body: JSON.stringify({ message, wallet, voice, mode: 'router' }),
   })
-  if (!res.ok) throw new Error(`Chat failed: ${res.status}`)
-  return res.json()
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Chat failed: ${res.status} ${body}`)
+  }
 }
 
 export async function getMemeIntake() {

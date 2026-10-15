@@ -1,11 +1,16 @@
 @font-face {
   font-family: 'Friendszone';
   src: url('/assets/Friendszone.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'BradBunR';
-  src: url('/assets/BradBunR.ttf') format('truetype');
+  src: url('/assets/BradBunR.woff2') format('woff2'),
+       url('/assets/BradBunR.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
   font-display: swap;
 }
 
@@ -279,6 +284,21 @@ html, body, #root {
 .suite-shell { display: flex; height: 100vh; overflow: hidden; }
 .suite-content { flex: 1; height: 100%; min-width: 0; overflow-y: auto; overflow-x: hidden; }
 
+/* Top-nav mode overrides */
+.suite-shell--top { display: block; --chatw-left: 0px; --chatw-top: var(--topnav-h, 54px); }
+.suite-shell--top .suite-content {
+  height: 100vh;
+  padding-top: var(--topnav-h, 54px);
+  box-sizing: border-box;
+  transition: padding-top 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.suite-shell--top.nav-hidden .suite-content { padding-top: 0; }
+.suite-shell--top .live-layout { height: 100%; }
+/* Right panel grows to fill whatever's left after a perfect 16:9 center column */
+.suite-shell--top .live-right {
+  width: max(290px, calc(100vw - (100vh - 128px) * 16 / 9));
+}
+
 .placeholder-view { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 12px; color: #555; }
 .placeholder-view span { font-size: 2rem; font-weight: 700; letter-spacing: .1em; color: #888; }
 .placeholder-view p { margin: 0; font-size: .85rem; color: #555; }
@@ -383,7 +403,7 @@ html, body, #root {
   font-size: 11px;
   padding: 5px 10px;
   cursor: pointer;
-  width: fit-content;
+  width: 100%;
   transition: color 0.1s, border-color 0.1s;
 }
 .suite-nav-disconnect:hover { color: var(--text); border-color: #666; }
@@ -475,6 +495,32 @@ html, body, #root {
   display: block;
 }
 
+.profile-hero-avatar--placeholder {
+  height: 260px;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 72px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.profile-no-archetype {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.profile-no-archetype-text {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0;
+}
+.profile-oracle-cta {
+  align-self: flex-start;
+}
+
 .profile-hero-info {
   display: flex;
   flex-direction: column;
@@ -550,9 +596,8 @@ html, body, #root {
   margin: 0;
 }
 .profile-memes-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  column-width: 200px;
+  column-gap: 12px;
   margin-top: 4px;
 }
 .profile-meme-card {
@@ -561,6 +606,8 @@ html, body, #root {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  break-inside: avoid;
+  margin-bottom: 12px;
 }
 .profile-meme-img {
   width: 100%;
@@ -587,6 +634,54 @@ html, body, #root {
 .profile-meme-chad   { color: var(--gold); }
 .profile-meme-vs     { color: var(--text-dim); }
 .profile-meme-votes  { font-size: 10px; color: var(--gold); flex-shrink: 0; }
+
+.profile-meme-label--studio {
+  color: var(--text-dim);
+  font-style: italic;
+}
+.profile-meme-badge--studio {
+  font-size: 9px;
+  font-weight: 700;
+  color: #b266ff;
+  background: rgba(178,102,255,0.1);
+  border: 1px solid rgba(178,102,255,0.3);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Social metrics bar below memes grid */
+.profile-meme-social {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #0d0d0d;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+}
+.profile-meme-social-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #444;
+  text-transform: uppercase;
+}
+.profile-meme-social-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.profile-meme-social-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #888;
+}
+.profile-meme-social-icon { font-size: 13px; }
 
 /* ── MemeDetail ───────────────────────────────────────────────── */
 .meme-detail {
@@ -1509,25 +1604,16 @@ html, body, #root {
 .spectrum-end--chad   { color: var(--gold); }
 .spectrum-end--virgin { color: #6a8ab8; }
 
-/* Horizontal scrolling card row */
+/* Card row — wraps when content overflows */
 .char-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-  scroll-snap-type: x mandatory;
-  justify-content: center;
+  justify-content: flex-start;
 }
-
-.char-row::-webkit-scrollbar { height: 4px; }
-.char-row::-webkit-scrollbar-track { background: var(--surface); border-radius: 2px; }
-.char-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-.char-row::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
 
 .char-row--deities {
   justify-content: center;
-  overflow-x: visible;
-  flex-wrap: wrap;
 }
 
 /* Character card */
@@ -1744,6 +1830,10 @@ html, body, #root {
   gap: 36px;
   padding: 36px 36px 28px;
   align-items: flex-start;
+  max-width: 1000px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .char-detail-portrait-wrap {
@@ -1769,8 +1859,10 @@ html, body, #root {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
   padding-top: 6px;
+  min-width: 0;
 }
 
 .char-detail-name {
@@ -1795,6 +1887,7 @@ html, body, #root {
   font-style: italic;
   margin: 0;
   line-height: 1.5;
+  align-self: stretch;
 }
 
 .char-detail-lore {
@@ -1803,6 +1896,7 @@ html, body, #root {
   line-height: 1.7;
   margin: 0;
   opacity: 0.85;
+  align-self: stretch;
 }
 
 .char-detail-body {
@@ -1810,6 +1904,10 @@ html, body, #root {
   flex-direction: column;
   gap: 32px;
   padding: 0 36px 48px;
+  max-width: 1000px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .char-detail-block {
@@ -1930,6 +2028,69 @@ html, body, #root {
   min-width: 0;
 }
 
+/* ── Wiki-style stats table ──────────────────────────────────────────────── */
+.char-stats-table {
+  width: auto;
+  max-width: 480px;
+  border-collapse: collapse;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 2px 0;
+}
+
+.char-stats-table th,
+.char-stats-table td {
+  padding: 5px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.char-stats-table tr:last-child th,
+.char-stats-table tr:last-child td { border-bottom: none; }
+
+.char-stats-table th {
+  background: rgba(240,160,32,0.06);
+  color: var(--gold);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 700;
+  white-space: nowrap;
+  padding-right: 20px;
+}
+
+.char-stats-table td {
+  color: var(--text);
+  font-size: 12px;
+  max-width: 300px;
+}
+
+.char-detail-lore--extra {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  opacity: 0.8;
+}
+
+/* ── Extended cast section & row ─────────────────────────────────────────── */
+.characters-section--extended .characters-section-header {
+  border-bottom-color: #3a5a8a;
+}
+
+.characters-section--extended .characters-section-title {
+  color: #7aaad8;
+}
+
+/* .char-row--extended inherits all wrapping from .char-row */
+
 @media (max-width: 640px) {
   .char-detail-header {
     flex-direction: column;
@@ -1964,6 +2125,8 @@ html, body, #root {
 }
 
 .char-skin-thumb {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -2170,6 +2333,320 @@ html, body, #root {
 .md-comment-avatar--clickable:hover { opacity: 0.8; }
 .md-comment-wallet--clickable { cursor: pointer; }
 .md-comment-wallet--clickable:hover { color: var(--gold); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── Profile follow stats ────────────────────────────────────── */
+.profile-follow-stats {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 10px;
+}
+.profile-follow-stat-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 14px 4px 0;
+  gap: 1px;
+  transition: opacity 0.15s;
+}
+.profile-follow-stat-btn:first-child { padding-left: 0; }
+.profile-follow-stat-btn:hover:not(.profile-follow-stat-btn--plain) { opacity: 0.75; }
+.profile-follow-stat-btn--plain { cursor: default; padding-left: 14px; }
+.profile-follow-stat-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--font-display);
+  line-height: 1.1;
+}
+.profile-follow-stat-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+}
+.profile-follow-stat-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* ── Followers modal ─────────────────────────────────────────── */
+.follow-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+}
+.follow-modal {
+  background: var(--dark);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 340px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.follow-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.follow-modal-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+.follow-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.follow-modal-close:hover { background: var(--surface); color: var(--text-main); }
+.follow-modal-list {
+  overflow-y: auto;
+  padding: 8px 0;
+  flex: 1;
+}
+.follow-modal-row {
+  padding: 8px 20px;
+  transition: background 0.12s;
+}
+.follow-modal-row:hover { background: var(--surface); }
+.follow-modal-empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 24px 16px;
+  margin: 0;
+}
+
+/* ── Public profile (redesigned) ─────────────────────────────── */
+.pub-profile-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding-bottom: 64px;
+}
+/* Sections inside the public profile get the same horizontal rhythm as the hero */
+.pub-profile-page .profile-section {
+  padding: 0 24px;
+}
+.pub-profile-page .profile-section-title {
+  padding-top: 8px;
+}
+.pub-profile-topbar-addr {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.pub-profile-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 28px 24px 28px;
+  border-bottom: 1px solid var(--border);
+}
+.pub-profile-avatar-wrap {
+  flex-shrink: 0;
+}
+.pub-profile-avatar-pulse {
+  width: 120px;
+  height: 120px;
+  border-radius: 12px;
+  background: var(--surface);
+  animation: pub-pulse 1.4s ease-in-out infinite;
+}
+.pub-profile-avatar-img {
+  width: 120px;
+  height: 120px;
+  border-radius: 12px;
+  object-fit: cover;
+  display: block;
+  border: 2px solid var(--border);
+}
+.pub-profile-hero-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pub-profile-archetype-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--gold, #f5c842);
+  font-weight: 700;
+  font-family: var(--font-ui);
+}
+.pub-profile-name {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.1;
+}
+.pub-profile-name--none { color: var(--text-dim); font-size: 18px; }
+.pub-profile-tagline {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-style: italic;
+  margin: 0;
+}
+.pub-profile-name-skeleton {
+  width: 160px;
+  height: 32px;
+  background: var(--surface);
+  border-radius: 6px;
+  animation: pub-pulse 1.4s ease-in-out infinite;
+}
+/* ── Follow stats row ── */
+.pub-profile-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 8px;
+}
+.pub-profile-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 14px;
+}
+.pub-profile-stat:first-child { padding-left: 0; }
+.pub-profile-stat-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  font-family: var(--font-display);
+  line-height: 1.1;
+}
+.pub-profile-stat-label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  text-transform: uppercase;
+}
+.pub-profile-stat-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+}
+/* ── Follow / Friend / Message actions ── */
+.pub-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.pub-profile-actions .pub-profile-follow-btn,
+.pub-profile-actions .pub-profile-friend-btn,
+.pub-profile-actions .pub-profile-message-btn {
+  margin-top: 0;
+}
+.pub-profile-friend-btn {
+  align-self: flex-start;
+  padding: 7px 22px;
+  border-radius: 6px;
+  border: 1px solid #4dc8ff;
+  background: transparent;
+  color: #4dc8ff;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: background 0.15s, color 0.15s;
+}
+.pub-profile-friend-btn:hover:not(:disabled) {
+  background: #4dc8ff;
+  color: #000;
+}
+.pub-profile-friend-btn--active {
+  background: rgba(77, 200, 255, 0.12);
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+.pub-profile-friend-btn:disabled { opacity: 0.7; cursor: default; }
+
+.pub-profile-message-btn {
+  align-self: flex-start;
+  padding: 7px 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: background 0.15s, color 0.15s;
+}
+.pub-profile-message-btn:hover {
+  background: var(--surface);
+  color: #fff;
+}
+
+/* ── Follow button ── */
+.pub-profile-follow-btn {
+  margin-top: 10px;
+  align-self: flex-start;
+  padding: 7px 22px;
+  border-radius: 6px;
+  border: 1px solid var(--gold, #f5c842);
+  background: transparent;
+  color: var(--gold, #f5c842);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  transition: background 0.15s, color 0.15s;
+}
+.pub-profile-follow-btn:hover:not(:disabled) {
+  background: var(--gold, #f5c842);
+  color: #000;
+}
+.pub-profile-follow-btn--following {
+  background: rgba(245, 200, 66, 0.12);
+  color: var(--text-dim);
+  border-color: var(--border);
+}
+.pub-profile-follow-btn--following:hover:not(:disabled) {
+  background: rgba(255, 80, 80, 0.15);
+  border-color: #ff5050;
+  color: #ff5050;
+}
+.pub-profile-follow-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
 
 /* ── Quiz / Oracle ────────────────────────────────────────────── */
 .quiz-idle,

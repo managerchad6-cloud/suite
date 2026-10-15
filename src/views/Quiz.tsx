@@ -4,7 +4,7 @@ import {
   type Message, type QuizQuestion, type QuizResult, type QuizResponse,
 } from '../api/quiz'
 import { generatePfp, generatePortraitPfp, LEGENDARY_CHARS } from '../api/pfp'
-import { saveQuizEntry, saveProfile, loadProfile, blobUrlToDataUrl, historyToConversation, type UserProfile } from '../lib/quizLog'
+import { saveQuizEntry, saveProfile, uploadPortrait, loadProfile, blobUrlToDataUrl, historyToConversation, type UserProfile } from '../lib/quizLog'
 
 class QuizErrorBoundary extends Component<{ children: ReactNode }, { crashed: boolean }> {
   constructor(props: { children: ReactNode }) {
@@ -28,36 +28,43 @@ class QuizErrorBoundary extends Component<{ children: ReactNode }, { crashed: bo
 }
 
 const CHAR_TEMPLATE: Record<string, string> = {
-  gigachad:  'gigachad_template',
-  chad:      'chad_template',
-  thad:      'thad_template',
-  lad:       'lad_template',
-  boomer:    'boomer_template',
-  brad:      'brad_template',
-  basic:     'basic_template',
-  neckbeard: 'neckbeard_template',
-  incel:     'incel_template',
-  wizard:    'wizard_template',
-  virgin:    'virgin_template',
-  stacy:     'stacy_template',
-  tracy:     'tracy_template',
-  lacy:      'lacy_template',
-  brandy:    'brandy_template',
-  veronica:  'veronica_template',
-  becky:     'becky_template',
-  femcel:    'femcel_template',
-  legbeard:  'legbeard_template',
-  witch:     'witch_template',
-  gad:       'gad_template',
-  zad:       'zad_template',
-  bad:       'bad_template',
-  gizzard:   'gizzard_template',
+  gigachad:    'gigachad_template',
+  chad:        'chad_template',
+  thad:        'thad_template',
+  lad:         'lad_template',
+  boomer:      'boomer_template',
+  brad:        'brad_template',
+  cad:         'cad_template',
+  basic:       'basic_template',
+  neckbeard:   'neckbeard_template',
+  incel:       'incel_template',
+  coomer:      'coomer_template',
+  shlad:       'shlad_template',
+  lshad:       'lshad_template',
+  wizard:      'wizard_template',
+  grandwizard: 'grandwizard_template',
+  wraith:      'wraith_template',
+  virgin:      'virgin_template',
+  stacy:       'stacy_template',
+  tracy:       'tracy_template',
+  lacy:        'lacy_template',
+  brandy:      'brandy_template',
+  veronica:    'veronica_template',
+  becky:       'becky_template',
+  femcel:      'femcel_template',
+  legbeard:    'legbeard_template',
+  witch:       'witch_template',
+  gad:         'gad_template',
+  zad:         'zad_template',
+  bad:         'bad_template',
+  gizzard:     'gizzard_template',
 }
 
 const CHAR_NAME: Record<string, string> = {
   gigachad: 'Gigachad', chad: 'Chad', thad: 'Thad', lad: 'Lad',
-  boomer: 'Dad', brad: 'Brad', basic: 'Basic', neckbeard: 'Neckbeard',
-  incel: 'Incel', wizard: 'Wizard', virgin: 'Virgin', stacy: 'Stacy',
+  boomer: 'Dad', brad: 'Brad', cad: 'Cad', basic: 'Basic', neckbeard: 'Neckbeard',
+  incel: 'Incel', coomer: 'Coomer', shlad: 'Shlad', lshad: 'Lshad', wizard: 'Wizard',
+  grandwizard: 'Grand Wizard', wraith: 'Wraith', virgin: 'Virgin', stacy: 'Stacy',
   tracy: 'Tracy', lacy: 'Lacy', brandy: 'Brandy', veronica: 'Veronica',
   becky: 'Becky', femcel: 'Femcel', legbeard: 'Legbeard', witch: 'Witch',
   gad: 'Gad', zad: 'Zad', bad: 'Bad', gizzard: 'Gizzard',
@@ -76,6 +83,7 @@ type Phase = 'idle' | 'questioning' | 'generating' | 'revealed'
 
 interface RevealData {
   character: string
+  title: string
   description: string
   attrs: Record<string, string>
   imageUrl: string
@@ -112,9 +120,10 @@ function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
     loadProfile(address).then(p => {
       if (p) setSavedProfile({
         character:   p.character,
+        title:       p.title ?? '',
         description: p.description,
         attrs:       p.attributes,
-        imageUrl:    `/assets/chars/${p.character}.png`,
+        imageUrl:    `/profiles/${encodeURIComponent(address)}/portrait/full`,
       })
     })
   }, [address])
@@ -153,13 +162,15 @@ function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
       const prof: UserProfile = {
         walletAddress: address,
         character: result.character,
+        title: result.title,
         description: result.description,
         attributes: result.attributes,
         characterImageDataUrl: imageDataUrl,
       }
       saveProfile(prof)
+      uploadPortrait(address, imageDataUrl, 'full')
       onProfileUpdate(prof)
-      setReveal({ character: result.character, description: result.description, attrs: result.attributes, imageUrl: imageBlobUrl })
+      setReveal({ character: result.character, title: result.title, description: result.description, attrs: result.attributes, imageUrl: imageBlobUrl })
       setPhase('revealed')
       // Auto-generate portrait PFP immediately — no manual click required
       setPortraitLoading(true)
@@ -168,6 +179,7 @@ function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
         const portraitDataUrl = await blobUrlToDataUrl(portraitBlobUrl)
         const profFull = { ...prof, portraitDataUrl }
         saveProfile(profFull)
+        uploadPortrait(address, portraitDataUrl, 'pfp')
         onProfileUpdate(profFull)
         setPortraitUrl(portraitBlobUrl)
       } catch (e: any) {
@@ -243,13 +255,15 @@ function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
         const prof: UserProfile = {
           walletAddress: address,
           character: result.character,
+          title: result.title,
           description: result.description,
           attributes: result.attributes,
           characterImageDataUrl: imageDataUrl,
         }
         saveProfile(prof)
+        uploadPortrait(address, imageDataUrl, 'full')
         onProfileUpdate(prof)
-        setReveal({ character: result.character, description: result.description, attrs: result.attributes, imageUrl: imageBlobUrl })
+        setReveal({ character: result.character, title: result.title, description: result.description, attrs: result.attributes, imageUrl: imageBlobUrl })
         setPhase('revealed')
         setPortraitLoading(true)
         try {
@@ -257,6 +271,7 @@ function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
           const portraitDataUrl = await blobUrlToDataUrl(portraitBlobUrl)
           const profFull = { ...prof, portraitDataUrl }
           saveProfile(profFull)
+          uploadPortrait(address, portraitDataUrl, 'pfp')
           onProfileUpdate(profFull)
           setPortraitUrl(portraitBlobUrl)
         } catch (e: any) {
@@ -281,8 +296,9 @@ function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
       setPortraitUrl(url)
       // Save portrait as persistent data URL in profile
       const dataUrl = await blobUrlToDataUrl(url)
-      const prof: UserProfile = { walletAddress: address, character: reveal.character, description: reveal.description, attributes: reveal.attrs, portraitDataUrl: dataUrl }
+      const prof: UserProfile = { walletAddress: address, character: reveal.character, title: reveal.title, description: reveal.description, attributes: reveal.attrs, portraitDataUrl: dataUrl }
       saveProfile(prof)
+      uploadPortrait(address, dataUrl, 'pfp')
       onProfileUpdate(prof)
     } catch (e: any) {
       setError(`Portrait generation failed: ${e.message}`)
@@ -323,7 +339,7 @@ function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
         <div className="quiz-saved-profile">
           <p className="quiz-saved-label">Your archetype</p>
           <img src={savedProfile.imageUrl} alt={savedProfile.character} className="quiz-saved-img" />
-          <p className="quiz-saved-char">{CHAR_NAME[savedProfile.character] ?? savedProfile.character}</p>
+          <p className="quiz-saved-char">{savedProfile.title ? `${savedProfile.title} ` : ''}{CHAR_NAME[savedProfile.character] ?? savedProfile.character}</p>
           <p className="quiz-saved-desc">{savedProfile.description}</p>
         </div>
       )}
@@ -345,11 +361,12 @@ function QuizInner({ address, onProfileUpdate, onComplete }: Props) {
   // ── Revealed ──────────────────────────────────────────────────────────
   if (phase === 'revealed' && reveal) {
     const name = CHAR_NAME[reveal.character] ?? reveal.character
+    const fullName = reveal.title ? `${reveal.title} ${name}` : name
     return (
       <div className="quiz-reveal">
         <div className="quiz-reveal-header">
           <p className="quiz-oracle-label">YOU ARE</p>
-          <h2 className="quiz-reveal-char">{name}</h2>
+          <h2 className="quiz-reveal-char">{fullName}</h2>
         </div>
 
         <div className="quiz-reveal-body">

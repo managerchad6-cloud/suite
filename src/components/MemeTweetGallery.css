@@ -1,0 +1,126 @@
+.mtg-root { display: flex; flex-direction: column; gap: 10px; }
+
+/* Toggle header */
+.mtg-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+.mtg-toggle:hover { border-color: #333; }
+.mtg-toggle-label { font-size: 13px; font-weight: 600; color: #aaa; flex: 1; }
+.mtg-toggle-count {
+  background: #1d9bf0;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 8px;
+  min-width: 20px;
+  text-align: center;
+}
+.mtg-toggle-chevron { font-size: 10px; color: #555; }
+
+/* Totals bar */
+.mtg-totals {
+  display: flex;
+  gap: 16px;
+  padding: 0 2px 2px;
+  flex-wrap: wrap;
+}
+.mtg-total { font-size: 12px; color: #555; }
+
+/* Masonry grid — CSS columns trick */
+.mtg-grid {
+  columns: 2 160px;
+  column-gap: 8px;
+}
+@media (max-width: 400px) {
+  .mtg-grid { columns: 1; }
+}
+
+/* Individual card */
+.mtg-card {
+  break-inside: avoid;
+  background: #0d0d0d;
+  border: 1px solid #1a1a1a;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 8px;
+  transition: border-color 0.15s;
+}
+.mtg-card:hover { border-color: #2a2a2a; }
+
+.mtg-card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.mtg-avatar {
+  width: 26px;
+  height: 26px;
+  background: #1d9bf0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.mtg-meta { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px; }
+.mtg-handle { font-size: 12px; font-weight: 700; color: #e7e9ea; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtg-time   { font-size: 10px; color: #555; }
+
+.mtg-ext {
+  font-size: 11px;
+  color: #1d9bf0;
+  text-decoration: none;
+  opacity: 0.6;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.mtg-ext:hover { opacity: 1; }
+
+.mtg-text {
+  font-size: 12px;
+  color: #bbb;
+  line-height: 1.5;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* Meme image */
+.mtg-img-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #1a1a1a;
+}
+.mtg-img {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.mtg-metrics {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.mtg-metric { font-size: 11px; color: #555; }
+.mtg-metric--active { color: #888; }

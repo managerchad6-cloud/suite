@@ -41,6 +41,7 @@ export async function postXTweet(params: {
   meme_id?: string
   meme_type?: string
   creator_wallet?: string
+  share_in_community?: boolean
 }): Promise<TweetResult> {
   const res = await fetch('/api/x/tweet', {
     method: 'POST',
@@ -105,4 +106,73 @@ export function subscribeToMetrics(
   }
   es.onerror = () => {}
   return () => es.close()
+}
+
+export interface MemeShareItem {
+  id: string
+  wallet: string
+  meme_id: string
+  meme_type: string
+  tweet_id: string | null
+  tweet_url: string | null
+  tweet_text: string | null
+  x_handle: string | null
+  creator_wallet: string | null
+  created_at: number
+  like_count: number | null
+  retweet_count: number | null
+  reply_count: number | null
+  quote_count: number | null
+  impression_count: number | null
+  metrics_updated_at: number | null
+}
+
+export interface MemeTotals {
+  share_count: number
+  total_likes: number
+  total_rts: number
+  total_replies: number
+  total_views: number
+}
+
+export async function fetchMemeShares(meme_id: string, meme_type: string): Promise<MemeShareItem[]> {
+  try {
+    const res = await fetch(`/api/x/shares/meme?meme_id=${encodeURIComponent(meme_id)}&meme_type=${encodeURIComponent(meme_type)}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.items ?? []
+  } catch { return [] }
+}
+
+export async function fetchMemeTotals(meme_id: string, meme_type: string): Promise<MemeTotals> {
+  try {
+    const res = await fetch(`/api/x/meme-totals?meme_id=${encodeURIComponent(meme_id)}&meme_type=${encodeURIComponent(meme_type)}`)
+    if (!res.ok) return { share_count: 0, total_likes: 0, total_rts: 0, total_replies: 0, total_views: 0 }
+    return res.json()
+  } catch { return { share_count: 0, total_likes: 0, total_rts: 0, total_replies: 0, total_views: 0 } }
+}
+
+export async function fetchCreatorShares(wallet: string): Promise<MemeShareItem[]> {
+  try {
+    const res = await fetch(`/api/x/shares/creator?wallet=${encodeURIComponent(wallet)}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.items ?? []
+  } catch { return [] }
+}
+
+export interface CreatorEngagement {
+  total_shares: number
+  total_likes: number
+  total_rts: number
+  total_replies: number
+  total_views: number
+}
+
+export async function fetchCreatorEngagement(wallet: string): Promise<CreatorEngagement> {
+  try {
+    const res = await fetch(`/api/x/creator-engagement?wallet=${encodeURIComponent(wallet)}`)
+    if (!res.ok) return { total_shares: 0, total_likes: 0, total_rts: 0, total_replies: 0, total_views: 0 }
+    return res.json()
+  } catch { return { total_shares: 0, total_likes: 0, total_rts: 0, total_replies: 0, total_views: 0 } }
 }

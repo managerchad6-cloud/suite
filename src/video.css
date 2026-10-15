@@ -1,0 +1,772 @@
+/* ═══════════════════════════════════════════════════════════════════
+   VVC Video Studio + Feed styles
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Prompt screen ──────────────────────────────────────────────── */
+
+.vs-prompt-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #0a0a0a;
+}
+
+.vs-prompt-inner {
+  width: min(640px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vs-prompt-title {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -1px;
+  margin: 0;
+}
+
+.vs-prompt-sub {
+  color: #888;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.vs-prompt-sub code {
+  background: #222;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #ccc;
+}
+
+.vs-prompt-sub kbd {
+  background: #222;
+  border: 1px solid #444;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  color: #ccc;
+}
+
+.vs-prompt-input-wrap {
+  position: relative;
+}
+
+.vs-prompt-textarea {
+  width: 100%;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+  padding: 14px 16px;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+.vs-prompt-textarea:focus {
+  outline: none;
+  border-color: #555;
+}
+
+/* @ mention popover */
+.vs-mention-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+}
+
+.vs-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vs-mention-item:hover { background: #252525; }
+
+.vs-mention-avatar {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.vs-mention-name { font-weight: 600; flex: 1; }
+.vs-mention-tier { font-size: 0.75rem; color: #666; }
+
+/* Char chips */
+.vs-char-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vs-char-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 20px;
+  padding: 4px 10px 4px 6px;
+  font-size: 0.85rem;
+  color: #fff;
+}
+
+.vs-char-chip img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.vs-char-chip button {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.vs-char-chip button:hover { color: #fff; }
+
+/* Actions */
+.vs-prompt-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.vs-prompt-browse {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #ccc;
+  padding: 10px 18px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.vs-prompt-browse:hover { border-color: #555; }
+
+.vs-prompt-submit {
+  background: #fff;
+  border: none;
+  border-radius: 6px;
+  color: #000;
+  padding: 10px 24px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.vs-prompt-submit:hover:not(:disabled) { background: #e0e0e0; }
+.vs-prompt-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── 3-panel editor layout ──────────────────────────────────────── */
+
+.vs-editor {
+  display: grid;
+  grid-template-columns: 220px 1fr 400px;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a0a;
+  color: #fff;
+}
+
+/* Left: scene list */
+.vs-scene-list {
+  border-right: 1px solid #1e1e1e;
+  overflow-y: auto;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vs-scene-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 14px 12px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #1e1e1e;
+  margin-bottom: 8px;
+}
+
+.vs-total-dur { color: #666; font-weight: 400; font-size: 0.8rem; }
+
+.vs-scene-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: #ccc;
+  text-align: left;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.vs-scene-item:hover { background: #111; color: #fff; }
+
+.vs-scene-item.active {
+  background: #111;
+  border-left-color: #fff;
+  color: #fff;
+}
+
+.vs-scene-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vs-scene-num { font-weight: 700; font-size: 0.9rem; }
+
+.vs-scene-item-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vs-scene-role {
+  font-size: 0.72rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vs-scene-setting {
+  font-size: 0.78rem;
+  color: #888;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.vs-scene-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.vs-scene-badge--pending    { color: #666; }
+.vs-scene-badge--generating { color: #aaa; }
+.vs-scene-badge--done       { color: #4caf50; }
+.vs-scene-badge--failed     { color: #f44336; }
+
+.vs-add-scene {
+  margin: 8px 14px;
+  background: none;
+  border: 1px dashed #333;
+  border-radius: 6px;
+  color: #555;
+  padding: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.vs-add-scene:hover { border-color: #555; color: #888; }
+
+/* Center: scene editor */
+.vs-scene-editor {
+  overflow-y: auto;
+  padding: 20px;
+  border-right: 1px solid #1e1e1e;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vs-editor-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #555;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.vs-generate-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+  color: #666;
+}
+
+.vs-generate-btn {
+  background: #fff;
+  border: none;
+  border-radius: 6px;
+  color: #000;
+  padding: 10px 24px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vs-generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-top: 40px;
+  color: #666;
+}
+
+/* Dialogue editor */
+.vs-dialogue-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vs-dialogue-turn {
+  background: #111;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.vs-dialogue-turn--chad   { border-left: 3px solid #4fc3f7; }
+.vs-dialogue-turn--virgin { border-left: 3px solid #ef9a9a; }
+.vs-dialogue-turn--stacy  { border-left: 3px solid #ce93d8; }
+
+.vs-dialogue-turn-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.vs-dialogue-speaker {
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+  color: #ccc;
+}
+
+.vs-dialogue-emotion {
+  font-size: 0.72rem;
+  color: #555;
+  background: #1a1a1a;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.vs-inner-thought-tag {
+  font-size: 0.72rem;
+  color: #888;
+  margin-left: auto;
+}
+
+.vs-dialogue-turn-body {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.vs-dialogue-text {
+  flex: 1;
+  background: #0a0a0a;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 0.9rem;
+  padding: 6px 8px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.vs-dialogue-text:focus { outline: none; border-color: #444; }
+
+.vs-regen-btn {
+  background: none;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  color: #555;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.vs-regen-btn:hover:not(:disabled) { border-color: #555; color: #ccc; }
+.vs-regen-btn:disabled { opacity: 0.4; }
+
+/* Cut list */
+.vs-cutlist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vs-cutlist-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.vs-cutlist-duration { color: #888; }
+
+.vs-cutlist-timeline {
+  position: relative;
+  height: 28px;
+  background: #111;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.vs-cutlist-segment {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  background: #2a2a2a;
+  border-right: 1px solid #0a0a0a;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.vs-cutlist-label {
+  font-size: 0.68rem;
+  color: #888;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vs-cutlist-shots {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vs-cutlist-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.vs-cutlist-row select {
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  color: #ccc;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  flex: 1;
+}
+
+.vs-cut-frames { font-size: 0.72rem; color: #555; white-space: nowrap; }
+
+/* Right: preview panel */
+.vs-preview-panel {
+  display: flex;
+  flex-direction: column;
+  background: #050505;
+  overflow: hidden;
+}
+
+.vs-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1e1e1e;
+  min-height: 44px;
+}
+
+.vs-play-btn {
+  background: none;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #fff;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.vs-play-btn:hover { border-color: #666; }
+
+.vs-frame-counter {
+  font-size: 0.75rem;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+}
+
+.vs-canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.vs-canvas-placeholder {
+  width: 100%;
+  max-height: 100%;
+  aspect-ratio: 9 / 16;
+  background: #111;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  font-size: 2rem;
+}
+
+.vs-scrubber {
+  padding: 4px 14px 8px;
+}
+
+.vs-scrubber input[type="range"] {
+  width: 100%;
+  accent-color: #fff;
+}
+
+.vs-preview-footer {
+  padding: 10px 14px;
+  border-top: 1px solid #1e1e1e;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vs-next-btn {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #ccc;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  width: 100%;
+  text-align: center;
+}
+
+.vs-next-btn:hover:not(:disabled) { border-color: #555; color: #fff; }
+.vs-next-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.vs-finish-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vs-publish-btn,
+.vs-export-btn {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #ccc;
+  padding: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.vs-export-btn {
+  background: #fff;
+  color: #000;
+  border-color: #fff;
+}
+
+.vs-publish-btn:hover:not(:disabled) { border-color: #666; color: #fff; }
+.vs-export-btn:hover:not(:disabled)  { background: #e0e0e0; }
+
+.vs-publish-btn:disabled,
+.vs-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.vs-download-link {
+  display: block;
+  text-align: center;
+  padding: 8px;
+  background: #4caf50;
+  border-radius: 6px;
+  color: #000;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+/* ── Spinner ────────────────────────────────────────────────────── */
+
+.vs-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #333;
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: vs-spin 0.8s linear infinite;
+}
+
+@keyframes vs-spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Video Feed (TikTok-style)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.vf-feed {
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+}
+
+.vf-feed::-webkit-scrollbar { display: none; }
+
+.vf-card {
+  height: 100vh;
+  scroll-snap-align: start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: #000;
+}
+
+.vf-canvas-wrap {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vf-tap-overlay {
+  position: absolute;
+  inset: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.vf-placeholder {
+  width: min(360px, 90vw);
+  aspect-ratio: 9 / 16;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  font-size: 2.5rem;
+  border-radius: 8px;
+}
+
+.vf-info {
+  position: absolute;
+  bottom: 80px;
+  left: 16px;
+  right: 80px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.vf-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  margin-bottom: 4px;
+}
+
+.vf-meta {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.6);
+}
+
+.vf-scene-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  pointer-events: all;
+}
+
+.vf-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.vf-dot.active { background: #fff; }
+
+.vf-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 3;
+}
+
+.vf-vote-btn,
+.vf-share-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.vf-vote-icon { font-size: 1.6rem; line-height: 1; }
+.vf-vote-count { font-size: 0.8rem; font-weight: 600; }
+
+.vf-vote-btn.voted .vf-vote-icon { color: #4fc3f7; }
+
+.vf-share-btn { font-size: 1.6rem; }
+
+.vf-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: #555;
+}
