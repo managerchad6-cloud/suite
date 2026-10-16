@@ -10,7 +10,7 @@ const TREASURY_PK = 'BvqPmrhAMJHozjpmJ9r7zLwkbZbS99pSaEkfQw3HxUQS'
 
 // ─── VVC Token ───────────────────────────────────────────────────────────────
 // The mint comes from the server's token config (pre-launch: a placeholder); this is only a fallback
-const VVC_MINT_FALLBACK = '6ogzHhzdrQr9Pgv6hZ2MNze7UrzBMAFyBBWUYp1Fhitx'
+const VVC_MINT_FALLBACK = 'MukLDtJ8Cx9DxLbeyLRSWPSposTMWuwHANbuaudpump'
 const VVC_DECIMALS = 6  // standard SPL token decimals — confirm on deploy
 // ─────────────────────────────────────────────────────────────────────────────
 
