@@ -63,6 +63,54 @@ export function issueMemeToken(): Promise<MemeToken & { credits_deducted: number
   return api('/api/credits/issue-meme-token', { method: 'POST' })
 }
 
-export async function claimSignupBonus(): Promise<{ granted: number; new_balance: number }> {
-  try { return await api('/api/credits/signup-bonus', { method: 'POST' }) } catch { return { granted: 0, new_balance: 0 } }
+// ─── $VVC: the site token. Holders get free credits every week; nobody else gets free credits ──
+
+export interface TokenConfig {
+  symbol: string          // always shown as $VVC
+  mint: string            // pre-launch: a placeholder set on the server
+  buyEnabled: boolean     // false: "Buy $VVC" shows as coming soon
+  holder: { minBalance: number; weeklyCredits: number }
+}
+
+export interface HolderStatus {
+  symbol: string
+  isHolder: boolean
+  tokenBalance: number
+  minBalance: number
+  weeklyCredits: number
+  freeCredits: number     // free credits still unspent (part of the balance)
+  granted: number         // credits added by this check
+  nextRefillAt: string | null
+  checkedAt: string | null
+  error?: string
+}
+
+let tokenConfig: Promise<TokenConfig> | null = null
+/** Public, fetched once per page load. */
+export function fetchTokenConfig(): Promise<TokenConfig> {
+  tokenConfig ??= api<TokenConfig>('/api/credits/token').catch(e => { tokenConfig = null; throw e })
+  return tokenConfig
+}
+
+function holderResult(p: Promise<HolderStatus>): Promise<HolderStatus> {
+  return p.then(s => {
+    if (s.granted > 0) window.dispatchEvent(new CustomEvent('vvc:credits-changed'))
+    window.dispatchEvent(new CustomEvent('vvc:holder-status', { detail: s }))
+    return s
+  })
+}
+
+/** The member's holder status; the server tops up the weekly free credits when they are due. */
+export function fetchHolderStatus(): Promise<HolderStatus> {
+  return holderResult(api('/api/credits/holder'))
+}
+
+/** Re-read the token balance from the chain now (right after a swap). */
+export function checkHolderNow(): Promise<HolderStatus> {
+  return holderResult(api('/api/credits/holder/check', { method: 'POST' }))
+}
+
+/** Open the "Buy $VVC" modal from anywhere. */
+export function openBuyVvc() {
+  window.dispatchEvent(new CustomEvent('vvc:buy-vvc'))
 }

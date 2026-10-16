@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
 import { getSigningProvider } from '../wallet'
-import { fetchCreditPacks, verifyPurchase, type CreditPack } from '../api/credits'
+import { fetchCreditPacks, fetchTokenConfig, openBuyVvc, verifyPurchase, type CreditPack, type TokenConfig } from '../api/credits'
 import './BuyCreditsModal.css'
+import './BuyVvc.css'
 
 const SOLANA_RPC  = (import.meta as any).env?.VITE_SOLANA_RPC_URL ?? 'https://mainnet.helius-rpc.com'
 const USDC_MINT   = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const TREASURY_PK = 'BvqPmrhAMJHozjpmJ9r7zLwkbZbS99pSaEkfQw3HxUQS'
 
 // ─── VVC Token ───────────────────────────────────────────────────────────────
-// Replace VVC_MINT with the mainnet contract address once VVC token is deployed.
-const VVC_MINT     = '6ogzHhzdrQr9Pgv6hZ2MNze7UrzBMAFyBBWUYp1Fhitx'
+// The mint comes from the server's token config (pre-launch: a placeholder); this is only a fallback
+const VVC_MINT_FALLBACK = '6ogzHhzdrQr9Pgv6hZ2MNze7UrzBMAFyBBWUYp1Fhitx'
 const VVC_DECIMALS = 6  // standard SPL token decimals — confirm on deploy
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,8 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
   const [payMethod, setPayMethod] = useState<PayMethod>('usdc')
   const [solPrice,  setSolPrice]  = useState<number | null>(null)
   const [vvcPrice,  setVvcPrice]  = useState<number | null>(null)
+  const [token,     setToken]     = useState<TokenConfig | null>(null)
+  const VVC_MINT = token?.mint ?? VVC_MINT_FALLBACK
 
   useEffect(() => {
     fetchCreditPacks().then(d => {
@@ -71,8 +74,12 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
           .catch(() => {})
       )
 
-    // VVC price via DexScreener — swap VVC_MINT for real mint after deploy
-    fetch(`https://api.dexscreener.com/latest/dex/tokens/${VVC_MINT}`)
+    // VVC price via DexScreener, for the token the server is configured with
+    fetchTokenConfig()
+      .then(t => {
+        setToken(t)
+        return fetch(`https://api.dexscreener.com/latest/dex/tokens/${t.mint}`)
+      })
       .then(r => r.json())
       .then(d => {
         const p = d?.pairs?.[0]?.priceUsd
@@ -215,6 +222,14 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
         {requiredCredits && step === 'pick' && (
           <div className="bcm-notice">
             You need <strong>{requiredCredits} credits</strong> — you have <strong>{currentBalance}</strong>
+          </div>
+        )}
+
+        {/* Holders get free credits: the cheapest way to credits is holding the token */}
+        {token && step === 'pick' && (
+          <div className="bcm-holder-banner">
+            <span>Hold <strong>{token.holder.minBalance.toLocaleString()} ${token.symbol}</strong> and get <strong>{token.holder.weeklyCredits} free credits</strong> every week.</span>
+            <button className="buyvvc-cta" onClick={() => { onClose(); openBuyVvc() }}>Buy ${token.symbol}</button>
           </div>
         )}
 

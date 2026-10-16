@@ -9,7 +9,8 @@ import { ChatWidget } from './components/ChatWidget'
 import { CreditBalance } from './components/CreditBalance'
 import { TopNav } from './components/TopNav'
 import { fetchPlayer, recordLogin, type PlayerState, type BadgeDef } from './api/player'
-import { claimSignupBonus } from './api/credits'
+import { fetchHolderStatus } from './api/credits'
+import { BuyVvcButton, BuyVvcHost } from './components/BuyVvc'
 import { useIdentity } from './identity/IdentityProvider'
 import { JoinFlow } from './identity/JoinFlow'
 import { profileImage } from './identity/api'
@@ -133,13 +134,11 @@ export default function App() {
   // Payments still sign through the legacy wallet module: reattach a trusted provider quietly
   useEffect(() => { if (wallet) tryAutoConnect().catch(() => {}) }, [wallet])
 
-  // A member arrived (signed in, or just finished joining): daily login, bonus, player stats
+  // A member arrived (signed in, or just finished joining): daily login, holder credits, player stats
   useEffect(() => {
     if (!memberWallet) { setPlayerState(null); setChatOpen(false); return }
     refreshPlayer(memberWallet)
-    claimSignupBonus().then(r => {
-      if (r.granted > 0) window.dispatchEvent(new CustomEvent('vvc:credits-changed'))
-    })
+    fetchHolderStatus().catch(() => {})     // $VVC holders: weekly free credits, topped up when due
     recordLogin().then(r => {
       pushBadges(r.new_badges)
       refreshPlayer(memberWallet)
@@ -156,6 +155,7 @@ export default function App() {
 
   return (
     <div className={`suite-shell${NAV_MODE === 'top' ? ' suite-shell--top' : ''}`}>
+      <BuyVvcHost />
       <BadgeUnlockedToast
         badges={newBadges}
         onDismiss={id => setNewBadges(prev => prev.filter(b => b.id !== id))}
@@ -198,6 +198,7 @@ export default function App() {
             <span>WEBSITE</span>
           </a>
           <div className="suite-nav-footer">
+            <BuyVvcButton className="buyvvc-cta--block" />
             <NavIdentity
               playerState={playerState}
               active={location.pathname === '/profile'}
