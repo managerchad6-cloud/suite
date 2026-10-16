@@ -1197,22 +1197,27 @@ html, body, #root {
 }
 .chat-sent { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .chat-sent-item {
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 5px 10px; border-radius: 5px;
-  background: #111; border-left: 3px solid #555;
+  padding: 6px 10px 7px; border-radius: 5px;
+  background: #111; border-left: 3px solid var(--gold);
   font-size: 13px;
   animation: chat-sent-in 0.18s ease-out;
+  transition: opacity 0.45s ease 0.25s;
 }
 @keyframes chat-sent-in { from { opacity: 0; transform: translateY(4px); } }
+.chat-sent-row { display: flex; align-items: baseline; gap: 10px; }
 .chat-sent-text { flex: 1; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-sent-stage { flex-shrink: 0; color: #999; font-size: 12px; }
-.chat-sent--shown, .chat-sent--review, .chat-sent--held, .chat-sent--forming { border-left-color: var(--gold); }
-.chat-sent--forming .chat-sent-stage, .chat-sent--sending .chat-sent-stage { animation: live-dot 1.2s ease-in-out infinite; }
-.chat-sent--ready { border-left-color: #4aa3ff; }
-.chat-sent--ready .chat-sent-stage { color: #8cc4ff; }
-.chat-sent--on-air { border-left-color: #d0202a; }
-.chat-sent--on-air .chat-sent-stage { color: #ff6b72; font-weight: 600; }
-.chat-sent--dropped, .chat-sent--failed { border-left-color: #663; opacity: 0.8; }
+.chat-sent--sending .chat-sent-stage { animation: live-dot 1.2s ease-in-out infinite; }
+/* Fake progress: races ahead, then creeps toward 94% until the message is picked up */
+.chat-sent-bar { position: relative; height: 3px; margin-top: 5px; border-radius: 2px; background: #2a2a2a; overflow: hidden; }
+.chat-sent-bar span, .chat-sent-bar::after { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--gold); }
+.chat-sent-bar span { width: 0; animation: chat-bar-fill 14s cubic-bezier(0.1, 0.75, 0.25, 1) forwards; }
+.chat-sent-bar::after { content: ''; width: 100%; opacity: 0; transition: opacity 0.2s; }
+@keyframes chat-bar-fill { 0% { width: 0; } 15% { width: 55%; } 100% { width: 94%; } }
+.chat-sent--done .chat-sent-bar::after { opacity: 1; }
+.chat-sent--done { opacity: 0; }
+.chat-sent--done .chat-sent-stage { animation: none; }
+.chat-sent--failed { border-left-color: #663; }
 .chat-sent--failed .chat-sent-stage { color: #e08a5a; }
 .chat-input {
   flex: 1;
