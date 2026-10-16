@@ -33,7 +33,15 @@ export const WS_URL     = `wss://suite.virginvschad.vip/ws/orchestrator`
  * Follow it with 'chat:status' events for `id`. `filtered` means chat is too busy right now.
  */
 export function sendChat(message: string, voice?: 'chad' | 'virgin') {
-  return api<{ queued?: boolean; id?: string; filtered?: boolean }>(`${CHAT}/api/chat`, { method: 'POST', body: { message, voice, mode: 'router' } })
+  // With a voice the message goes straight to that character; without, the router picks one
+  return api<{ queued?: boolean; id?: string; filtered?: boolean }>(`${CHAT}/api/chat`, {
+    method: 'POST', body: { message, voice, mode: voice ? 'direct' : 'router' },
+  })
+}
+
+/** Pitch an idea to the show: saved for voting, and the characters react to it on stream. */
+export function submitSuggestion(text: string) {
+  return api<{ ok: boolean; id?: string }>(`${CHAT}/api/chat`, { method: 'POST', body: { message: `/suggestion ${text}`, mode: 'router' } })
 }
 
 export async function getMemeIntake() {
@@ -74,14 +82,20 @@ export function voteYtQueue(id: string, action: 'upvote' | 'unvote'): Promise<{ 
   return api(`${ANIM}/api/yt-queue/${encodeURIComponent(id)}/vote`, { method: action === 'upvote' ? 'POST' : 'DELETE' })
 }
 
-export async function getLists() {
+export interface StreamListItem { title: string; votes?: number }
+export interface StreamLists { videos: StreamListItem[]; roadmap: StreamListItem[] }
+
+/** The on-stream vote lists (numbered on stream, 1-based) */
+export async function getLists(): Promise<StreamLists> {
   try {
     const res = await fetch(`${ANIM}/api/lists`)
-    if (!res.ok) return null
-    return res.json()
-  } catch { return null }
+    if (!res.ok) return { videos: [], roadmap: [] }
+    const d = await res.json()
+    return { videos: d?.videos?.items ?? [], roadmap: d?.roadmap?.items ?? [] }
+  } catch { return { videos: [], roadmap: [] } }
 }
 
+/** `index` is the 1-based number shown on stream */
 export function voteList(list: 'video' | 'roadmap', index: number) {
   return api(`${ANIM}/api/lists/vote`, { method: 'POST', body: { list, index } })
 }
