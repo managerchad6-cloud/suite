@@ -2822,6 +2822,21 @@ html, body, #root {
 .quiz-continue-btn:hover:not(:disabled) { background: #f5b800; }
 .quiz-continue-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* Final notes: the optional last question */
+.quiz-question-hint {
+  margin: -4px 0 4px;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.quiz-final-actions {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 16px;
+}
+
 .quiz-continue-btn--primary {
   width: 100%;
   padding: 16px 32px;
