@@ -15,6 +15,7 @@ interface Props {
 
 // The oracle aims for ~20–28 answers; the bar never claims it's finished
 const progressOf = (turn: number) => Math.min(95, Math.round((turn / 24) * 100))
+const isFinal = (iv: InterviewState | null) => !!iv?.question?.final
 
 export function Interview({ kind, onCompleted }: Props) {
   const [interview, setInterview] = useState<InterviewState | null>(null)
@@ -52,7 +53,7 @@ export function Interview({ kind, onCompleted }: Props) {
 
   async function submit(answer: string) {
     const text = answer.trim()
-    if (!text || !interview || thinking) return
+    if ((!text && !interview?.question?.final) || !interview || thinking) return
     setThinking(true)
     setError(null)
     try {
@@ -85,7 +86,7 @@ export function Interview({ kind, onCompleted }: Props) {
   return (
     <div className="quiz-interview">
       <div className="quiz-progress-track">
-        <div className="quiz-progress-fill" style={{ width: `${progressOf(interview?.turn ?? 0)}%` }} />
+        <div className="quiz-progress-fill" style={{ width: `${isFinal(interview) ? 100 : progressOf(interview?.turn ?? 0)}%` }} />
       </div>
 
       <div className="quiz-question-wrap">
@@ -98,6 +99,7 @@ export function Interview({ kind, onCompleted }: Props) {
         ) : (
           <div className="quiz-question-card">
             <p className="quiz-question-text">{q.question}</p>
+            {q.final && <p className="quiz-question-hint">Optional. Anything the questions missed: a detail, a habit, something you want in your picture.</p>}
 
             {q.type === 'single' && q.options && (
               <div className="quiz-options">
@@ -130,7 +132,7 @@ export function Interview({ kind, onCompleted }: Props) {
             {(q.type === 'open' || otherOpen) && (
               <textarea
                 className="quiz-textarea"
-                placeholder={q.type === 'open' ? 'Type your answer…' : 'Your own answer…'}
+                placeholder={q.final ? 'Add anything else (or skip)…' : q.type === 'open' ? 'Type your answer…' : 'Your own answer…'}
                 value={openText}
                 onChange={e => setOpenText(e.target.value)}
                 onKeyDown={e => {
@@ -144,8 +146,14 @@ export function Interview({ kind, onCompleted }: Props) {
               />
             )}
 
-            {q.type === 'open' && (
+            {q.type === 'open' && !q.final && (
               <button className="quiz-continue-btn" onClick={() => submit(openText)} disabled={!openText.trim()}>Continue</button>
+            )}
+            {q.final && (
+              <div className="quiz-final-actions">
+                <button className="quiz-continue-btn" onClick={() => submit(openText)} disabled={!openText.trim()}>Add and finish</button>
+                <button className="join-link-btn" onClick={() => submit('')}>Skip</button>
+              </div>
             )}
             {q.type === 'single' && otherOpen && (
               <button className="quiz-continue-btn" onClick={() => submit(otherAnswer)} disabled={!otherAnswer}>Continue</button>

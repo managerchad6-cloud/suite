@@ -46,6 +46,8 @@ export interface Question {
   type: 'single' | 'multi' | 'open'
   question: string
   options?: string[]
+  /** The optional last question ("anything else about yourself?"): may be skipped */
+  final?: boolean
 }
 
 export interface Interview {
@@ -86,9 +88,13 @@ export const logout = () => api<{ state: 'guest' }>(`${ID}/logout`, { method: 'P
 export const getInterview = () => api<{ interview: Interview | null }>(`${ID}/onboarding`)
 export const startOnboarding = () => api<{ interview: Interview }>(`${ID}/onboarding/start`, { method: 'POST' })
 export const restartInterview = () => api<{ interview: Interview }>(`${ID}/onboarding/restart`, { method: 'POST' })
+/** An empty answer to the final question skips it. */
 export const answerQuestion = (interview: Interview, answer: string) =>
   api<{ completed: boolean; interview: Interview; me?: SignedIn }>(`${ID}/onboarding/answer`, {
-    method: 'POST', body: { interviewId: interview.id, turn: interview.turn, answer },
+    method: 'POST',
+    body: interview.question?.final && !answer
+      ? { interviewId: interview.id, turn: interview.turn, skip: true }
+      : { interviewId: interview.id, turn: interview.turn, answer },
   })
 
 export const startRetake = () => api<{ interview: Interview }>(`${ID}/profile/retake`, { method: 'POST' })
