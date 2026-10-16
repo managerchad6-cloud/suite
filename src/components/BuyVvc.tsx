@@ -3,7 +3,7 @@
 // tops up the free credits at once.
 //
 // <BuyVvcHost/> is mounted once in App; anything opens it with openBuyVvc() (api/credits).
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useIdentity } from '../identity/IdentityProvider'
 import {
   checkHolderNow, fetchHolderStatus, fetchTokenConfig, openBuyVvc,
@@ -38,6 +38,27 @@ function loadJupiter(): Promise<JupiterPlugin> {
   return scriptLoad
 }
 
+/** The account the wallet extension is on right now (the one Jupiter swaps from), if connected. */
+function extensionWallet(): string | null {
+  type Key = { toString(): string } | null | undefined
+  const w = window as unknown as { phantom?: { solana?: { publicKey?: Key } }; solflare?: { publicKey?: Key }; backpack?: { publicKey?: Key } }
+  const keys = [w.phantom?.solana?.publicKey, w.solflare?.publicKey, w.backpack?.publicKey]
+  return keys.find(Boolean)?.toString() ?? null
+}
+
+const CONFETTI_COLORS = ['#ff4d4d', '#ffd700', '#4dff91', '#4dc8ff', '#ff4dce', '#fff', '#F0A020', '#ff922b']
+/** Full-screen confetti, like the Studio publish and X share celebrations. Re-key it to fire again. */
+function Confetti({ pieces = 70 }: { pieces?: number }) {
+  const styles = useMemo(() => Array.from({ length: pieces }, () => ({
+    '--x':        `${Math.random() * 100}vw`,
+    '--delay':    `${(Math.random() * 0.9).toFixed(2)}s`,
+    '--duration': `${(1 + Math.random() * 1.1).toFixed(2)}s`,
+    '--color':    CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+    '--rot':      `${Math.floor(Math.random() * 360)}deg`,
+  } as React.CSSProperties)), [pieces])
+  return <>{styles.map((st, i) => <span key={i} className="buyvvc-confetti" style={st} />)}</>
+}
+
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: n < 10 ? 2 : 0 })
 const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`
 
@@ -70,6 +91,8 @@ export function BuyVvcHost() {
 }
 
 type SwapState = 'idle' | 'loading' | 'ready' | 'unavailable' | 'checking' | 'done'
+/** What the last swap did for the signed-in wallet. */
+type Outcome = { kind: 'credits' | 'holder' | 'more' | 'elsewhere' | 'pending'; bought?: number; from?: string }
 
 function BuyVvcModal({ onClose }: { onClose: () => void }) {
   const { status, memberWallet, join } = useIdentity()
@@ -79,6 +102,9 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
   const [swap, setSwap] = useState<SwapState>('idle')
   const [granted, setGranted] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const [burst, setBurst] = useState(0)            // confetti: bump to fire
+  const [swapWallet, setSwapWallet] = useState<string | null>(null)
   const alive = useRef(true)
   const timers = useRef<number[]>([])
 
@@ -96,13 +122,40 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
     fetchHolderStatus().then(s => { if (alive.current) setHolder(s) }).catch(() => {})
   }, [isMember])
 
-  // A finished swap: re-read the balance until the new bag shows up (or we run out of tries)
+  // Which account the swap will use: Jupiter swaps from whatever the extension is on, which can
+  // differ from the signed-in wallet (an account switched in Phantom after signing in)
+  useEffect(() => {
+    if (!config?.buyEnabled) return
+    const read = () => setSwapWallet(extensionWallet())
+    read()
+    const id = window.setInterval(read, 1500)
+    return () => clearInterval(id)
+  }, [config?.buyEnabled])
+
+  // A finished swap: celebrate, then re-read the balance until the new bag shows up (or we run out of tries)
   const afterSwap = useCallback(() => {
-    if (!isMember) { setSwap('done'); return }
+    timers.current.forEach(clearTimeout)
+    timers.current = []
+    setBurst(b => b + 1)
+    setOutcome(null)
+    if (!isMember) { setSwap('done'); setOutcome({ kind: 'pending' }); return }
     setSwap('checking')
+    const from = extensionWallet()
+    const elsewhere = !!from && from !== memberWallet
     const before = holder?.tokenBalance ?? 0
     let finished = false
     let total = 0
+    let latest: HolderStatus | null = null
+    const conclude = () => {
+      finished = true
+      if (!alive.current) return
+      setSwap('done')
+      const bought = latest ? latest.tokenBalance - before : 0
+      if (total > 0) setOutcome({ kind: 'credits', bought })
+      else if (bought > 0) setOutcome({ kind: latest?.isHolder ? 'holder' : 'more', bought })
+      else if (elsewhere) setOutcome({ kind: 'elsewhere', from: from! })
+      else setOutcome({ kind: 'pending' })
+    }
     RECHECK_DELAYS_MS.forEach((delay, i) => {
       const last = i === RECHECK_DELAYS_MS.length - 1
       timers.current.push(window.setTimeout(async () => {
@@ -110,15 +163,16 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
         try {
           const s = await checkHolderNow()
           if (!alive.current) return
+          latest = s
           setHolder(s)
-          total += s.granted
-          if (total > 0) setGranted(total)
-          if (s.tokenBalance > before) finished = true
+          if (s.granted > 0) { total += s.granted; setGranted(total); setBurst(b => b + 1) }
+          if (s.tokenBalance > before) return conclude()
         } catch { /* try again on the next round */ }
-        if ((finished || last) && alive.current) setSwap('done')
+        // A swap from another wallet never shows up here: say so after the first check
+        if (last || elsewhere) conclude()
       }, delay))
     })
-  }, [isMember, holder])
+  }, [isMember, holder, memberWallet])
   // onSuccess is bound once when the swap is set up: route it to the latest callback
   const afterSwapRef = useRef(afterSwap)
   afterSwapRef.current = afterSwap
@@ -149,14 +203,15 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
   const min = config?.holder.minBalance ?? 0
   const weekly = config?.holder.weeklyCredits ?? 0
   const missing = holder && !holder.isHolder ? Math.max(0, min - holder.tokenBalance) : 0
-  const busy = swap === 'checking'
+  const wrongWallet = isMember && !!swapWallet && swapWallet !== memberWallet
 
   return (
-    <div className="buyvvc-overlay" onClick={e => { if (e.target === e.currentTarget && !busy) onClose() }}>
+    <div className="buyvvc-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      {burst > 0 && <Confetti key={burst} pieces={granted > 0 ? 110 : 70} />}
       <div className="buyvvc-modal" role="dialog" aria-label={`Buy ${sym}`}>
         <div className="buyvvc-header">
           <span className="buyvvc-title">Get {sym}</span>
-          {!busy && <button className="buyvvc-close" onClick={onClose} aria-label="Close">✕</button>}
+          <button className="buyvvc-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
         <div className="buyvvc-pitch">
@@ -202,18 +257,28 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {granted > 0 && <div className="buyvvc-granted">+{granted} free credits added</div>}
-        {swap === 'checking' && <div className="buyvvc-checking">Swap done. Checking your {sym} balance…</div>}
-        {swap === 'done' && granted === 0 && (
-          <div className="buyvvc-checking">
-            {holder?.isHolder ? `You're a ${sym} holder.` : `Swap done. If your ${sym} doesn't show yet, it will on your next visit.`}
+        {granted > 0 && <div className="buyvvc-granted">+{granted} free credits added ⚡</div>}
+        {swap === 'checking' && <div className="buyvvc-checking">Swap done 🎉 Checking your {sym} balance…</div>}
+        {swap === 'done' && outcome && outcome.kind !== 'credits' && (
+          <div className={`buyvvc-outcome buyvvc-outcome--${outcome.kind}`}>
+            {outcome.kind === 'holder' && <>You got <strong>{fmt(outcome.bought!)} {sym}</strong>. You're a holder: free credits every week.</>}
+            {outcome.kind === 'more' && <>You got <strong>{fmt(outcome.bought!)} {sym}</strong>. {fmt(missing)} more to unlock {weekly} free credits a week.</>}
+            {outcome.kind === 'elsewhere' && <>That swap went to <strong>{short(outcome.from!)}</strong>, not the wallet you're signed in with (<strong>{short(memberWallet!)}</strong>). Send the {sym} there, or sign in with {short(outcome.from!)}, for it to count.</>}
+            {outcome.kind === 'pending' && <>Swap done. If your {sym} doesn't show yet, it will on your next visit.</>}
           </div>
         )}
 
         {config && !config.buyEnabled && <div className="buyvvc-soon">{sym} trading opens soon.</div>}
         {config?.buyEnabled && (
           <>
-            {isMember && <p className="buyvvc-wallet-note">Swap with your signed-in wallet ({short(memberWallet!)}) so it counts.</p>}
+            {wrongWallet ? (
+              <p className="buyvvc-wallet-warn">
+                Your wallet is on <strong>{short(swapWallet!)}</strong>, but you're signed in as <strong>{short(memberWallet!)}</strong>.
+                Switch to {short(memberWallet!)} in your wallet so the {sym} counts for your credits.
+              </p>
+            ) : (
+              isMember && <p className="buyvvc-wallet-note">Swap with your signed-in wallet ({short(memberWallet!)}) so it counts.</p>
+            )}
             <div id={TARGET_ID} className="buyvvc-swap">
               {swap === 'loading' && <div className="buyvvc-swap-loading">Loading swap…</div>}
             </div>
