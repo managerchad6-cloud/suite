@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { getMemeIntake, voteMeme, submitMemeToLivestream, WS_URL } from '../api/livestream'
-import { OrchestratorWS, type MemeVoteItem, type MemeIntakeState } from '../api/ws'
+import { subscribeOrchestrator, type MemeVoteItem, type MemeIntakeState } from '../api/ws'
 import { MemberGate, useMemberGate } from '../identity/gate'
 
 type VotingState = 'idle' | 'voting' | 'rolling'
@@ -16,7 +16,6 @@ export function MemeQueue() {
   const [state, setState] = useState<VotingState>('idle')
   const [countdown, setCountdown] = useState<number | null>(null)
   const [voting, setVoting] = useState<number | null>(null)
-  const wsRef = useRef<OrchestratorWS | null>(null)
 
   const [memeText, setMemeText] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -32,13 +31,11 @@ export function MemeQueue() {
   useEffect(() => {
     getMemeIntake().then((d) => { if (d) applyState(d) })
 
-    wsRef.current = new OrchestratorWS(WS_URL)
-    const unsub = wsRef.current.on((msg) => {
+    return subscribeOrchestrator(WS_URL, (msg) => {
       if (msg.event === 'meme:intake-update') {
         applyState((msg as { event: string; data: MemeIntakeState }).data)
       }
     })
-    return () => { unsub(); wsRef.current?.destroy() }
   }, [])
 
   // Tick countdown locally between WS updates
