@@ -28,8 +28,12 @@ export function voteOnSuggestion(id: string, action: 'upvote' | 'unvote'): Promi
 export const STREAM_URL = `${ANIM}/streams/live/stream.m3u8`
 export const WS_URL     = `wss://suite.virginvschad.vip/ws/orchestrator`
 
+/**
+ * Answers as soon as the message is on the stream overlay; the reply is written afterwards.
+ * Follow it with 'chat:status' events for `id`. `filtered` means chat is too busy right now.
+ */
 export function sendChat(message: string, voice?: 'chad' | 'virgin') {
-  return api(`${CHAT}/api/chat`, { method: 'POST', body: { message, voice, mode: 'router' } })
+  return api<{ queued?: boolean; id?: string; filtered?: boolean }>(`${CHAT}/api/chat`, { method: 'POST', body: { message, voice, mode: 'router' } })
 }
 
 export async function getMemeIntake() {
