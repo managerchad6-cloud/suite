@@ -3,6 +3,7 @@ import { type Location } from 'react-router-dom'
 import { truncateAddress } from '@mf/wallet'
 import { NotificationBell } from './NotificationPanel'
 import { CreditBalance } from './CreditBalance'
+import { BuyVvcButton } from './BuyVvc'
 import { GlobalSearch } from './GlobalSearch'
 import type { PlayerState } from '../api/player'
 import { useIdentity } from '../identity/IdentityProvider'
@@ -126,6 +127,7 @@ export function TopNav({
                 </div>
               </button>
 
+              <BuyVvcButton />
               <div data-zad-target="credits" style={{ display: 'contents' }}>
                 <CreditBalance />
               </div>
@@ -136,6 +138,7 @@ export function TopNav({
             </>
           ) : (
             <>
+              <BuyVvcButton />
               <button className="suite-nav-join topnav-join" onClick={() => join()}>
                 {status === 'pending' ? 'Finish joining' : 'Join'}
               </button>

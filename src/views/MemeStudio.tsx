@@ -10,7 +10,7 @@ import { truncateAddress } from '../wallet'
 import { useMemberGate } from '../identity/gate'
 import { saveSession, loadSession, clearSession, type SessionSnapshot } from '../lib/studioDb'
 import { StudioHome } from './StudioHome'
-import { deductCredits, claimSignupBonus, type CreditAction } from '../api/credits'
+import { deductCredits, type CreditAction } from '../api/credits'
 import { hasUserGeminiKey, setAiTicket } from '../api/pfp'
 import { generateMemeLabels } from '../api/zad'
 import { BuyCreditsModal } from '../components/BuyCreditsModal'
@@ -1022,7 +1022,6 @@ export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: 
       }).catch(() => {})
       return
     }
-    void claimSignupBonus()
     loadSession(address).then(snapshot => {
       if (snapshot) void handleLoadDraft(snapshot)
     }).catch(() => { /* no stored session */ })
