@@ -108,27 +108,7 @@
 .buyvvc-outcome--holder { border-color: rgba(240,160,32,0.5); }
 .buyvvc-outcome--elsewhere { border-color: rgba(224,112,112,0.5); color: #f0c0c0; }
 
-/* Full-screen confetti (same as the Studio publish / X share celebrations) */
-.buyvvc-confetti {
-  position: fixed;
-  top: -12px;
-  left: var(--x);
-  width: 8px;
-  height: 14px;
-  background: var(--color);
-  border-radius: 2px;
-  transform: rotate(var(--rot));
-  animation: buyvvc-confetti-fall var(--duration) var(--delay) ease-in forwards;
-  pointer-events: none;
-  z-index: 9200;
-}
-@keyframes buyvvc-confetti-fall {
-  0%   { top: -12px; opacity: 1;  transform: rotate(var(--rot)) scale(1); }
-  80%  { opacity: 1; }
-  100% { top: 105vh;  opacity: 0; transform: rotate(calc(var(--rot) + 720deg)) scale(0.6); }
-}
 @keyframes buyvvc-pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .buyvvc-confetti { display: none; } }
 .buyvvc-swap {
   width: 100%;
   min-height: 420px;

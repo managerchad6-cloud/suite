@@ -3,12 +3,13 @@
 // tops up the free credits at once.
 //
 // <BuyVvcHost/> is mounted once in App; anything opens it with openBuyVvc() (api/credits).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useIdentity } from '../identity/IdentityProvider'
 import {
   checkHolderNow, fetchHolderStatus, fetchTokenConfig, openBuyVvc,
   type HolderStatus, type TokenConfig,
 } from '../api/credits'
+import { Confetti } from './Confetti'
 import './BuyVvc.css'
 
 const JUPITER_SCRIPT = 'https://plugin.jup.ag/plugin-v1.js'
@@ -44,19 +45,6 @@ function extensionWallet(): string | null {
   const w = window as unknown as { phantom?: { solana?: { publicKey?: Key } }; solflare?: { publicKey?: Key }; backpack?: { publicKey?: Key } }
   const keys = [w.phantom?.solana?.publicKey, w.solflare?.publicKey, w.backpack?.publicKey]
   return keys.find(Boolean)?.toString() ?? null
-}
-
-const CONFETTI_COLORS = ['#ff4d4d', '#ffd700', '#4dff91', '#4dc8ff', '#ff4dce', '#fff', '#F0A020', '#ff922b']
-/** Full-screen confetti, like the Studio publish and X share celebrations. Re-key it to fire again. */
-function Confetti({ pieces = 70 }: { pieces?: number }) {
-  const styles = useMemo(() => Array.from({ length: pieces }, () => ({
-    '--x':        `${Math.random() * 100}vw`,
-    '--delay':    `${(Math.random() * 0.9).toFixed(2)}s`,
-    '--duration': `${(1 + Math.random() * 1.1).toFixed(2)}s`,
-    '--color':    CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-    '--rot':      `${Math.floor(Math.random() * 360)}deg`,
-  } as React.CSSProperties)), [pieces])
-  return <>{styles.map((st, i) => <span key={i} className="buyvvc-confetti" style={st} />)}</>
 }
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: n < 10 ? 2 : 0 })

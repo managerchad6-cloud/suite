@@ -1,0 +1,19 @@
+.vvc-confetti {
+  position: fixed;
+  top: -12px;
+  left: var(--x);
+  width: 8px;
+  height: 14px;
+  background: var(--color);
+  border-radius: 2px;
+  transform: rotate(var(--rot));
+  animation: vvc-confetti-fall var(--duration) var(--delay) ease-in forwards;
+  pointer-events: none;
+  z-index: 10000;
+}
+@keyframes vvc-confetti-fall {
+  0%   { top: -12px; opacity: 1;  transform: rotate(var(--rot)) scale(1); }
+  80%  { opacity: 1; }
+  100% { top: 105vh;  opacity: 0; transform: rotate(calc(var(--rot) + 720deg)) scale(0.6); }
+}
+@media (prefers-reduced-motion: reduce) { .vvc-confetti { display: none; } }
