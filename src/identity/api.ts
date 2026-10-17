@@ -18,6 +18,8 @@ export interface Profile {
   updatedAt: string | null
   avatar: ImageState
   portrait: ImageState
+  /** Paid, generated banner. `url` is the last one made (kept while a new one paints or after one failed); `jobId` for a refund */
+  banner?: ImageState & { jobId?: string }
   fallbackImageUrl: string
   /** After a paid regenerate: the character from before, until you keep the new one or go back */
   previous?: PreviousCharacter | null
@@ -84,6 +86,7 @@ export interface PublicProfile {
   description: string
   avatarUrl: string | null
   portraitUrl: string | null
+  bannerUrl?: string | null
   fallbackImageUrl: string
 }
 

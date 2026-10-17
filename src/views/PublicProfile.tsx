@@ -121,7 +121,7 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
       </div>
       {previewOwn && <div className="pp-preview-banner">👁 This is how others see your profile</div>}
 
-      <ProfileHero art={art} card={profile
+      <ProfileHero art={art} banner={profile?.bannerUrl} card={profile
         ? <CharacterCard image={art} name={archetypeName(profile.archetype)} tier={charData?.tier} rarity={charData?.rarity ?? 'common'} accent={accent} />
         : <EmptyCard loading={profile === undefined} initials={wallet.slice(0, 2).toUpperCase()} />}>
         <HeroIdentity

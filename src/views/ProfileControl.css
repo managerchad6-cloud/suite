@@ -2,28 +2,6 @@
 
 .pc-page { height: 100%; overflow-y: auto; background: var(--dark, #111); --pp-accent: #F0A020; }
 
-/* ── Header ─────────────────────────────────────────────────────────── */
-.pc-head {
-  position: relative; isolation: isolate;
-  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-  padding: 22px 28px; border-bottom: 1px solid #222;
-  background:
-    radial-gradient(ellipse at 0% 50%, color-mix(in srgb, var(--pp-accent) 16%, transparent), transparent 55%),
-    #131313;
-}
-.pc-head-pfp {
-  width: 72px; height: 72px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
-  border: 3px solid var(--pp-accent); background: #1e1e1e;
-  box-shadow: 0 0 0 4px rgba(0,0,0,0.5), 0 0 24px color-mix(in srgb, var(--pp-accent) 40%, transparent);
-}
-.pc-head-id { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 3px; }
-.pc-head-kicker { font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--pp-accent); }
-.pc-head-name { margin: 0; font-family: var(--font-display); font-size: clamp(24px, 3vw, 34px); color: #fff; line-height: 1.1; }
-.pc-head-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #888; font-size: 13px; }
-.pc-head-meta button { padding: 2px 8px; border-radius: 10px; border: 1px solid #333; background: #1a1a1a; color: #aaa; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; cursor: pointer; }
-.pc-head-meta button:hover { color: #fff; border-color: #555; }
-.pc-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-
 /* ── Layout: section nav + main ─────────────────────────────────────── */
 .pc-body { display: grid; grid-template-columns: 220px 1fr; gap: 24px; padding: 24px 28px 56px; align-items: start; }
 .pc-nav { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 4px; }
@@ -70,58 +48,54 @@
 .pc-flash--ok { background: rgba(240,160,32,0.1); border: 1px solid rgba(240,160,32,0.4); color: #f5c26b; }
 .pc-flash--err { background: rgba(224,80,80,0.1); border: 1px solid rgba(224,80,80,0.4); color: #f0a0a0; }
 
-/* ── Character: a social-profile header ─────────────────────────────── */
-.pc-x { border-radius: 16px; overflow: hidden; background: #161616; border: 1px solid #242424; }
-.pc-x-banner {
-  position: relative; height: 230px; overflow: hidden; isolation: isolate;
-  background: #1a1a1a;
+/* ── Character: one card. Left: banner, round PFP over it, who you are. Right: your full character ── */
+.pc-x {
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(240px, 26vw, 360px);
+  border-radius: 16px; overflow: hidden; background: #161616; border: 1px solid #242424;
+  min-height: 480px;
 }
-/* The art itself, blown up and blurred, makes the banner's colors */
+.pc-x-main { min-width: 0; display: flex; flex-direction: column; }
+
+.pc-x-banner { position: relative; height: 210px; overflow: hidden; isolation: isolate; background: #1a1a1a; }
+/* The generated banner, or until there is one, a wash of the art itself */
+.pc-x-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; animation: pc-in 0.5s ease-out; }
 .pc-x-banner-bg {
   position: absolute; inset: -30px; z-index: -2;
   background-size: cover; background-position: center 30%;
-  filter: blur(26px) saturate(1.5) brightness(0.75); transform: scale(1.15);
+  filter: blur(26px) saturate(1.5) brightness(0.7); transform: scale(1.15);
 }
-.pc-x-banner::after {
+.pc-x-banner:not(.pc-x-banner--made)::after {
   content: ''; position: absolute; inset: 0; z-index: -1;
-  background:
-    repeating-linear-gradient(115deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 22px),
-    linear-gradient(90deg, rgba(0,0,0,0.55), transparent 55%),
-    linear-gradient(180deg, transparent 55%, rgba(0,0,0,0.55));
+  background: repeating-linear-gradient(115deg, rgba(255,255,255,0.035) 0 2px, transparent 2px 22px), linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.5));
 }
-.pc-x-banner--sketch .pc-x-art img { filter: grayscale(1) contrast(1.3) opacity(0.55); }
-.pc-x-chip {
-  position: absolute; top: 14px; left: 16px;
-  padding: 4px 10px; border-radius: 10px; background: rgba(0,0,0,0.6);
-  color: var(--pp-accent); font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+.pc-x-banner--made::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.45)); }
+.pc-x-banner--painting .pc-x-banner-img { filter: grayscale(0.7) brightness(0.6); }
+.pc-x-banner--painting .pc-x-banner-bg { filter: blur(26px) grayscale(0.7) brightness(0.5); }
+.pc-x-banner--painting::before {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 30%; z-index: 0;
+  background: linear-gradient(90deg, transparent, rgba(240,160,32,0.22), transparent);
+  animation: pc-sweep 2.2s ease-in-out infinite;
 }
-/* The full character, pinned up in the banner like a polaroid (the art has a white background);
-   click for full size */
-.pc-x-art {
-  position: absolute; right: 7%; top: 18px; height: calc(100% - 36px);
-  padding: 7px 7px 22px; border: none; border-radius: 4px; background: #f4f1ea; cursor: zoom-in;
-  box-shadow: 0 14px 30px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.2);
-  transform: rotate(4deg);
-  transition: transform 0.25s cubic-bezier(.2,1.2,.4,1);
+@keyframes pc-sweep { from { left: -30%; } to { left: 100%; } }
+.pc-x-banner-tools { position: absolute; right: 14px; top: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pc-x-banner-btn {
+  padding: 7px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); color: #fff;
+  font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.04em; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
-.pc-x-art::before {          /* a strip of tape */
-  content: ''; position: absolute; top: -9px; left: 50%; width: 54px; height: 18px;
-  transform: translateX(-50%) rotate(-3deg);
-  background: rgba(240,160,32,0.55); box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-}
-.pc-x-art:hover { transform: rotate(0deg) scale(1.04); }
-.pc-x-art img { height: 100%; width: auto; display: block; border-radius: 2px; }
+.pc-x-banner-btn:hover:not(:disabled) { background: rgba(240,160,32,0.9); border-color: var(--gold, #F0A020); color: #000; transform: translateY(-1px); }
+.pc-x-banner-btn:disabled { opacity: 0.55; cursor: default; }
 .pc-x-status {
-  position: absolute; left: 16px; bottom: 14px;
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 12px; border-radius: 12px; border: none;
   background: rgba(0,0,0,0.7); color: #f3c27a; font-size: 12px;
 }
 .pc-x-status--fail { color: #f0a0a0; cursor: pointer; }
 
-.pc-x-bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 0 20px; margin-top: -64px; position: relative; }
+.pc-x-bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 0 20px; margin-top: -62px; position: relative; flex-wrap: wrap; }
 .pc-x-avatar {
-  position: relative; width: 132px; height: 132px; flex-shrink: 0; border-radius: 50%;
+  position: relative; width: 128px; height: 128px; flex-shrink: 0; border-radius: 50%;
   border: 5px solid #161616; background: #222;
   box-shadow: 0 0 0 2px var(--pp-accent), 0 10px 30px rgba(0,0,0,0.5);
 }
@@ -131,9 +105,8 @@
   border: 3px solid transparent; border-top-color: var(--gold, #F0A020); border-right-color: rgba(240,160,32,0.4);
   animation: pc-spin 1s linear infinite;
 }
-.pc-x-actions { display: flex; gap: 8px; padding-bottom: 6px; }
+.pc-x-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding-bottom: 6px; }
 .pc-x-actions .pc-btn { white-space: nowrap; }
-@media (max-width: 480px) { .pc-x-actions .pc-btn { padding: 7px 10px; font-size: 12px; } .pc-x-actions { gap: 6px; } }
 .pc-x-dl { position: relative; }
 .pc-x-dl summary { list-style: none; display: inline-block; }
 .pc-x-dl summary::-webkit-details-marker { display: none; }
@@ -145,17 +118,52 @@
 .pc-x-dl-menu a { padding: 8px 10px; border-radius: 7px; color: #ddd; font-size: 13px; text-decoration: none; }
 .pc-x-dl-menu a:hover { background: #262626; color: #fff; }
 
-.pc-x-id { padding: 12px 20px 18px; display: flex; flex-direction: column; gap: 6px; }
-.pc-x-name { margin: 0; font-family: var(--font-display); font-size: clamp(24px, 3vw, 34px); color: #fff; line-height: 1.1; }
-.pc-x-handle { margin: 0; color: #777; font-size: 14px; }
-.pc-x-bio { margin: 6px 0 0; color: #ddd; font-size: 15px; line-height: 1.55; max-width: 760px; }
+.pc-x-id { padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 8px; }
+.pc-x-name { margin: 0; font-family: var(--font-display); font-size: clamp(26px, 3vw, 38px); color: #fff; line-height: 1.05; }
+.pc-x-handle { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #888; font-size: 14px; }
+.pc-x-handle button {
+  padding: 2px 8px; border-radius: 10px; border: 1px solid #333; background: #1c1c1c; color: #aaa;
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; cursor: pointer;
+}
+.pc-x-handle button:hover { color: #fff; border-color: #555; }
+.pc-x-rarity { padding: 2px 8px; border-radius: 9px; background: rgba(240,160,32,0.1); color: var(--pp-accent); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+/* Counts that lead to their section, like a social profile's following/followers */
+.pc-x-stats { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.pc-x-stats button { padding: 0; border: none; background: none; color: #888; font: inherit; font-size: 14px; cursor: pointer; }
+.pc-x-stats button b { color: #fff; font-weight: 700; margin-right: 3px; font-variant-numeric: tabular-nums; }
+.pc-x-stats button:hover { color: #ccc; text-decoration: underline; }
+.pc-x-bio { margin: 4px 0 0; color: #ddd; font-size: 15px; line-height: 1.55; max-width: 760px; }
 .pc-x-tagline { margin: 0; color: #888; font-size: 13px; font-style: italic; }
-.pc-x-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 6px; color: #888; font-size: 13px; }
+.pc-x-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 2px; color: #888; font-size: 13px; }
 .pc-x-link { padding: 0; border: none; background: none; color: var(--gold, #F0A020); font: inherit; font-size: 13px; cursor: pointer; }
 .pc-x-link:hover { text-decoration: underline; }
 .pc-x-traits { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; animation: pc-in 0.2s ease-out; }
 .pc-x-traits span { padding: 5px 9px; border-radius: 8px; background: #1e1e1e; border: 1px solid #2a2a2a; color: #bbb; font-size: 12px; }
 .pc-x-traits b { color: var(--gold, #F0A020); font-weight: 600; margin-right: 4px; text-transform: capitalize; }
+
+/* Your full character, the card's whole height (the art has a white background: a paper column) */
+.pc-x-side {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  margin: 12px 12px 12px 0; padding: 14px; border: none; border-radius: 12px;
+  background: #f4f1ea; cursor: zoom-in; overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08), 0 10px 30px rgba(0,0,0,0.35);
+}
+/* Absolutely placed, so the art fills the height the profile side needs instead of setting it */
+.pc-x-side img { position: absolute; inset: 14px; width: calc(100% - 28px); height: calc(100% - 28px); object-fit: contain; display: block; transition: transform 0.35s ease; }
+.pc-x-side:hover img { transform: scale(1.03); }
+.pc-x-side--sketch img { filter: grayscale(1) contrast(1.3) opacity(0.5); }
+.pc-x-side .pc-x-status { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); white-space: nowrap; }
+.pc-x-side-hint {
+  position: absolute; top: 10px; right: 10px; padding: 3px 8px; border-radius: 8px;
+  background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; opacity: 0; transition: opacity 0.15s;
+}
+.pc-x-side:hover .pc-x-side-hint { opacity: 1; }
+
+/* Outside the card's section: who this control room belongs to, at the top of the nav */
+.pc-nav-me { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid #262626; background: #161616; color: #eee; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.pc-nav-me img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid var(--pp-accent); }
+.pc-nav-me span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-nav-me:hover { border-color: #444; }
 
 /* Change your character: two options side by side */
 .pc-change { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
@@ -239,13 +247,30 @@
   .pc-nav-item--on { box-shadow: inset 0 -3px 0 var(--pp-accent); }
   .pc-nav-hint { display: none; }
   .pc-nav-hint--alert { display: inline; }
-  .pc-head { padding: 16px; }
-  .pc-head-actions { width: 100%; }
-  .pc-x-banner { height: 170px; }
-  .pc-x-art { right: 4%; }
-  .pc-x-bar { margin-top: -50px; padding: 0 14px; }
-  .pc-x-avatar { width: 100px; height: 100px; border-width: 4px; }
+  .pc-x { grid-template-columns: 1fr; }
+  .pc-x-banner { height: 150px; }
+  .pc-x-bar { margin-top: -46px; padding: 0 14px; }
+  .pc-x-avatar { width: 96px; height: 96px; border-width: 4px; }
   .pc-x-id { padding: 10px 14px 16px; }
+  .pc-x-side { margin: 0 14px 14px; height: 340px; }
+  .pc-nav-me { display: none; }
   .pc-panel { padding: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .pc-main, .pc-decide, .pc-modal, .pc-flash, .pc-nav-hint--alert { animation: none; } }
+@media (max-width: 480px) { .pc-x-actions .pc-btn { padding: 7px 10px; font-size: 12px; } .pc-x-actions { gap: 6px; justify-content: flex-start; } }
+
+/* The card adapts to its own width (side nav, sidebar and screen size all eat into it):
+   when there's no room for two columns, your full character goes under the profile */
+.pc-main { container-type: inline-size; }
+@container (max-width: 780px) {
+  .pc-x { grid-template-columns: 1fr; min-height: 0; }
+  .pc-x-side { margin: 0 16px 16px; height: 380px; }
+}
+@container (max-width: 520px) {
+  .pc-x-banner { height: 150px; }
+  .pc-x-bar { margin-top: -46px; padding: 0 14px; }
+  .pc-x-avatar { width: 96px; height: 96px; border-width: 4px; }
+  .pc-x-actions { justify-content: flex-start; }
+  .pc-x-id { padding: 10px 14px 16px; }
+  .pc-x-side { margin: 0 14px 14px; height: 320px; }
+}
