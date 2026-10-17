@@ -38,7 +38,7 @@ export async function fetchCreditBalance(): Promise<{ balance: number; lifetime:
 }
 
 /** `character_regen` is charged by its own endpoint (regenerateCharacter), not through deductCredits */
-export function fetchCreditPacks(): Promise<{ packs: CreditPack[]; costs: CreditCosts & { character_regen?: number } }> {
+export function fetchCreditPacks(): Promise<{ packs: CreditPack[]; costs: CreditCosts & { character_regen?: number; banner?: number } }> {
   return api('/api/credits/packs')
 }
 
@@ -57,6 +57,18 @@ export async function fetchCreditHistory(limit = 40): Promise<CreditHistoryItem[
  * Paid: a new archetype + art from your interview. Charged here; refunded in full if it fails
  * (the error then carries `refunded: true`). The old character stays available to go back to.
  */
+/** Paid: a wide banner from your character and personality, made in the background (watch profile.banner). */
+export function generateBanner(): Promise<{ ok: boolean; cost: number; new_balance: number; jobId: string | null }> {
+  return withBadges(api<{ ok: boolean; cost: number; new_balance: number; jobId: string | null }>('/api/credits/generate-banner', { method: 'POST' }))
+    .then(r => { window.dispatchEvent(new CustomEvent('vvc:credits-changed')); return r })
+}
+
+/** A banner that failed in the background: get the credits back (once; the server checks it really failed). */
+export function refundBanner(jobId: string): Promise<{ ok: boolean; refunded: number; new_balance: number }> {
+  return api<{ ok: boolean; refunded: number; new_balance: number }>('/api/credits/banner-refund', { method: 'POST', body: { jobId } })
+    .then(r => { window.dispatchEvent(new CustomEvent('vvc:credits-changed')); return r })
+}
+
 export function regenerateCharacter(): Promise<{ ok: boolean; cost: number; new_balance: number }> {
   return withBadges(api<{ ok: boolean; cost: number; new_balance: number }>('/api/credits/regenerate-character', { method: 'POST' }))
     .then(r => { window.dispatchEvent(new CustomEvent('vvc:credits-changed')); return r })

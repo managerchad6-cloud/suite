@@ -69,7 +69,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const profile = me && me.state !== 'guest' ? me.account.profile : null
 
   // Images are generated in the background: keep /me fresh until they settle
-  const generating = profile?.avatar.status === 'generating' || profile?.portrait.status === 'generating'
+  const generating = profile?.avatar.status === 'generating' || profile?.portrait.status === 'generating' || profile?.banner?.status === 'generating'
   useEffect(() => {
     if (!generating) return
     const t = setInterval(refresh, POLL_MS)

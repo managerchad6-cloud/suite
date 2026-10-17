@@ -116,10 +116,13 @@ export function EmptyCard({ loading, initials }: { loading: boolean; initials?: 
 }
 
 /** Card on the left, info column on the right (stacked on phones), the full art blurred behind */
-export function ProfileHero({ art, card, children }: { art: string | null; card: ReactNode; children: ReactNode }) {
+/** `banner`: the member's generated banner, shown behind the hero instead of a blurred wash of the art */
+export function ProfileHero({ art, banner, card, children }: { art: string | null; banner?: string | null; card: ReactNode; children: ReactNode }) {
   return (
-    <section className="pp-hero">
-      {art && <div className="pp-hero-bg" style={{ backgroundImage: `url("${art}")` }} aria-hidden />}
+    <section className={`pp-hero${banner ? ' pp-hero--banner' : ''}`}>
+      {banner
+        ? <div className="pp-hero-banner" style={{ backgroundImage: `url("${banner}")` }} aria-hidden />
+        : art && <div className="pp-hero-bg" style={{ backgroundImage: `url("${art}")` }} aria-hidden />}
       {card}
       <div className="pp-info">{children}</div>
     </section>

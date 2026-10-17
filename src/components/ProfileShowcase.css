@@ -326,3 +326,13 @@
   border-bottom: 1px solid color-mix(in srgb, var(--pp-accent, #F0A020) 40%, #222);
   color: #f3c27a; font-size: 13px;
 }
+
+/* A member's generated banner behind the hero (sharp, darkened toward the text) */
+.pp-hero-banner {
+  position: absolute; inset: 0; z-index: -2;
+  background-size: cover; background-position: center;
+  opacity: 0.6;
+}
+.pp-hero--banner::after {
+  background: linear-gradient(90deg, rgba(17,17,17,0.15), rgba(17,17,17,0.85) 45%), linear-gradient(180deg, transparent 60%, #111);
+}
