@@ -107,7 +107,7 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
   const votesReceived = memesLoading ? null : votes
 
   const charData = profile ? CHARACTERS.find(c => c.key === profile.archetype) ?? null : null
-  const { accent } = alignment(player)
+  const { accent } = alignment(profile?.archetype)
   const art = profile ? profile.avatarUrl ?? profile.fallbackImageUrl : null      // the full character
   const pfp = profile ? bestImage(profile) : null                                   // the square portrait
 
@@ -134,7 +134,7 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
           description={profile?.description}
         />
 
-        {player && <SpectrumBar player={player} />}
+        {profile && <SpectrumBar archetype={profile.archetype} player={player} />}
 
         <div className="pp-stats">
           <Stat value={followers} label="Followers" />

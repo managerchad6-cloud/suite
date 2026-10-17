@@ -66,24 +66,26 @@
   border-radius: 12px; overflow: hidden;
   background: radial-gradient(circle at 50% 35%, #2a2a2a, #121212 70%);
 }
-.pp-card-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px 0; gap: 8px; }
+.pp-card-top { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; gap: 8px; background: linear-gradient(rgba(0,0,0,0.55), transparent); }
 .pp-card-rarity {
   padding: 2px 8px; border-radius: 8px;
   background: rgba(0,0,0,0.55); color: var(--pp-accent);
   font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
 }
 .pp-card--legendary .pp-card-rarity { color: #ffd34d; }
-.pp-card-tier { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.08em; text-align: right; }
-.pp-card-art { flex: 1; min-height: 0; display: grid; place-items: center; padding: 6px 10px 0; }
-.pp-card-art img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 10px 18px rgba(0,0,0,0.6)); user-select: none; }
+.pp-card-tier { font-size: 10px; color: #eee; text-shadow: 0 1px 3px rgba(0,0,0,0.8); text-transform: uppercase; letter-spacing: 0.08em; text-align: right; }
+/* The art covers the whole card face */
+.pp-card-art { position: absolute; inset: 0; display: grid; place-items: center; background: #fff; }
+.pp-card-art img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; user-select: none; display: block; }
 .pp-card-art-empty { width: 70%; height: 70%; border-radius: 12px; background: #1e1e1e; }
 .pp-card-name {
-  padding: 8px 12px 12px; text-align: center;
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  padding: 28px 12px 12px; text-align: center;
   font-family: var(--font-display); font-size: 22px; color: #fff;
   background: linear-gradient(transparent, rgba(0,0,0,0.75));
 }
 .pp-card-shine {
-  position: absolute; inset: 4px; border-radius: 12px; pointer-events: none;
+  position: absolute; inset: 4px; z-index: 3; border-radius: 12px; pointer-events: none;
   background: radial-gradient(circle at var(--gx) var(--gy), rgba(255,255,255,0.28), transparent 45%);
   mix-blend-mode: overlay; opacity: 0; transition: opacity 0.2s;
 }
@@ -195,9 +197,11 @@
 .pp-empty { margin: 24px 0; text-align: center; color: #666; }
 
 /* Meme grid */
-.pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+/* Masonry: each meme at its own aspect ratio, nothing cropped */
+.pp-grid { column-width: 240px; column-gap: 16px; }
 .pp-meme {
-  position: relative; display: flex; flex-direction: column;
+  position: relative; display: flex; flex-direction: column; width: 100%;
+  break-inside: avoid; margin: 0 0 16px;
   padding: 0; border-radius: 12px; overflow: hidden;
   border: 1px solid #262626; background: #181818;
   cursor: pointer; text-align: left; font: inherit; color: inherit;
@@ -206,8 +210,8 @@
 }
 @keyframes pp-meme-in { from { opacity: 0; transform: translateY(12px); } }
 .pp-meme:hover, .pp-meme:focus-visible { transform: translateY(-4px); border-color: var(--pp-accent); box-shadow: 0 14px 34px rgba(0,0,0,0.5); outline: none; }
-.pp-meme-img { aspect-ratio: 4 / 3; background: #fff; overflow: hidden; }
-.pp-meme-img img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; transition: transform 0.35s ease; }
+.pp-meme-img { background: #fff; overflow: hidden; min-height: 80px; }
+.pp-meme-img img { width: 100%; height: auto; display: block; transition: transform 0.35s ease; }
 .pp-meme:hover .pp-meme-img img { transform: scale(1.04); }
 .pp-meme-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
 .pp-meme-label { flex: 1; min-width: 0; font-size: 13px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: capitalize; }
@@ -229,7 +233,7 @@
   opacity: 0; transform: translateY(-4px); transition: opacity 0.15s, transform 0.15s;
 }
 .pp-meme:hover .pp-meme-open { opacity: 1; transform: none; }
-.pp-meme--skeleton { aspect-ratio: 4 / 3.6; cursor: default; animation: pp-pulse 1.4s ease-in-out infinite; }
+.pp-meme--skeleton { cursor: default; animation: pp-pulse 1.4s ease-in-out infinite; }
 
 /* Activity */
 .pp-activity { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-width: 760px; }
@@ -256,7 +260,8 @@
   .pp-topbar { padding: 10px 16px; }
   .pp-tabs { padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
   .pp-panel { padding: 16px; }
-  .pp-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .pp-grid { column-width: 150px; column-gap: 10px; }
+  .pp-meme { margin-bottom: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pp-card, .pp-meme, .pp-spectrum-marker { animation: none; }

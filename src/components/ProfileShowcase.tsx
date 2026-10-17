@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useRef, type CSSProperties, type PointerE
 import { imageUrl, parseMemeId, type Meme } from '../api/memes'
 import { studioMemeImageUrl, type StudioMeme } from '../api/studio'
 import { fetchPlayerTimeline, type ActivityEvent, type PlayerState } from '../api/player'
-import { archetypeName } from '../identity/archetypes'
+import { archetypeName, archetypeSpectrum } from '../identity/archetypes'
 import './ProfileShowcase.css'
 
 export type MemeSource = 'factory' | 'studio'
@@ -14,10 +14,32 @@ export interface MemeCard { key: string; source: MemeSource; id: string; img: st
 const ALIGN_ACCENT = { chad: '#F0A020', virgin: '#8fb3c9', neutral: '#c9c2b3' } as const
 export type Direction = keyof typeof ALIGN_ACCENT
 
-/** Which side of the spectrum a player leans, and the accent colour that goes with it */
-export function alignment(player: PlayerState | null): { direction: Direction; accent: string; spectrum: number } {
-  const direction = (player?.rank_direction ?? 'neutral') as Direction
-  return { direction, accent: ALIGN_ACCENT[direction], spectrum: Math.min(1, Math.max(0, player?.spectrum_position ?? 0.5)) }
+/** Which side of the spectrum an archetype sits on, and the accent colour that goes with it */
+export function alignment(archetype: string | null | undefined): { direction: Direction; accent: string; spectrum: number } {
+  const spectrum = archetype ? archetypeSpectrum(archetype) : 0.5
+  const direction: Direction = spectrum >= 0.6 ? 'chad' : spectrum <= 0.4 ? 'virgin' : 'neutral'
+  return { direction, accent: ALIGN_ACCENT[direction], spectrum }
+}
+
+/** The collectible-card tilt: the element leans toward the pointer and a shine follows it (CSS vars) */
+export function useTilt<T extends HTMLElement>(strength = 1) {
+  const ref = useRef<T>(null)
+  const onPointerMove = (e: PointerEvent<T>) => {
+    const el = ref.current
+    if (!el || e.pointerType === 'touch') return
+    const r = el.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height
+    el.style.setProperty('--rx', `${(0.5 - y) * 14 * strength}deg`)
+    el.style.setProperty('--ry', `${(x - 0.5) * 18 * strength}deg`)
+    el.style.setProperty('--gx', `${x * 100}%`)
+    el.style.setProperty('--gy', `${y * 100}%`)
+  }
+  const onPointerLeave = () => {
+    const el = ref.current
+    if (!el) return
+    el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg')
+  }
+  return { ref, onPointerMove, onPointerLeave }
 }
 
 export const shortWallet = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`
@@ -69,34 +91,19 @@ export function CharacterCard({ image, name, tier, rarity, accent, overlay }: {
   /** Shown over the art (e.g. "Drawing your character…") */
   overlay?: ReactNode
 }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const move = (e: PointerEvent<HTMLDivElement>) => {
-    const el = ref.current
-    if (!el || e.pointerType === 'touch') return
-    const r = el.getBoundingClientRect()
-    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height
-    el.style.setProperty('--rx', `${(0.5 - y) * 14}deg`)
-    el.style.setProperty('--ry', `${(x - 0.5) * 18}deg`)
-    el.style.setProperty('--gx', `${x * 100}%`)
-    el.style.setProperty('--gy', `${y * 100}%`)
-  }
-  const leave = () => {
-    const el = ref.current
-    if (!el) return
-    el.style.setProperty('--rx', '0deg'); el.style.setProperty('--ry', '0deg')
-  }
+  const tilt = useTilt<HTMLDivElement>()
   return (
     <div className="pp-card-stage">
-      <div ref={ref} className={`pp-card pp-card--${rarity}`} style={{ '--pp-accent': accent } as CSSProperties}
-        onPointerMove={move} onPointerLeave={leave}>
+      <div {...tilt} className={`pp-card pp-card--${rarity}`} style={{ '--pp-accent': accent } as CSSProperties}>
+        {/* The art covers the whole card; rarity, tier and name sit on top of it */}
         <div className="pp-card-inner">
-          <div className="pp-card-top">
-            <span className="pp-card-rarity">{rarity}</span>
-            {tier && <span className="pp-card-tier">{tier}</span>}
-          </div>
           <div className="pp-card-art">
             {image ? <img src={image} alt={name} draggable={false} /> : <div className="pp-card-art-empty" />}
             {overlay && <div className="pp-card-overlay">{overlay}</div>}
+          </div>
+          <div className="pp-card-top">
+            <span className="pp-card-rarity">{rarity}</span>
+            {tier && <span className="pp-card-tier">{tier}</span>}
           </div>
           <div className="pp-card-name">{name}</div>
         </div>
@@ -164,20 +171,27 @@ export function HeroIdentity({ pfp, kicker, sinceIso, name, loading, tagline, de
 }
 
 /** Rank, XP, streak and a marker on the Virgin–Chad bar */
-export function SpectrumBar({ player }: { player: PlayerState }) {
-  const { direction, accent, spectrum } = alignment(player)
+/** Where the member's archetype sits between Virgin and Chad; their XP rank alongside */
+export function SpectrumBar({ archetype, player }: { archetype: string; player: PlayerState | null }) {
+  const { accent, spectrum } = alignment(archetype)
+  const pct = Math.round(spectrum * 100)
+  // The colour switches at 40/60%; the words only call it the middle when it really is
+  const lean = pct >= 45 && pct <= 55 ? 'Right in the middle' : pct > 50 ? `${pct}% Chad` : `${100 - pct}% Virgin`
   return (
-    <div className="pp-spectrum" title={`${Math.round(spectrum * 100)}% Chad`}>
+    <div className="pp-spectrum" title={`${archetypeName(archetype)}: ${lean}`}>
       <div className="pp-spectrum-head">
         <span className="pp-rank" style={{ color: accent }}>
-          {rankName(player.current_rank)}
-          <small>{direction === 'neutral' ? 'Perfectly balanced' : `${direction === 'chad' ? 'Chad' : 'Virgin'} side`}</small>
+          {archetypeName(archetype)}
+          <small>{lean}</small>
         </span>
-        <span className="pp-xp">⚡ {player.total_xp.toLocaleString()} XP{player.login_streak > 1 && <em> · 🔥 {player.login_streak}-day streak</em>}</span>
+        {player && (
+          <span className="pp-xp">⚡ {player.total_xp.toLocaleString()} XP · rank {rankName(player.current_rank)}
+            {player.login_streak > 1 && <em> · 🔥 {player.login_streak}-day streak</em>}</span>
+        )}
       </div>
       <div className="pp-spectrum-bar">
         <span className="pp-spectrum-end">Virgin</span>
-        <div className="pp-spectrum-track"><span className="pp-spectrum-marker" style={{ left: `${spectrum * 100}%` }} /></div>
+        <div className="pp-spectrum-track"><span className="pp-spectrum-marker" style={{ left: `${pct}%` }} /></div>
         <span className="pp-spectrum-end">Chad</span>
       </div>
     </div>
@@ -238,7 +252,7 @@ export function MemeGrid({ cards, topKey, loading, empty, onOpenMeme }: {
   cards: MemeCard[]; topKey: string | null; loading: boolean; empty: ReactNode
   onOpenMeme?: (source: MemeSource, id: string) => void
 }) {
-  if (loading) return <div className="pp-grid">{Array.from({ length: 6 }, (_, i) => <div key={i} className="pp-meme pp-meme--skeleton" />)}</div>
+  if (loading) return <div className="pp-grid">{Array.from({ length: 6 }, (_, i) => <div key={i} className="pp-meme pp-meme--skeleton" style={{ height: [220, 300, 260, 340, 240, 280][i] }} />)}</div>
   if (cards.length === 0) return <div className="pp-empty">{empty}</div>
   return (
     <div className="pp-grid">

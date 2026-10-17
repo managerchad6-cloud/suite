@@ -26,7 +26,7 @@ import { UserChip } from '../components/UserChip'
 import { XTimeline } from '../components/XTimeline'
 import { CommentSection } from '../components/CommentSection'
 import {
-  ActivityList, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, type MemeSource,
+  ActivityList, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, useTilt, type MemeSource,
 } from '../components/ProfileShowcase'
 import './ProfileControl.css'
 
@@ -140,6 +140,7 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
   const [copied, setCopied] = useState<'wallet' | 'link' | null>(null)
   const [burst, setBurst] = useState(0)
   const prevBanner = useRef(profile?.banner?.status)
+  const tilt = useTilt<HTMLButtonElement>(0.6)     // the same collectible-card lean as public profiles
 
   // Celebrate a banner the moment it lands
   useEffect(() => {
@@ -225,7 +226,8 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
   const framing = profile.portrait.status === 'generating'
   const pfp = profile.portrait.url ?? profile.fallbackImageUrl
   const traits = Object.entries(profile.attributes)
-  const side = player?.rank_direction === 'chad' ? 'Chad side' : player?.rank_direction === 'virgin' ? 'Virgin side' : 'Balanced'
+  const sidePct = Math.round(alignment(profile.archetype).spectrum * 100)
+  const side = sidePct >= 45 && sidePct <= 55 ? 'Right in the middle' : sidePct > 50 ? `${sidePct}% Chad` : `${100 - sidePct}% Virgin`
   const bannerFailedJob = banner.status === 'failed' && banner.jobId && refunded !== banner.jobId ? banner.jobId : null
 
   return (
@@ -313,7 +315,7 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
           </div>
         </div>
 
-        <button className={`pc-x-side${painting ? ' pc-x-side--sketch' : ''}`} onClick={() => setLightbox(true)} title="View your full character">
+        <button {...tilt} className={`pc-x-side${painting ? ' pc-x-side--sketch' : ''}`} onClick={() => setLightbox(true)} title="View your full character">
           <img src={art} alt={`${archetypeName(profile.archetype)}, full character`} />
           {painting && <span className="pc-x-status"><span className="pc-spin" /> Painting your character…</span>}
           {profile.avatar.status === 'failed' && (
@@ -321,6 +323,7 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
               onClick={e => { e.stopPropagation(); image('retry') }}>{imageBusy ? '…' : 'The art failed. Try again'}</span>
           )}
           <span className="pc-x-side-hint">View full art ⤢</span>
+          <span className="pc-x-side-shine" aria-hidden />
         </button>
         </div>
       </section>
@@ -523,7 +526,7 @@ export function Profile({ onGoToOracle, onOpenMeme, onOpenProfile, onViewPublic,
   }, [refreshBalance])
 
   const { cards, topKey, votes } = useMemeCards(memes, studioMemes, sort)
-  const { accent } = alignment(player)
+  const { accent } = alignment(profile?.archetype)
   const pfp = profile ? profile.portrait.url ?? profile.fallbackImageUrl : null
   const hasEngagement = !!engagement && (engagement.total_likes > 0 || engagement.total_rts > 0 || engagement.total_replies > 0 || engagement.total_views > 0)
   const navHint: Record<Section, string | null> = useMemo(() => ({
@@ -616,10 +619,10 @@ export function Profile({ onGoToOracle, onOpenMeme, onOpenProfile, onViewPublic,
 
           {section === 'progress' && (
             <>
-              <Panel title="Where you stand" hint="Your XP pulls you toward Chad or Virgin.">
+              <Panel title="Where you stand" hint="Where your archetype sits between Virgin and Chad, and your XP rank.">
                 {player ? (
                   <>
-                    <SpectrumBar player={player} />
+                    {profile && <SpectrumBar archetype={profile.archetype} player={player} />}
                     <div className="pc-streaks">
                       <span>🔥 {player.login_streak}-day login streak</span>
                       <span>🎨 {player.creation_streak}-day creation streak</span>
