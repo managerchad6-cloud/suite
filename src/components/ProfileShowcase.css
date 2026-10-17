@@ -318,3 +318,11 @@
 @media (max-width: 860px) {
   .pp-owner { padding: 16px; grid-template-columns: 1fr; }
 }
+
+/* Your own public page, opened from the control room */
+.pp-preview-banner {
+  padding: 8px 24px; text-align: center;
+  background: color-mix(in srgb, var(--pp-accent, #F0A020) 14%, #141414);
+  border-bottom: 1px solid color-mix(in srgb, var(--pp-accent, #F0A020) 40%, #222);
+  color: #f3c27a; font-size: 13px;
+}

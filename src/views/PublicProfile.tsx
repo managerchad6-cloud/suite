@@ -24,11 +24,13 @@ interface Props {
   onOpenMeme?: (source: MemeSource, id: string) => void
   onOpenProfile?: (wallet: string) => void
   onOpenMessages?: (wallet: string) => void
+  /** You, looking at your own page as others see it (from your control room) */
+  previewOwn?: boolean
 }
 
 type Tab = 'memes' | 'badges' | 'activity' | 'wall'
 
-export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpenMessages }: Props) {
+export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpenMessages, previewOwn }: Props) {
   const gate = useMemberGate()
   const address = gate.wallet
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined)
@@ -112,11 +114,12 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
   return (
     <div className="pp-page" style={{ '--pp-accent': accent } as CSSProperties}>
       <div className="pp-topbar">
-        <button className="char-detail-back" onClick={onBack}>← Back</button>
+        <button className="char-detail-back" onClick={onBack}>{previewOwn ? '← Your control room' : '← Back'}</button>
         <button className="pp-wallet" onClick={copyWallet} title={`${wallet} (click to copy)`}>
           {copied ? 'Copied ✓' : shortWallet(wallet)}
         </button>
       </div>
+      {previewOwn && <div className="pp-preview-banner">👁 This is how others see your profile</div>}
 
       <ProfileHero art={art} card={profile
         ? <CharacterCard image={art} name={archetypeName(profile.archetype)} tier={charData?.tier} rarity={charData?.rarity ?? 'common'} accent={accent} />
@@ -141,7 +144,7 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
           <Stat value={badgeCount} label="Badges" onClick={() => setTab('badges')} />
         </div>
 
-        <div className="pp-actions">
+        {!previewOwn && <div className="pp-actions">
           <button className={`pp-btn pp-btn--primary${isFollowing ? ' pp-btn--on' : ''}`} {...gate.lockProps('follow')}
             onClick={gate.guard(handleFollow, 'follow')} disabled={!gate.locked && followPending}>
             {followPending ? '…' : isFollowing ? '✓ Following' : '+ Follow'}
@@ -158,7 +161,7 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
           {onOpenMessages && (
             <button className="pp-btn" {...gate.lockProps('message')} onClick={gate.guard(() => onOpenMessages(wallet), 'message')}>✉️ Message</button>
           )}
-        </div>
+        </div>}
       </ProfileHero>
 
       <ProfileTabs tab={tab} onTab={setTab}
