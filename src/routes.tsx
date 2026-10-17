@@ -141,8 +141,7 @@ export function ProfileRoute() {
   return (
     <Profile
       onGoToOracle={() => navigate('/pfp')}
-      onOpenDetail={meme => navigate(`/memes/factory/${meme.job_id}`)}
-      onOpenStudioMeme={id => navigate(`/memes/studio/${id}`)}
+      onOpenMeme={(source, id) => navigate(`/memes/${source}/${id}`)}
       onOpenProfile={w => navigate(`/u/${w}`)}
     />
   )

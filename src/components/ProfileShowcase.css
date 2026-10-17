@@ -1,4 +1,4 @@
-/* Public profile (someone else's): collectible card hero, spectrum, tabs, meme grid */
+/* Profiles (yours and others'): collectible card hero, spectrum, tabs, meme grid, owner panel */
 
 .pp-page { height: 100%; overflow-y: auto; background: var(--dark, #111); --pp-accent: #F0A020; }
 
@@ -261,4 +261,60 @@
 @media (prefers-reduced-motion: reduce) {
   .pp-card, .pp-meme, .pp-spectrum-marker { animation: none; }
   .pp-card--legendary { animation: none; }
+}
+
+/* ── Your own profile ───────────────────────────────────────────────── */
+.pp-topbar-title { font-family: var(--font-ui); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: #aaa; }
+.pp-topbar-right { display: flex; gap: 6px; }
+.pp-card-overlay {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 16px;
+  background: rgba(0,0,0,0.45); text-align: center;
+}
+.pp-card-art { position: relative; }
+.pp-card-status { color: #ddd; font-size: 13px; animation: pp-pulse 1.4s ease-in-out infinite; }
+
+.pp-owner {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;
+  padding: 20px 32px; border-bottom: 1px solid #222;
+}
+.pp-owner-card {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  padding: 16px 18px; border-radius: 14px;
+  background: #161616; border: 1px solid #262626;
+}
+.pp-owner-title { margin: 0; font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #888; font-weight: 500; }
+.pp-owner-balance { display: flex; align-items: baseline; gap: 8px; }
+.pp-owner-big { font-family: var(--font-display); font-size: 34px; color: #fff; font-variant-numeric: tabular-nums; }
+.pp-owner-sub { color: #777; font-size: 13px; }
+.pp-owner-holder { margin: 0; font-size: 13px; color: #999; line-height: 1.45; }
+.pp-owner-holder--on { color: #f3c27a; }
+.pp-owner-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.pp-owner-actions .pp-btn { padding: 8px 14px; }
+.pp-owner-files { display: flex; gap: 12px; }
+.pp-owner-file { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pp-owner-thumb {
+  width: 84px; height: 84px; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center; background: #1e1e1e; border: 2px solid var(--pp-accent);
+  color: #666; font-size: 12px;
+}
+.pp-owner-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pp-owner-thumb--art { width: 64px; border-radius: 10px; border-color: #333; }
+.pp-owner-thumb--art img { object-fit: contain; }
+.pp-owner-file figcaption { font-size: 12px; color: #777; }
+.pp-owner-file a { color: var(--pp-accent); text-decoration: none; }
+.pp-owner-file a:hover { text-decoration: underline; }
+.pp-owner-traits { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-owner-trait { padding: 3px 9px; border-radius: 10px; background: #1e1e1e; border: 1px solid #2a2a2a; color: #ccc; font-size: 12px; }
+.pp-owner-trait b { color: #888; font-weight: 500; text-transform: capitalize; }
+.pp-owner-note { margin: 0; font-size: 11px; color: #666; }
+
+.pp-meme-tag { flex-shrink: 0; padding: 1px 6px; border-radius: 6px; background: #262626; color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.pp-reach {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px;
+  padding: 12px 16px; border-radius: 12px; background: #161616; border: 1px solid #262626; color: #ddd; font-size: 14px;
+}
+.pp-reach-label { width: 100%; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #777; }
+
+@media (max-width: 860px) {
+  .pp-owner { padding: 16px; grid-template-columns: 1fr; }
 }
