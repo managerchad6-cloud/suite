@@ -37,8 +37,29 @@ export async function fetchCreditBalance(): Promise<{ balance: number; lifetime:
   try { return await api('/api/credits/balance') } catch { return { balance: 0, lifetime: 0 } }
 }
 
-export function fetchCreditPacks(): Promise<{ packs: CreditPack[]; costs: CreditCosts }> {
+/** `character_regen` is charged by its own endpoint (regenerateCharacter), not through deductCredits */
+export function fetchCreditPacks(): Promise<{ packs: CreditPack[]; costs: CreditCosts & { character_regen?: number } }> {
   return api('/api/credits/packs')
+}
+
+export interface CreditHistoryItem {
+  at: string
+  /** + received (purchase, holder top-up, refund), − spent */
+  amount: number
+  kind: string
+}
+
+export async function fetchCreditHistory(limit = 40): Promise<CreditHistoryItem[]> {
+  try { return (await api<{ items: CreditHistoryItem[] }>(`/api/credits/history?limit=${limit}`)).items } catch { return [] }
+}
+
+/**
+ * Paid: a new archetype + art from your interview. Charged here; refunded in full if it fails
+ * (the error then carries `refunded: true`). The old character stays available to go back to.
+ */
+export function regenerateCharacter(): Promise<{ ok: boolean; cost: number; new_balance: number }> {
+  return withBadges(api<{ ok: boolean; cost: number; new_balance: number }>('/api/credits/regenerate-character', { method: 'POST' }))
+    .then(r => { window.dispatchEvent(new CustomEvent('vvc:credits-changed')); return r })
 }
 
 /** Charge an action. Studio AI actions also return `ai_ticket`: the images this charge paid for. */

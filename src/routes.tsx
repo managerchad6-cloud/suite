@@ -1,4 +1,4 @@
-import { useOutletContext, useParams, useNavigate, Navigate } from 'react-router-dom'
+import { useOutletContext, useParams, useNavigate, useSearchParams, Navigate } from 'react-router-dom'
 import { Live } from './views/Live'
 import { Memes } from './views/Memes'
 import { Forum } from './views/Forum'
@@ -143,6 +143,9 @@ export function ProfileRoute() {
       onGoToOracle={() => navigate('/pfp')}
       onOpenMeme={(source, id) => navigate(`/memes/${source}/${id}`)}
       onOpenProfile={w => navigate(`/u/${w}`)}
+      onViewPublic={w => navigate(`/u/${w}?as=public`)}
+      onOpenStudio={() => navigate('/studio')}
+      onOpenFactory={() => navigate('/factory')}
     />
   )
 }
@@ -200,13 +203,16 @@ export function PublicProfileRoute() {
   const { openChat } = useOutletContext<AppOutletContext>()
   const { memberWallet } = useIdentity()
   const navigate = useNavigate()
-
-  if (wallet === memberWallet) return <Navigate to="/profile" replace />
+  const [params] = useSearchParams()
+  const own = wallet === memberWallet
+  // Your own public page is your control room, unless you asked to see it as others do
+  if (own && params.get('as') !== 'public') return <Navigate to="/profile" replace />
 
   return (
     <PublicProfile
       wallet={wallet!}
-      onBack={() => navigate(-1)}
+      previewOwn={own}
+      onBack={() => (own ? navigate('/profile') : navigate(-1))}
       onOpenMeme={(source, id) => navigate(`/memes/${source}/${id}`)}
       onOpenProfile={w => navigate(`/u/${w}`)}
       onOpenMessages={openChat}

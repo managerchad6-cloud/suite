@@ -19,6 +19,16 @@ export interface Profile {
   avatar: ImageState
   portrait: ImageState
   fallbackImageUrl: string
+  /** After a paid regenerate: the character from before, until you keep the new one or go back */
+  previous?: PreviousCharacter | null
+}
+
+export interface PreviousCharacter {
+  archetype: string
+  title: string
+  avatarUrl: string | null
+  portraitUrl: string | null
+  fallbackImageUrl: string
 }
 
 export interface Account {
@@ -103,6 +113,9 @@ export const reroll = (feedback?: string) =>
   api<{ interview: Interview; me: SignedIn }>(`${ID}/profile/reroll`, { method: 'POST', body: { feedback } })
 export const retryAvatar = () => api<{ me: SignedIn }>(`${ID}/profile/avatar/retry`, { method: 'POST' })
 export const requestPortrait = () => api<{ me: SignedIn }>(`${ID}/profile/portrait`, { method: 'POST' })
+/** After a paid regenerate (api/credits regenerateCharacter): keep the new character, or go back (free) */
+export const keepRegenerated = () => api<{ me: SignedIn }>(`${ID}/profile/regenerate/keep`, { method: 'POST' })
+export const revertRegenerated = () => api<{ me: SignedIn }>(`${ID}/profile/regenerate/revert`, { method: 'POST' })
 
 // ── Public profiles (anyone's avatar) ──────────────────────────────────────
 const publicCache = new Map<string, Promise<PublicProfile | null>>()
