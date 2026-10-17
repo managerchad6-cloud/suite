@@ -232,9 +232,9 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
     <>
       {burst > 0 && <Confetti key={burst} />}
 
-      {/* ── You: one card. Banner + round PFP + who you are on the left, your full character on the right ── */}
+      {/* ── You: one card. A banner across the top; under it, the round PFP and who you are, and your full
+             character in a panel that rises over the banner's edge, like the PFP does ── */}
       <section className="pc-x" style={{ '--pp-accent': accent } as CSSProperties}>
-        <div className="pc-x-main">
           <div className={`pc-x-banner${banner.url ? ' pc-x-banner--made' : ''}${banner.status === 'generating' ? ' pc-x-banner--painting' : ''}`}>
             {banner.url
               ? <img className="pc-x-banner-img" src={banner.url} alt="" />
@@ -259,6 +259,8 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
             </div>
           </div>
 
+        <div className="pc-x-body">
+        <div className="pc-x-main">
           <div className="pc-x-bar">
             <div className={`pc-x-avatar${framing ? ' pc-x-avatar--busy' : ''}`}>
               <img src={pfp} alt="Your profile picture" />
@@ -320,6 +322,7 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
           )}
           <span className="pc-x-side-hint">View full art ⤢</span>
         </button>
+        </div>
       </section>
 
       {msg && <div className={`pc-flash${msg.ok ? ' pc-flash--ok' : ' pc-flash--err'}`} role="status">{msg.text}</div>}
