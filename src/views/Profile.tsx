@@ -26,7 +26,7 @@ import { UserChip } from '../components/UserChip'
 import { XTimeline } from '../components/XTimeline'
 import { CommentSection } from '../components/CommentSection'
 import {
-  ActivityList, CharacterCard, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, type MemeSource,
+  ActivityList, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, type MemeSource,
 } from '../components/ProfileShowcase'
 import './ProfileControl.css'
 
@@ -83,10 +83,6 @@ function Panel({ title, hint, children, aside }: { title: string; hint?: ReactNo
 
 // ── Character ───────────────────────────────────────────────────────────────────────────────
 
-function imageLabel(s: ProfileData['avatar']['status'], ready: string, working: string) {
-  return s === 'ready' ? ready : s === 'generating' ? working : s === 'failed' ? 'Failed' : 'Not made yet'
-}
-
 /** After a regenerate: the old character next to the new one, keep or go back */
 function RegenDecision({ profile, busy, onKeep, onRevert }: {
   profile: ProfileData; busy: 'keep' | 'revert' | null; onKeep: () => void; onRevert: () => void
@@ -122,10 +118,13 @@ function RegenDecision({ profile, busy, onKeep, onRevert }: {
   )
 }
 
-function CharacterSection({ profile, balance, regenCost, onGoToOracle, onBuyCredits, accent }: {
-  profile: ProfileData | null; balance: number | null; regenCost: number; onGoToOracle: () => void; onBuyCredits: () => void; accent: string
+function CharacterSection({ profile, wallet, memberSince, player, balance, regenCost, onGoToOracle, onBuyCredits, accent }: {
+  profile: ProfileData | null; wallet: string; memberSince: string | null; player: PlayerState | null
+  balance: number | null; regenCost: number; onGoToOracle: () => void; onBuyCredits: () => void; accent: string
 }) {
   const { setMe, refresh } = useIdentity()
+  const [lightbox, setLightbox] = useState(false)
+  const [showTraits, setShowTraits] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const [regen, setRegen] = useState<'idle' | 'working'>('idle')
   const [decideBusy, setDecideBusy] = useState<'keep' | 'revert' | null>(null)
@@ -175,87 +174,109 @@ function CharacterSection({ profile, balance, regenCost, onGoToOracle, onBuyCred
     catch (e) { setMsg({ ok: false, text: (e as Error).message }) } finally { setImageBusy(false) }
   }
 
-  const overlay = profile.avatar.status === 'generating' ? <span className="pp-card-status">Painting your character…</span> : null
+  const painting = profile.avatar.status === 'generating'
+  const framing = profile.portrait.status === 'generating'
+  const pfp = profile.portrait.url ?? profile.fallbackImageUrl
+  const traits = Object.entries(profile.attributes)
+  const side = player?.rank_direction === 'chad' ? 'Chad side' : player?.rank_direction === 'virgin' ? 'Virgin side' : 'Balanced'
 
   return (
     <>
       {burst > 0 && <Confetti key={burst} />}
-      <Panel title="Your character" hint="Who the Oracle says you are, and the art everyone sees.">
-        <div className="pc-char">
-          <CharacterCard image={art} name={archetypeName(profile.archetype)} tier={char?.tier} rarity={char?.rarity ?? 'common'} accent={accent} overlay={overlay} />
-          <div className="pc-char-info">
-            <p className="pc-kicker">{archetypeName(profile.archetype)}{char ? ` · ${char.tier}` : ''}</p>
-            <h3 className="pc-char-name">{displayName(profile)}</h3>
-            {char && <p className="pc-tagline">“{char.tagline}”</p>}
-            <p className="pc-desc">{profile.description}</p>
 
-            <div className="pc-files">
-              <div className="pc-file">
-                <div className="pc-file-thumb pc-file-thumb--round">{profile.portrait.url ? <img src={profile.portrait.url} alt="" /> : <span>PFP</span>}</div>
-                <div className="pc-file-meta">
-                  <b>Profile picture</b>
-                  <span>{imageLabel(profile.portrait.status, 'Ready', 'Framing…')}</span>
-                  <div className="pc-file-links">
-                    {profile.portrait.url && <a href={profile.portrait.url} download={`${profile.archetype}_pfp`}>Download</a>}
-                    {profile.avatar.status === 'ready' && profile.portrait.status !== 'generating' && (
-                      <button onClick={() => image('portrait')} disabled={imageBusy}>{imageBusy ? '…' : profile.portrait.url ? 'Redo PFP' : 'Make PFP'}</button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="pc-file">
-                <div className="pc-file-thumb"><img src={art} alt="" /></div>
-                <div className="pc-file-meta">
-                  <b>Full character</b>
-                  <span>{imageLabel(profile.avatar.status, 'Ready', 'Painting…')}</span>
-                  <div className="pc-file-links">
-                    {profile.avatar.url && <a href={profile.avatar.url} download={`${profile.archetype}_full`}>Download</a>}
-                    {profile.avatar.status === 'failed' && <button onClick={() => image('retry')} disabled={imageBusy}>{imageBusy ? '…' : 'Try again'}</button>}
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* ── Your profile, as a social profile header: banner, round PFP over it, bio ── */}
+      <section className="pc-x" style={{ '--pp-accent': accent } as CSSProperties}>
+        <div className={`pc-x-banner${painting ? ' pc-x-banner--sketch' : ''}`}>
+          <div className="pc-x-banner-bg" style={{ backgroundImage: `url("${art}")` }} aria-hidden />
+          <span className="pc-x-chip">{char?.rarity ?? 'common'}{char ? ` · ${char.tier}` : ''}</span>
+          <button className="pc-x-art" onClick={() => setLightbox(true)} title="View your full character">
+            <img src={art} alt={`${archetypeName(profile.archetype)}, full character`} />
+          </button>
+          {painting && <span className="pc-x-status"><span className="pc-spin" /> Painting your character…</span>}
+          {profile.avatar.status === 'failed' && (
+            <button className="pc-x-status pc-x-status--fail" onClick={() => image('retry')} disabled={imageBusy}>
+              {imageBusy ? '…' : 'The art failed. Try again'}
+            </button>
+          )}
+        </div>
 
-            {Object.keys(profile.attributes).length > 0 && (
-              <details className="pc-traits">
-                <summary>What went into your picture</summary>
-                <div>{Object.entries(profile.attributes).map(([k, v]) => <span key={k}><b>{k}</b> {v}</span>)}</div>
+        <div className="pc-x-bar">
+          <div className={`pc-x-avatar${framing ? ' pc-x-avatar--busy' : ''}`}>
+            <img src={pfp} alt="Your profile picture" />
+          </div>
+          <div className="pc-x-actions">
+            {profile.avatar.status === 'ready' && (
+              <button className="pc-btn" onClick={() => image('portrait')} disabled={imageBusy || framing}>
+                {framing ? 'Framing PFP…' : imageBusy ? '…' : profile.portrait.url ? 'Redo PFP' : 'Make PFP'}
+              </button>
+            )}
+            {(profile.portrait.url || profile.avatar.url) && (
+              <details className="pc-x-dl">
+                <summary className="pc-btn">Download ▾</summary>
+                <div className="pc-x-dl-menu">
+                  {profile.portrait.url && <a href={profile.portrait.url} download={`${profile.archetype}_pfp`}>Profile picture</a>}
+                  {profile.avatar.url && <a href={profile.avatar.url} download={`${profile.archetype}_full`}>Full character</a>}
+                </div>
               </details>
             )}
           </div>
         </div>
-      </Panel>
 
-      {profile.previous ? (
-        <RegenDecision profile={profile} busy={decideBusy} onKeep={() => decide('keep')} onRevert={() => decide('revert')} />
-      ) : (
-        <Panel title="Regenerate your character" hint="The Oracle re-reads your interview and picks again: a new archetype, new art, a new PFP. No new questions.">
-          <div className="pc-regen">
-            <div className="pc-regen-price"><span>⚡ {regenCost}</span><small>credits</small></div>
-            <ul className="pc-regen-points">
-              <li>See the result, then keep it or go back to your current character</li>
-              <li>If the Oracle fails, your credits come straight back</li>
-              <li>You have <b>{balance === null ? '…' : balance.toLocaleString()}</b> credits</li>
-            </ul>
-            {regen === 'working' ? (
-              <div className="pc-regen-working"><span className="pc-spin" /> The Oracle is re-reading your interview…</div>
-            ) : enough ? (
-              <button className="pc-btn pc-btn--primary pc-btn--big" onClick={() => setConfirm(true)}>Regenerate for {regenCost} ⚡</button>
-            ) : (
-              <div className="pc-actions">
-                <button className="pc-btn pc-btn--primary" onClick={onBuyCredits}>Get credits</button>
-                <button className="pc-btn" onClick={openBuyVvc}>Hold $VVC for free credits</button>
-              </div>
+        <div className="pc-x-id">
+          <h3 className="pc-x-name">{displayName(profile)}</h3>
+          <p className="pc-x-handle">@{shortWallet(wallet)} · {archetypeName(profile.archetype)}</p>
+          <p className="pc-x-bio">{profile.description}</p>
+          {char && <p className="pc-x-tagline">“{char.tagline}”</p>}
+          <div className="pc-x-meta">
+            {memberSince && <span>📅 Joined {new Date(memberSince).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>}
+            {player && <span>⚡ {player.total_xp.toLocaleString()} XP</span>}
+            {player && <span>⚖ {side}</span>}
+            {traits.length > 0 && (
+              <button className="pc-x-link" onClick={() => setShowTraits(t => !t)}>{showTraits ? 'Hide' : 'What went into your picture'}</button>
             )}
           </div>
-        </Panel>
-      )}
+          {showTraits && <div className="pc-x-traits">{traits.map(([k, v]) => <span key={k}><b>{k}</b> {v}</span>)}</div>}
+        </div>
+      </section>
 
       {msg && <div className={`pc-flash${msg.ok ? ' pc-flash--ok' : ' pc-flash--err'}`} role="status">{msg.text}</div>}
 
-      <Panel title="Start over" hint="A whole new interview with the Oracle. Your current character stays until you finish it.">
-        <button className="pc-btn" onClick={onGoToOracle}>Retake the interview</button>
+      {profile.previous && <RegenDecision profile={profile} busy={decideBusy} onKeep={() => decide('keep')} onRevert={() => decide('revert')} />}
+
+      {/* ── Changing who you are: two ways ── */}
+      <Panel title="Change your character">
+        <div className="pc-change">
+          {!profile.previous && (
+            <div className="pc-change-opt pc-change-opt--regen">
+              <div className="pc-change-top"><b>Regenerate</b><span className="pc-price">⚡ {regenCost}</span></div>
+              <p>The Oracle re-reads your interview and picks again: new archetype, new art, new PFP. Keep it or go back. Refunded if it fails.</p>
+              {regen === 'working' ? (
+                <div className="pc-regen-working"><span className="pc-spin" /> The Oracle is re-reading your interview…</div>
+              ) : enough ? (
+                <button className="pc-btn pc-btn--primary" onClick={() => setConfirm(true)}>Regenerate for {regenCost} ⚡</button>
+              ) : (
+                <div className="pc-actions">
+                  <button className="pc-btn pc-btn--primary" onClick={onBuyCredits}>Get credits</button>
+                  <button className="pc-btn" onClick={openBuyVvc}>Hold $VVC</button>
+                  <span className="pc-fine">You have {balance ?? '…'}</span>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="pc-change-opt">
+            <div className="pc-change-top"><b>Retake the interview</b><span className="pc-price pc-price--free">Free</span></div>
+            <p>A whole new conversation with the Oracle. Your current character stays until you finish.</p>
+            <button className="pc-btn" onClick={onGoToOracle}>Start over</button>
+          </div>
+        </div>
       </Panel>
+
+      {lightbox && (
+        <div className="pc-lightbox" onClick={() => setLightbox(false)} role="dialog" aria-label="Your full character">
+          <img src={art} alt="" />
+          <span>Click anywhere to close</span>
+        </div>
+      )}
 
       {confirm && (
         <div className="pc-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setConfirm(false) }}>
@@ -344,7 +365,8 @@ function PeopleList({ title, wallets, empty }: { title: string; wallets: string[
 
 export function Profile({ onGoToOracle, onOpenMeme, onOpenProfile, onViewPublic, onOpenStudio, onOpenFactory }: Props) {
   // Member-only view (the route sends everyone else away): the wallet is always set here
-  const { memberWallet, profile } = useIdentity()
+  const { memberWallet, profile, me } = useIdentity()
+  const memberSince = me && me.state !== 'guest' ? me.account.memberSince : null
   const address = memberWallet ?? ''
   const [params, setParams] = useSearchParams()
   const section = (SECTIONS.find(s => s.id === params.get('s'))?.id ?? 'character') as Section
@@ -454,7 +476,8 @@ export function Profile({ onGoToOracle, onOpenMeme, onOpenProfile, onViewPublic,
 
         <main className="pc-main" key={section}>
           {section === 'character' && (
-            <CharacterSection profile={profile} balance={balance} regenCost={regenCost} accent={accent}
+            <CharacterSection profile={profile} wallet={address} memberSince={memberSince} player={player}
+              balance={balance} regenCost={regenCost} accent={accent}
               onGoToOracle={onGoToOracle} onBuyCredits={() => setBuyOpen(true)} />
           )}
 
