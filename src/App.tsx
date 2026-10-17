@@ -13,6 +13,7 @@ import { fetchHolderStatus } from './api/credits'
 import { BuyVvcButton, BuyVvcHost } from './components/BuyVvc'
 import { useIdentity } from './identity/IdentityProvider'
 import { JoinFlow } from './identity/JoinFlow'
+import { PfpReadyToast } from './identity/PfpReadyToast'
 import { profileImage } from './identity/api'
 
 const NAV_MODE = (import.meta.env.VITE_NAV_MODE ?? 'side') as 'side' | 'top'
@@ -156,6 +157,7 @@ export default function App() {
   return (
     <div className={`suite-shell${NAV_MODE === 'top' ? ' suite-shell--top' : ''}`}>
       <BuyVvcHost />
+      <PfpReadyToast />
       <BadgeUnlockedToast
         badges={newBadges}
         onDismiss={id => setNewBadges(prev => prev.filter(b => b.id !== id))}

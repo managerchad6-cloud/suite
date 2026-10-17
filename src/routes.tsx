@@ -208,7 +208,7 @@ export function PublicProfileRoute() {
     <PublicProfile
       wallet={wallet!}
       onBack={() => navigate(-1)}
-      onOpenDetail={meme => navigate(`/memes/factory/${meme.job_id}`)}
+      onOpenMeme={(source, id) => navigate(`/memes/${source}/${id}`)}
       onOpenProfile={w => navigate(`/u/${w}`)}
       onOpenMessages={openChat}
     />
