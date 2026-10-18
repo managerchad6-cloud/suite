@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useMemberGate } from '../identity/gate'
 import { fetchGalleryMemes, studioMemeImageUrl } from '../api/studio'
 import { fetchMemes, imageUrl } from '../api/memes'
@@ -719,6 +719,70 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
     return () => window.removeEventListener('keydown', handler)
   })
 
+  // ── The stack: the current meme big, its neighbours small and tucked behind its edges ──
+  // Cards size themselves in CSS from the slide and their meme's shape; the slots are placed here
+  // from the same numbers, so a neighbour always peeks out from behind the current card's real edge.
+  const carouselRef = useRef<HTMLDivElement>(null)
+  const [stage, setStage] = useState<Stage | null>(null)
+  const [ratios, setRatios] = useState<Record<string, number>>({})
+  const onRatio = useCallback((key: string, r: number) => setRatios(p => (p[key] === r ? p : { ...p, [key]: r })), [])
+  useLayoutEffect(() => {
+    const el = carouselRef.current
+    if (!el) return
+    const measure = () => {
+      const slide = el.querySelector<HTMLElement>('.feed-slide')
+      const card = el.querySelector<HTMLElement>('.feed-slide--current .fp')
+      const st = card?.querySelector<HTMLElement>('.fp-stage')
+      const mobile = window.matchMedia('(max-width: 600px)').matches
+      setStage(prev => {
+        const next: Stage = {
+          w: slide?.offsetWidth ?? el.clientWidth * 0.95,
+          h: slide?.offsetHeight ?? el.clientHeight * 0.82,
+          ch: el.clientHeight,
+          mobile,
+          // Header + title above the meme, as rendered (it can wrap)
+          chrome: card && st ? card.offsetHeight - st.offsetHeight : prev?.chrome ?? 120,
+        }
+        return prev && Object.keys(next).every(k => prev[k as keyof Stage] === next[k as keyof Stage]) ? prev : next
+      })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    const card = el.querySelector('.feed-slide--current .fp')
+    if (card) ro.observe(card)
+    return () => ro.disconnect()
+  }, [idx, heroActive, loading, visible.length, ratios])
+
+  /** The card's own (unscaled) size: the same formula as .feed-slide .fp in FeedStage.css */
+  function cardSize(item: UnifiedMemeItem, st: Stage) {
+    const ar = ratios[item.key] ?? 4 / 3
+    const w = st.mobile
+      ? Math.min(st.w, (st.h - 116 - 70) * ar)
+      : Math.min(st.w - 86, (st.h - 128) * ar, 1500)
+    return { w, h: w / ar + st.chrome }
+  }
+
+  /** Where a slot sits: offset from the current one (-2..2); on the hero, offset 1 is the waiting first meme */
+  function slotStyle(item: UnifiedMemeItem, offset: number): React.CSSProperties | undefined {
+    if (!stage) return undefined
+    const S = stage.h
+    if (offset === 0 && !heroActive) return { transform: `translateY(${-S / 2}px)` }
+    const { w, h } = cardSize(item, stage)
+    const s = Math.min(heroActive && offset === 1 ? 0.86 : 0.8, (stage.mobile ? 280 : heroActive ? 760 : 620) / w)
+    let center: number   // the card's visual centre, relative to the carousel's centre line
+    if (heroActive) {
+      const top = stage.ch * 0.12                        // just under the hero's text
+      center = offset === 1 ? top + (s * h) / 2 : top + s * h * 1.6
+    } else {
+      const cur = currentItem ? cardSize(currentItem, stage).h + (stage.mobile ? 72 : 0) : 0
+      const edge = cur / 2 - TUCK                         // a neighbour starts this far inside the current card
+      const far = Math.abs(offset) === 2
+      center = Math.sign(offset) * (edge + (s * h) / 2 + (far ? s * h * 0.9 : 0))
+    }
+    return { transform: `translateY(${center - S / 2}px) scale(${s})` }
+  }
+
   // Render one slide; the action rail sits beside the current one
   function renderSlide(visIdx: number) {
     const item = visible[visIdx]
@@ -733,10 +797,10 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
     const sharedMetrics = sharedTweetId ? xMetrics.get(sharedTweetId) : null
     const own = !!item.wallet && item.wallet === wallet
     return (
-      <div key={item.key} className={`feed-slide feed-slide--${cls}${heropeek ? ' feed-slide--hero-peek' : ''}`}>
-        {cls === 'next' && !heropeek && <span className="fx-next-label">Up next</span>}
+      <div key={item.key} className={`feed-slide feed-slide--${cls}${heropeek ? ' feed-slide--hero-peek' : ''}`} style={slotStyle(item, offset)}>
         <FeedPost
           item={item}
+          onRatio={r => onRatio(item.key, r)}
           current={isCurrent}
           following={item.wallet && !own ? (gate.locked ? false : followingSet.has(item.wallet)) : null}
           own={own}
@@ -927,7 +991,7 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
             <button className="fx-chip is-on" onClick={() => { chooseSource('all'); setFilterChars(new Set()) }}>Clear filters</button>
           </div>
         ) : (
-          <div className="feed-carousel">
+          <div className="feed-carousel" ref={carouselRef}>
             {/* Ambient light from the current meme; neighbours stay mounted so it crossfades */}
             {[idx - 1, idx, idx + 1].map(i => visible[i] && (
               <div key={`bg-${visible[i].key}`} className={`fx-backdrop${i === idx && !heroActive ? ' is-on' : ''}`}
@@ -1033,6 +1097,9 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
 }
 
 const FIRST_STREAK_BONUS = { at: 5, xp: 10 }
+/** How far a neighbour tucks in behind the current card's edge */
+const TUCK = 56
+interface Stage { w: number; h: number; ch: number; chrome: number; mobile: boolean }
 /** Slide slots by offset from the current one: two above, two below (the outer ones wait off-stage) */
 const SLOT = ['above', 'prev', 'current', 'next', 'below'] as const
 const compact = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n))

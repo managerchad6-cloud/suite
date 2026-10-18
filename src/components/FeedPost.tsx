@@ -22,6 +22,8 @@ interface Props {
   onOpenProfile?: (wallet: string) => void
   onDoubleTap: () => void
   flipped: boolean
+  /** The meme's width/height, once its image loads */
+  onRatio?: (ratio: number) => void
   verdict: Verdict | null
   children?: ReactNode
 }
@@ -35,7 +37,7 @@ function ago(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-export function FeedPost({ item, current, following, own, onFollow, onOpen, onOpenProfile, onDoubleTap, flipped, verdict, children }: Props) {
+export function FeedPost({ item, current, following, own, onFollow, onOpen, onOpenProfile, onDoubleTap, flipped, onRatio, verdict, children }: Props) {
   const [creator, setCreator] = useState<PublicProfile | null>(null)
   // The card hugs the meme's shape (until it runs out of room)
   const [ratio, setRatio] = useState<number | null>(null)
@@ -97,7 +99,7 @@ export function FeedPost({ item, current, following, own, onFollow, onOpen, onOp
         <div className="fp-flip">
           <div className="fp-face fp-front" onClick={tap} role="button" tabIndex={-1} aria-label="Open the meme (double-tap for Based)">
             <img src={item.imageUrl} alt={item.title} draggable={false} loading={current ? 'eager' : 'lazy'}
-              onLoad={e => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setRatio(i.naturalWidth / i.naturalHeight) }} />
+              onLoad={e => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) { setRatio(i.naturalWidth / i.naturalHeight); onRatio?.(i.naturalWidth / i.naturalHeight) } }} />
             {burst > 0 && <span key={burst} className="fp-burst" aria-hidden>▲<b>BASED</b></span>}
             {verdict && (
               <div key={verdict.key} className={`fp-verdict fp-verdict--${verdict.pct >= 50 === (verdict.dir === 1) ? 'with' : 'against'}`}>
