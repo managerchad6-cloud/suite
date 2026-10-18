@@ -468,12 +468,10 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
     window.dispatchEvent(new CustomEvent('vvc:feed-advance', { detail: dir }))
     if (heroActive) {
       if (dir === 1) {
+        setHeroActive(false)
         setHeroLeaving(true)
         if (heroLeavingTimerRef.current) clearTimeout(heroLeavingTimerRef.current)
-        heroLeavingTimerRef.current = setTimeout(() => {
-          setHeroActive(false)
-          setHeroLeaving(false)
-        }, 280)
+        heroLeavingTimerRef.current = setTimeout(() => setHeroLeaving(false), 500)
       }
       return
     }
@@ -722,12 +720,14 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
   })
 
   // Render one slide; the action rail sits beside the current one
-  function renderSlide(visIdx: number, forceClass?: 'prev' | 'current' | 'next', heropeek?: boolean) {
+  function renderSlide(visIdx: number) {
     const item = visible[visIdx]
     if (!item) return null
-    const offset = visIdx - idx
-    if (!forceClass && (offset < -1 || offset > 1)) return null
-    const cls = forceClass ?? (offset < 0 ? 'prev' : offset > 0 ? 'next' : 'current')
+    // On the hero, the "current" slot is the hero itself (one above the first meme)
+    const offset = visIdx - (heroActive ? idx - 1 : idx)
+    if (offset < -2 || offset > 2) return null
+    const cls = SLOT[offset + 2]
+    const heropeek = heroActive && offset === 1
     const isCurrent = cls === 'current'
     const sharedTweetId = sharedMemeMap.get(item.sourceId)
     const sharedMetrics = sharedTweetId ? xMetrics.get(sharedTweetId) : null
@@ -928,9 +928,11 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
           </div>
         ) : (
           <div className="feed-carousel">
-            {currentItem && !heroActive && (
-              <div key={currentItem.key} className="fx-backdrop" style={{ backgroundImage: `url("${currentItem.imageUrl}")` }} aria-hidden />
-            )}
+            {/* Ambient light from the current meme; neighbours stay mounted so it crossfades */}
+            {[idx - 1, idx, idx + 1].map(i => visible[i] && (
+              <div key={`bg-${visible[i].key}`} className={`fx-backdrop${i === idx && !heroActive ? ' is-on' : ''}`}
+                style={{ backgroundImage: `url("${visible[i].imageUrl}")` }} aria-hidden />
+            ))}
 
             {/* ── Category hero ── */}
             <div className={`feed-hero feed-hero--${activeCategory} ${(heroActive && !heroLeaving) ? 'feed-hero--visible' : 'feed-hero--hidden'}`}>
@@ -985,10 +987,7 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
               </div>
             )}
 
-            {(heroActive || heroLeaving)
-              ? renderSlide(0, 'next', true)
-              : [idx - 1, idx, idx + 1].map(i => renderSlide(i))
-            }
+            {[idx - 2, idx - 1, idx, idx + 1, idx + 2].map(i => renderSlide(i))}
 
             {/* Where you are in the feed */}
             {visible.length > 1 && !heroActive && (
@@ -1034,6 +1033,8 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
 }
 
 const FIRST_STREAK_BONUS = { at: 5, xp: 10 }
+/** Slide slots by offset from the current one: two above, two below (the outer ones wait off-stage) */
+const SLOT = ['above', 'prev', 'current', 'next', 'below'] as const
 const compact = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n))
 
 interface Toast { id: number; icon: string; title: string; sub?: string; tone: 'gold' | 'green'; href?: string }

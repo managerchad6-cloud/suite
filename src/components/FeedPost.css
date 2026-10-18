@@ -2,11 +2,15 @@
 
 .fp {
   --tier: #7bd88f;
-  flex: 0 1 680px; min-width: 0; height: 100%;
-  display: flex; flex-direction: column; gap: 8px;
-  padding: 12px 14px 14px; border-radius: 20px;
-  background: #141414; border: 1px solid #262626;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--tier) 16%, transparent), 0 30px 80px -40px color-mix(in srgb, var(--tier) 55%, transparent);
+  flex: 0 1 680px; min-width: 0; max-height: 100%;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 14px 14px; border-radius: 22px;
+  /* A hairline edge that catches the tier colour at the top and a little gold at the bottom */
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, #171717, #121212) padding-box,
+    linear-gradient(160deg, color-mix(in srgb, var(--tier) 55%, #262626), #262626 35%, #262626 70%, color-mix(in srgb, var(--gold) 30%, #262626)) border-box;
+  box-shadow: 0 30px 80px -36px color-mix(in srgb, var(--tier) 50%, transparent), 0 12px 30px rgba(0,0,0,0.45);
   user-select: none;
 }
 
@@ -27,7 +31,7 @@
 }
 .fp-name:hover:not(:disabled) { text-decoration: underline; }
 .fp-name:disabled { cursor: default; }
-.fp-sub { font-size: 12px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-sub { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #777; white-space: nowrap; overflow: hidden; }
 .fp-follow {
   flex-shrink: 0; padding: 6px 16px; border-radius: 999px; border: 1px solid #fff; background: #fff; color: #000;
   font-weight: 700; font-size: 13px; cursor: pointer; transition: transform 0.1s, background 0.15s;
@@ -51,23 +55,26 @@
 }
 
 /* The meme, and its back (the breakdown) */
-.fp-stage { position: relative; flex: 1; min-height: 0; perspective: 1400px; }
+.fp-stage { position: relative; flex: 0 1 auto; min-height: 120px; aspect-ratio: 4 / 3; perspective: 1400px; }
 .fp-flip { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(.3,1.3,.5,1); }
 .fp--flipped .fp-flip { transform: rotateY(180deg); }
 .fp-face {
   position: absolute; inset: 0; border-radius: 14px; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden;
-  background: #0a0a0a; border: 1px solid #242424;
+  background: #0a0a0a;
 }
 .fp-front { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .fp-front img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .fp-back { transform: rotateY(180deg); overflow-y: auto; background: #111; }
 
-.fp-tier {
-  position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 999px;
-  background: rgba(0,0,0,0.75); border: 1px solid color-mix(in srgb, var(--tier) 60%, transparent); color: var(--tier);
-  font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.06em;
+.fp-tier, .fp-remix {
+  flex-shrink: 0; padding: 2px 8px; border-radius: 999px; font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.06em;
 }
-.fp-remix { position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,0.75); color: #ddd; font-size: 11px; }
+.fp-tier { color: var(--tier); background: color-mix(in srgb, var(--tier) 12%, transparent); border: 1px solid color-mix(in srgb, var(--tier) 40%, transparent); }
+.fp-remix { color: #ccc; background: #1f1f1f; border: 1px solid #2c2c2c; }
+/* The card settling in as it takes centre stage */
+.feed-slide--current .fp-head, .feed-slide--current .fp-title { animation: fp-up 0.5s 0.08s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.feed-slide--current .fp-title { animation-delay: 0.14s; }
+@keyframes fp-up { from { opacity: 0.4; transform: translateY(6px); } }
 
 .fp-burst {
   position: absolute; left: 50%; top: 50%; z-index: 3; pointer-events: none;

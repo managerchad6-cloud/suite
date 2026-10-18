@@ -106,8 +106,9 @@
   position: absolute; inset: -60px; z-index: 0; pointer-events: none;
   background-size: cover; background-position: center;
   filter: blur(60px) saturate(1.6) brightness(0.32); transform: scale(1.1);
-  animation: fx-fade 0.6s ease-out;
+  opacity: 0; transition: opacity 0.8s ease;
 }
+.fx-backdrop.is-on { opacity: 1; }
 .feed-carousel .feed-slide { z-index: 2; }
 .feed-carousel .feed-slide--current { z-index: 3; }
 .fx-next-label {
@@ -217,3 +218,31 @@
 @media (prefers-reduced-motion: reduce) {
   .fx-top *, .fx-rail *, .fx-toast, .fx-rankup-card, .fx-backdrop { animation: none !important; transition: none !important; }
 }
+
+/* ── Motion: every card lives in one of five slots and glides between them ── */
+.feed-carousel .feed-slide {
+  transition:
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity   0.45s ease,
+    filter    0.45s ease;
+  will-change: transform, opacity;
+}
+.feed-slide--above {
+  transform: translateY(calc(-50% - 125%)) scale(0.7);
+  opacity: 0; filter: brightness(0.4); z-index: 1; pointer-events: none;
+}
+.feed-slide--below {
+  transform: translateY(calc(-50% + 125%)) scale(0.7);
+  opacity: 0; filter: brightness(0.4); z-index: 1; pointer-events: none;
+}
+/* On the hero, the first meme waits in the next slot at full colour, inviting the scroll */
+.feed-carousel .feed-slide--hero-peek { transform: translateY(calc(-50% + 64%)) scale(0.86); }
+/* The hero lifts away as the first meme rises into its place */
+.feed-hero { transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.feed-hero--hidden { transform: translateY(-80px) scale(0.96); }
+.feed-scroll-cue { transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+.feed-scroll-cue--leaving { transform: translate(-50%, -140%); }
+/* The rail follows its card in */
+.feed-slide--current .fx-rail { animation: fx-rail-in 0.5s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes fx-rail-in { from { opacity: 0; transform: translateX(12px); } }
+@media (max-width: 600px) { @keyframes fx-rail-in { from { opacity: 0; transform: translateY(10px); } } }

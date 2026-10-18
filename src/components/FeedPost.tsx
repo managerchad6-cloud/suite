@@ -37,6 +37,8 @@ function ago(iso: string) {
 
 export function FeedPost({ item, current, following, own, onFollow, onOpen, onOpenProfile, onDoubleTap, flipped, verdict, children }: Props) {
   const [creator, setCreator] = useState<PublicProfile | null>(null)
+  // The card hugs the meme's shape (until it runs out of room)
+  const [ratio, setRatio] = useState<number | null>(null)
   useEffect(() => { if (item.wallet) getPublicProfile(item.wallet).then(setCreator) }, [item.wallet])
 
   // Tap opens the meme page; a second tap within 300ms makes it a double-tap (Based) instead
@@ -69,7 +71,11 @@ export function FeedPost({ item, current, following, own, onFollow, onOpen, onOp
         </button>
         <div className="fp-who">
           <button className="fp-name" onClick={() => item.wallet && onOpenProfile?.(item.wallet)} disabled={!item.wallet} tabIndex={current ? 0 : -1}>{name}</button>
-          <span className="fp-sub">{item.wallet && <>@{shortWallet(item.wallet)} · </>}{ago(item.dateIso)}</span>
+          <span className="fp-sub">
+            {item.wallet && <>@{shortWallet(item.wallet)} · </>}{ago(item.dateIso)}
+            <span className="fp-tier">{tier.icon} {tier.label}{item.tier === 'fresh' || !item.tier ? ' · scout it' : ''}</span>
+            {item.remixed_from && <span className="fp-remix">🎨 Remix</span>}
+          </span>
         </div>
         {own ? <span className="fp-own">Yours</span>
           : following !== null && (
@@ -87,12 +93,11 @@ export function FeedPost({ item, current, following, own, onFollow, onOpen, onOp
         </h2>
       ) : <h2 className="fp-title">{item.title}</h2>}
 
-      <div className="fp-stage">
+      <div className="fp-stage" style={ratio ? { aspectRatio: String(ratio) } : undefined}>
         <div className="fp-flip">
           <div className="fp-face fp-front" onClick={tap} role="button" tabIndex={-1} aria-label="Open the meme (double-tap for Based)">
-            <img src={item.imageUrl} alt={item.title} draggable={false} loading={current ? 'eager' : 'lazy'} />
-            <span className="fp-tier">{tier.icon} {tier.label}{item.tier === 'fresh' || !item.tier ? ' · scout it' : ''}</span>
-            {item.remixed_from && <span className="fp-remix">🎨 Remix</span>}
+            <img src={item.imageUrl} alt={item.title} draggable={false} loading={current ? 'eager' : 'lazy'}
+              onLoad={e => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setRatio(i.naturalWidth / i.naturalHeight) }} />
             {burst > 0 && <span key={burst} className="fp-burst" aria-hidden>▲<b>BASED</b></span>}
             {verdict && (
               <div key={verdict.key} className={`fp-verdict fp-verdict--${verdict.pct >= 50 === (verdict.dir === 1) ? 'with' : 'against'}`}>
