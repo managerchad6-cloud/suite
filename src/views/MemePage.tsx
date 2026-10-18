@@ -4,8 +4,9 @@
 // replies, share to X, remix. Up next keeps the loop going (→ / J, or the nudge after you vote).
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchGalleryMemes, fetchStudioMeme, fetchStudioMemesByWallet, studioMemeImageUrl, type StudioMeme } from '../api/studio'
-import { fetchMemes, fetchMemesByWallet, fetchMetadata, imageUrl as factoryImageUrl, parseMemeId, type JobMetadata } from '../api/memes'
+import { fetchGalleryMemes, fetchStudioMemesByWallet, studioMemeImageUrl } from '../api/studio'
+import { fetchMemes, fetchMemesByWallet, imageUrl as factoryImageUrl } from '../api/memes'
+import { EMPTY, NEXT, SCOUT, TIERS, itemTitle as teaserTitle, pretty, splitSide, useMeme } from '../lib/memeInfo'
 import { castVote, getVoteState, trackFeedAction, type VoteState } from '../api/votes'
 import { checkIsFollowing, toggleFollow } from '../api/follow'
 import { fetchComments } from '../api/comments'
@@ -17,113 +18,8 @@ import { CommentSection } from '../components/CommentSection'
 import { MemeTweetGallery } from '../components/MemeTweetGallery'
 import { ShareToX } from '../components/ShareToX'
 import { shortWallet } from '../components/ProfileShowcase'
-import type { MemeSourceType, MemeTier } from '../types/unified'
+import type { MemeSourceType } from '../types/unified'
 import './MemePage.css'
-
-// ── What we know about the meme, the same shape whatever made it ─────────────
-
-interface Side { name: string; labels: string[]; char?: string }
-
-interface MemeInfo {
-  /** Two sides for a matchup (Virgin X vs Chad Y), or one per character for Studio memes */
-  sides: Side[]
-  /** One-line title for sharing and the tab */
-  title: string
-  wallet: string | null
-  createdAt: string | null
-  characters: string[]
-  remixedFrom: { id: string; title: string | null } | null
-  hasDraft: boolean
-}
-
-const EMPTY: MemeInfo = { sides: [], title: '', wallet: null, createdAt: null, characters: [], remixedFrom: null, hasDraft: false }
-const pretty = (s: string) => s.replace(/_/g, ' ')
-
-function fromStudio(m: StudioMeme): MemeInfo {
-  const byChar = new Map<string, string[]>()
-  for (const { text, charKey } of m.labelLinks ?? []) {
-    const k = charKey ?? ''
-    byChar.set(k, [...(byChar.get(k) ?? []), text])
-  }
-  const titles = m.titles.filter(Boolean)
-  // Titles run left to right across the meme; `characters` doesn't follow that order, so match each
-  // title to a character by name ("chad corner dealer" → chad), then the rest in label order
-  const order = [...new Set([...(m.labelLinks ?? []).map(l => l.charKey).filter((k): k is string => !!k), ...m.characters])]
-  const titleOf = new Map<string, string>()
-  const left = titles.filter(t => {
-    const k = order.find(c => !titleOf.has(c) && t.toLowerCase().includes(pretty(c).toLowerCase()))
-    if (k) titleOf.set(k, t)
-    return !k
-  })
-  for (const c of order) if (!titleOf.has(c) && left.length) titleOf.set(c, left.shift()!)
-  const sides: Side[] = order.map(c => ({ name: titleOf.get(c) ?? pretty(c), char: c, labels: byChar.get(c) ?? [] }))
-  for (const t of left) sides.push({ name: t, labels: [] })
-  // Labels that weren't tied to a character, or the older flat list
-  const loose = [...(byChar.get('') ?? []), ...(m.labelLinks?.length ? [] : m.labels ?? [])]
-  if (loose.length) sides.push({ name: 'Also', labels: loose })
-  return {
-    sides,
-    title: (titles.length ? titles : m.characters.map(pretty)).join(' vs ') || 'A Studio meme',
-    wallet: m.wallet, createdAt: m.created_at, characters: m.characters,
-    remixedFrom: m.remixed_from ? { id: m.remixed_from, title: m.remixed_from_meta?.title ?? null } : null,
-    hasDraft: !!m.has_draft,
-  }
-}
-
-function fromFactory(meta: JobMetadata | null, wallet: string | null): MemeInfo {
-  const { virgin, chad } = parseMemeId(meta?.id ?? null)
-  return {
-    ...EMPTY,
-    sides: [
-      { name: `Virgin ${virgin}`, labels: meta?.virgin_labels ?? [], char: 'virgin' },
-      { name: `Chad ${chad}`, labels: meta?.chad_labels ?? [], char: 'chad' },
-    ],
-    title: `Virgin ${virgin} vs Chad ${chad}`,
-    wallet,
-  }
-}
-
-function useMeme(source: MemeSourceType, id: string) {
-  const [info, setInfo] = useState<MemeInfo | null>(null)
-  const [missing, setMissing] = useState(false)
-  useEffect(() => {
-    let live = true
-    if (source === 'studio') {
-      fetchStudioMeme(id).then(m => live && setInfo(fromStudio(m)), () => live && setMissing(true))
-    } else if (source === 'factory') {
-      Promise.all([
-        fetchMetadata(id),
-        fetch(`/jobs/${encodeURIComponent(id)}`).then(r => (r.ok ? r.json() : null)).catch(() => null) as Promise<{ wallet?: string | null; status?: string } | null>,
-      ]).then(([meta, job]) => {
-        if (!live) return
-        if (!meta && !job) { setMissing(true); return }
-        setInfo(fromFactory(meta, job?.wallet ?? null))
-      })
-    } else {
-      setInfo({ ...EMPTY, title: 'From the meme bank' })
-    }
-    return () => { live = false }
-  }, [source, id])
-  return { info, missing }
-}
-
-// ── Tiers: where this meme is, and how far to the next one ───────────────────
-
-const TIERS: Record<MemeTier, { icon: string; label: string; color: string }> = {
-  fresh:     { icon: '🌱', label: 'Fresh',     color: '#7bd88f' },
-  rising:    { icon: '📈', label: 'Rising',    color: '#4dc8ff' },
-  hot:       { icon: '🔥', label: 'Hot',       color: '#ff7a3d' },
-  legendary: { icon: '👑', label: 'Legendary', color: '#F0A020' },
-  pantheon:  { icon: '🏛', label: 'Pantheon',  color: '#e7c6ff' },
-}
-// Vote totals each tier needs (the score and pace rules sit on top of these)
-const NEXT: Partial<Record<MemeTier, { tier: MemeTier; votes: number; from: number }>> = {
-  fresh:  { tier: 'rising',    votes: 10,  from: 0 },
-  rising: { tier: 'hot',       votes: 100, from: 10 },
-  hot:    { tier: 'legendary', votes: 500, from: 100 },
-}
-// XP a scout earns for upvoting while Fresh, once the meme climbs
-const SCOUT = [['Rising', 20], ['Hot', 50], ['Legendary', 200]] as const
 
 // ── Up next: memes you haven't seen this visit ───────────────────────────────
 
@@ -140,11 +36,6 @@ function markSeen(key: string) {
   } catch { /* private mode */ }
 }
 
-function teaserTitle(source: MemeSourceType, raw: { meme_id?: string | null; titles?: string[]; characters?: string[] }) {
-  if (source === 'factory') { const { virgin, chad } = parseMemeId(raw.meme_id ?? null); return `Virgin ${virgin} vs Chad ${chad}` }
-  const t = (raw.titles ?? []).filter(Boolean)
-  return (t.length ? t : (raw.characters ?? []).map(pretty)).join(' vs ') || 'A Studio meme'
-}
 
 let poolCache: Promise<Teaser[]> | null = null
 function teaserPool(): Promise<Teaser[]> {
@@ -202,12 +93,6 @@ function ago(iso: string | null) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 const compact = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n))
-
-/** "Virgin Script Kiddie" → kicker "Virgin", name "Script Kiddie" */
-function splitSide(name: string) {
-  const m = name.match(/^(Virgin|Chad)\s+(.+)$/)
-  return m ? { kicker: m[1], rest: m[2] } : { kicker: null, rest: name }
-}
 
 // ── The page ─────────────────────────────────────────────────────────────────
 
