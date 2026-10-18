@@ -21,12 +21,13 @@ import { CHARACTERS } from '../data/characterLore'
 import { BadgeGrid } from '../components/BadgeGrid'
 import { BuyCreditsModal } from '../components/BuyCreditsModal'
 import { Confetti } from '../components/Confetti'
+import { ProfileXCard } from '../components/ProfileXCard'
 import { ShadowEconomy } from '../components/ShadowEconomy'
 import { UserChip } from '../components/UserChip'
 import { XTimeline } from '../components/XTimeline'
 import { CommentSection } from '../components/CommentSection'
 import {
-  ActivityList, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, useTilt, type MemeSource,
+  ActivityList, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, type MemeSource,
 } from '../components/ProfileShowcase'
 import './ProfileControl.css'
 
@@ -128,7 +129,6 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
   onGoToOracle: () => void; onBuyCredits: () => void; accent: string
 }) {
   const { setMe, refresh } = useIdentity()
-  const [lightbox, setLightbox] = useState(false)
   const [showTraits, setShowTraits] = useState(false)
   const [confirm, setConfirm] = useState<null | 'regen' | 'banner'>(null)
   const [regen, setRegen] = useState<'idle' | 'working'>('idle')
@@ -140,7 +140,6 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
   const [copied, setCopied] = useState<'wallet' | 'link' | null>(null)
   const [burst, setBurst] = useState(0)
   const prevBanner = useRef(profile?.banner?.status)
-  const tilt = useTilt<HTMLButtonElement>(0.6)     // the same collectible-card lean as public profiles
 
   // Celebrate a banner the moment it lands
   useEffect(() => {
@@ -234,99 +233,82 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
     <>
       {burst > 0 && <Confetti key={burst} />}
 
-      {/* ── You: one card. A banner across the top; under it, the round PFP and who you are, and your full
-             character in a panel that rises over the banner's edge, like the PFP does ── */}
-      <section className="pc-x" style={{ '--pp-accent': accent } as CSSProperties}>
-          <div className={`pc-x-banner${banner.url ? ' pc-x-banner--made' : ''}${banner.status === 'generating' ? ' pc-x-banner--painting' : ''}`}>
-            {banner.url
-              ? <img className="pc-x-banner-img" src={banner.url} alt="" />
-              : <div className="pc-x-banner-bg" style={{ backgroundImage: `url("${art}")` }} aria-hidden />}
-            <div className="pc-x-banner-tools">
-              {banner.status === 'generating' ? (
-                <span className="pc-x-status"><span className="pc-spin" /> Painting your banner…</span>
-              ) : bannerFailedJob ? (
-                <>
-                  <span className="pc-x-status pc-x-status--fail">The banner didn't work</span>
-                  <button className="pc-x-banner-btn" onClick={() => claimBannerRefund(bannerFailedJob)} disabled={!!bannerBusy}>
-                    {bannerBusy === 'refund' ? '…' : `Get your ⚡ ${bannerCost} back`}
-                  </button>
-                </>
-              ) : (
-                <button className="pc-x-banner-btn" onClick={() => (enough(bannerCost) ? setConfirm('banner') : onBuyCredits())}
-                  disabled={!!bannerBusy || profile.avatar.status !== 'ready'}
-                  title={profile.avatar.status !== 'ready' ? 'Your character art needs to be ready first' : undefined}>
-                  {bannerBusy === 'start' ? '…' : `✨ ${banner.url ? 'New banner' : 'Generate your banner'} · ⚡ ${bannerCost}`}
-                </button>
-              )}
-            </div>
-          </div>
-
-        <div className="pc-x-body">
-        <div className="pc-x-main">
-          <div className="pc-x-bar">
-            <div className={`pc-x-avatar${framing ? ' pc-x-avatar--busy' : ''}`}>
-              <img src={pfp} alt="Your profile picture" />
-            </div>
-            <div className="pc-x-actions">
-              <button className="pc-btn pc-btn--primary" onClick={onViewPublic}>👁 See how others see you</button>
-              <button className="pc-btn" onClick={() => copy('link')} title="Copy your profile link">{copied === 'link' ? 'Copied ✓' : '🔗 Share'}</button>
-              {profile.avatar.status === 'ready' && (
-                <button className="pc-btn" onClick={() => image('portrait')} disabled={imageBusy || framing}>
-                  {framing ? 'Framing PFP…' : imageBusy ? '…' : profile.portrait.url ? 'Redo PFP' : 'Make PFP'}
-                </button>
-              )}
-              {(profile.portrait.url || profile.avatar.url || banner.url) && (
-                <details className="pc-x-dl">
-                  <summary className="pc-btn">Download ▾</summary>
-                  <div className="pc-x-dl-menu">
-                    {profile.portrait.url && <a href={profile.portrait.url} download={`${profile.archetype}_pfp`}>Profile picture</a>}
-                    {profile.avatar.url && <a href={profile.avatar.url} download={`${profile.archetype}_full`}>Full character</a>}
-                    {banner.url && <a href={banner.url} download={`${profile.archetype}_banner`}>Banner</a>}
-                  </div>
-                </details>
-              )}
-            </div>
-          </div>
-
-          <div className="pc-x-id">
-            <h1 className="pc-x-name">{displayName(profile)}</h1>
-            <p className="pc-x-handle">
-              <button onClick={() => copy('wallet')} title={wallet}>{copied === 'wallet' ? 'Copied ✓' : `@${shortWallet(wallet)}`}</button>
-              <span>{archetypeName(profile.archetype)}</span>
-              {char && <span className="pc-x-rarity">{char.rarity} · {char.tier}</span>}
-            </p>
-            <div className="pc-x-stats">
-              <button onClick={() => onGo('credits')}><b>⚡ {balance === null ? '…' : balance.toLocaleString()}</b> credits</button>
-              <button onClick={() => onGo('progress')}><b>{player ? compact(player.total_xp) : '…'}</b> XP</button>
-              <button onClick={() => onGo('social')}><b>{stats.followers ?? '…'}</b> followers</button>
-              <button onClick={() => onGo('social')}><b>{stats.following ?? '…'}</b> following</button>
-              <button onClick={() => onGo('memes')}><b>{stats.memes ?? '…'}</b> memes</button>
-            </div>
-            <p className="pc-x-bio">{profile.description}</p>
-            {char && <p className="pc-x-tagline">“{char.tagline}”</p>}
-            <div className="pc-x-meta">
-              {memberSince && <span>📅 Joined {new Date(memberSince).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>}
-              {player && <span>⚖ {side}</span>}
-              {traits.length > 0 && (
-                <button className="pc-x-link" onClick={() => setShowTraits(t => !t)}>{showTraits ? 'Hide' : 'What went into your picture'}</button>
-              )}
-            </div>
-            {showTraits && <div className="pc-x-traits">{traits.map(([k, v]) => <span key={k}><b>{k}</b> {v}</span>)}</div>}
-          </div>
-        </div>
-
-        <button {...tilt} className={`pc-x-side${painting ? ' pc-x-side--sketch' : ''}`} onClick={() => setLightbox(true)} title="View your full character">
-          <img src={art} alt={`${archetypeName(profile.archetype)}, full character`} />
+      {/* ── You: the shared profile header card, with your own buttons ── */}
+      <ProfileXCard
+        accent={accent}
+        art={art}
+        pfp={pfp}
+        name={displayName(profile)}
+        bannerUrl={banner.url}
+        bannerPainting={banner.status === 'generating'}
+        bannerTools={banner.status === 'generating' ? (
+          <span className="pc-x-status"><span className="pc-spin" /> Painting your banner…</span>
+        ) : bannerFailedJob ? (
+          <>
+            <span className="pc-x-status pc-x-status--fail">The banner didn't work</span>
+            <button className="pc-x-banner-btn" onClick={() => claimBannerRefund(bannerFailedJob)} disabled={!!bannerBusy}>
+              {bannerBusy === 'refund' ? '…' : `Get your ⚡ ${bannerCost} back`}
+            </button>
+          </>
+        ) : (
+          <button className="pc-x-banner-btn" onClick={() => (enough(bannerCost) ? setConfirm('banner') : onBuyCredits())}
+            disabled={!!bannerBusy || profile.avatar.status !== 'ready'}
+            title={profile.avatar.status !== 'ready' ? 'Your character art needs to be ready first' : undefined}>
+            {bannerBusy === 'start' ? '…' : `✨ ${banner.url ? 'New banner' : 'Generate your banner'} · ⚡ ${bannerCost}`}
+          </button>
+        )}
+        pfpBusy={framing}
+        actions={<>
+          <button className="pc-btn pc-btn--primary" onClick={onViewPublic}>👁 See how others see you</button>
+          <button className="pc-btn" onClick={() => copy('link')} title="Copy your profile link">{copied === 'link' ? 'Copied ✓' : '🔗 Share'}</button>
+          {profile.avatar.status === 'ready' && (
+            <button className="pc-btn" onClick={() => image('portrait')} disabled={imageBusy || framing}>
+              {framing ? 'Framing PFP…' : imageBusy ? '…' : profile.portrait.url ? 'Redo PFP' : 'Make PFP'}
+            </button>
+          )}
+          {(profile.portrait.url || profile.avatar.url || banner.url) && (
+            <details className="pc-x-dl">
+              <summary className="pc-btn">Download ▾</summary>
+              <div className="pc-x-dl-menu">
+                {profile.portrait.url && <a href={profile.portrait.url} download={`${profile.archetype}_pfp`}>Profile picture</a>}
+                {profile.avatar.url && <a href={profile.avatar.url} download={`${profile.archetype}_full`}>Full character</a>}
+                {banner.url && <a href={banner.url} download={`${profile.archetype}_banner`}>Banner</a>}
+              </div>
+            </details>
+          )}
+        </>}
+        handle={<>
+          <button onClick={() => copy('wallet')} title={wallet}>{copied === 'wallet' ? 'Copied ✓' : `@${shortWallet(wallet)}`}</button>
+          <span>{archetypeName(profile.archetype)}</span>
+          {char && <span className="pc-x-rarity">{char.rarity} · {char.tier}</span>}
+        </>}
+        stats={<>
+          <button onClick={() => onGo('credits')}><b>⚡ {balance === null ? '…' : balance.toLocaleString()}</b> credits</button>
+          <button onClick={() => onGo('progress')}><b>{player ? compact(player.total_xp) : '…'}</b> XP</button>
+          <button onClick={() => onGo('social')}><b>{stats.followers ?? '…'}</b> followers</button>
+          <button onClick={() => onGo('social')}><b>{stats.following ?? '…'}</b> following</button>
+          <button onClick={() => onGo('memes')}><b>{stats.memes ?? '…'}</b> memes</button>
+        </>}
+        bio={profile.description}
+        tagline={char?.tagline}
+        meta={<>
+          {memberSince && <span>📅 Joined {new Date(memberSince).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>}
+          <span>⚖ {side}</span>
+          {traits.length > 0 && (
+            <button className="pc-x-link" onClick={() => setShowTraits(t => !t)}>{showTraits ? 'Hide' : 'What went into your picture'}</button>
+          )}
+        </>}
+        artPainting={painting}
+        artOverlay={<>
           {painting && <span className="pc-x-status"><span className="pc-spin" /> Painting your character…</span>}
           {profile.avatar.status === 'failed' && (
             <span className="pc-x-status pc-x-status--fail" role="button" tabIndex={0}
               onClick={e => { e.stopPropagation(); image('retry') }}>{imageBusy ? '…' : 'The art failed. Try again'}</span>
           )}
-          <span className="pc-x-side-hint">View full art ⤢</span>
-          <span className="pc-x-side-shine" aria-hidden />
-        </button>
-        </div>
-      </section>
+        </>}
+      >
+        {showTraits && <div className="pc-x-traits">{traits.map(([k, v]) => <span key={k}><b>{k}</b> {v}</span>)}</div>}
+      </ProfileXCard>
 
       {msg && <div className={`pc-flash${msg.ok ? ' pc-flash--ok' : ' pc-flash--err'}`} role="status">{msg.text}</div>}
 
@@ -359,13 +341,6 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
           </div>
         </div>
       </Panel>
-
-      {lightbox && (
-        <div className="pc-lightbox" onClick={() => setLightbox(false)} role="dialog" aria-label="Your full character">
-          <img src={art} alt="" />
-          <span>Click anywhere to close</span>
-        </div>
-      )}
 
       {confirm === 'banner' && (
         <div className="pc-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setConfirm(null) }}>
