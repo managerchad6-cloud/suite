@@ -15,6 +15,7 @@ import { hasUserGeminiKey, setAiTicket } from '../api/pfp'
 import { generateMemeLabels } from '../api/zad'
 import { BuyCreditsModal } from '../components/BuyCreditsModal'
 import { GeminiKeyModal } from '../components/GeminiKeyModal'
+import { memeLink } from '../lib/links'
 import '../studio.css'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -4038,7 +4039,7 @@ export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: 
       setPublishedMemeId(result.job_id)
       // Pre-fill tweet text so the compose box is ready
       const t = titles[0] ?? 'Check out my new meme'
-      setPubTweetText(`${t}\n\nhttps://virginvschad.vip/memes/studio/${result.job_id}\n\n#VirginVsChad #Memes $VVC`)
+      setPubTweetText(`${t}\n\n${memeLink('studio', result.job_id)}\n\n#VirginVsChad #Memes $VVC`)
     } catch (err) {
       setPublishMsg({ ok: false, text: String(err) })
     } finally {

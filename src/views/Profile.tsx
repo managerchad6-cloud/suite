@@ -30,6 +30,7 @@ import { CommentSection } from '../components/CommentSection'
 import {
   ActivityList, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, type MemeSource,
 } from '../components/ProfileShowcase'
+import { profileLink } from '../lib/links'
 import './ProfileControl.css'
 
 interface Props {
@@ -163,7 +164,7 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
   const banner = profile.banner ?? { status: 'none' as const, url: null }
 
   const copy = (what: 'wallet' | 'link') => {
-    const text = what === 'wallet' ? wallet : `${window.location.origin}/#/u/${wallet}`
+    const text = what === 'wallet' ? wallet : profileLink(wallet)
     navigator.clipboard?.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(null), 1400) }).catch(() => {})
   }
 

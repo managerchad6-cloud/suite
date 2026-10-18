@@ -35,6 +35,9 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
   const gate = useMemberGate()
   const address = gate.wallet
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined)
+  useEffect(() => {
+    document.title = `${profile ? displayName(profile) : 'Member'} · Virgin vs Chad`
+  }, [profile])
   const [player, setPlayer] = useState<PlayerState | null>(null)
   const [memes, setMemes] = useState<Meme[]>([])
   const [studioMemes, setStudioMemes] = useState<StudioMeme[]>([])

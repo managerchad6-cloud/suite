@@ -135,6 +135,8 @@ export function ChatInput() {
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (slash.length === 0) {
       if (e.key === 'Backspace' && !msg && target !== 'auto') setTarget('auto')
+      // Escape hands the keyboard back to the stream (its shortcuts work again; typing comes back here)
+      if (e.key === 'Escape') { inputRef.current?.blur(); inputRef.current?.closest<HTMLElement>('.live-center')?.focus() }
       return
     }
     if (e.key === 'ArrowDown') { e.preventDefault(); setCmdIndex(i => (i + 1) % slash.length) }

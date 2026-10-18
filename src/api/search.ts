@@ -1,4 +1,5 @@
 import { imageUrl } from './memes'
+import { itemTitle } from '../lib/memeInfo'
 import { studioMemeImageUrl } from './studio'
 import type { UnifiedMemeItem, MemeSourceType } from '../types/unified'
 import { getPublicProfiles, type PublicProfile } from '../identity/api'
@@ -35,7 +36,7 @@ async function getPool(): Promise<UnifiedMemeItem[]> {
     sr.value.items?.forEach((m: any) => items.push({
       key: `studio:${m.id}`, type: 'studio' as MemeSourceType, sourceId: m.id,
       imageUrl: studioMemeImageUrl(m.id),
-      title: (m.characters as string[]).map(c => c.replace(/_/g, ' ')).join(', ') || '—',
+      title: itemTitle('studio', m),
       meta: trunc(m.wallet), wallet: m.wallet, dateIso: toIso(m.created_at),
       characters: m.characters,
     }))
@@ -46,7 +47,7 @@ async function getPool(): Promise<UnifiedMemeItem[]> {
     fr.value.items?.forEach((m: any) => items.push({
       key: `factory:${m.job_id}`, type: 'factory' as MemeSourceType, sourceId: m.job_id,
       imageUrl: imageUrl(m.job_id),
-      title: m.meme_id ? (m.meme_id as string).replace(/_/g, ' ') : '—',
+      title: m.meme_id ? itemTitle('factory', m) : '—',
       meta: m.wallet ? trunc(m.wallet) : '—', wallet: m.wallet ?? undefined,
       dateIso: toIso(m.created_at),
     }))
