@@ -99,6 +99,9 @@ export const verify = (body: { nonce: string; signature: string; signedMessage?:
 export const logout = () => api<{ state: 'guest' }>(`${ID}/logout`, { method: 'POST' })
 
 export const getInterview = () => api<{ interview: Interview | null }>(`${ID}/onboarding`)
+/** Whether this wallet holds enough $VVC to start the interview (force re-reads the chain, e.g. after a buy) */
+export interface JoinEligibility { required: boolean; canJoin: boolean; tokenBalance?: number; joinMinBalance?: number; symbol?: string }
+export const getJoinEligibility = (force = false) => api<JoinEligibility>(`${ID}/onboarding/eligibility${force ? '?force=1' : ''}`)
 export const startOnboarding = () => api<{ interview: Interview }>(`${ID}/onboarding/start`, { method: 'POST' })
 export const restartInterview = () => api<{ interview: Interview }>(`${ID}/onboarding/restart`, { method: 'POST' })
 /** An empty answer to the final question skips it. */

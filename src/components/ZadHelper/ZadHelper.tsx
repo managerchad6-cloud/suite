@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { chatWithZad, makeUserMsg, makeModelMsg, type Message } from '../../api/zad'
+import { chatWithZad, fetchZadQuota, makeUserMsg, makeModelMsg, type Message, type ZadQuota } from '../../api/zad'
+import { ApiError } from '../../api/client'
 import { TOUR_STEPS, type PositionKey } from '../../data/zadCorpus'
 import { MemberGate, useMemberGate } from '../../identity/gate'
 import './ZadHelper.css'
@@ -39,6 +40,7 @@ export default function ZadHelper() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [input, setInput]       = useState('')
+  const [quota, setQuota]       = useState<ZadQuota | null>(null)
   const [position, setPosition] = useState<PositionKey>('bottom-right')
 
   const [dragPos, setDragPos]       = useState<{ bottom: number; left: number } | null>(null)
@@ -190,24 +192,43 @@ export default function ZadHelper() {
   }
 
   // ── Free chat ──────────────────────────────────────────────────────────
-  const sendMessage = useCallback(async () => {
+  // Members get a number of free messages a day (more for $VVC holders); past that, one costs credits
+  useEffect(() => {
+    if (mode !== 'chat' || !gate.wallet) return
+    fetchZadQuota().then(setQuota).catch(() => {})
+  }, [mode, gate.wallet])
+  const outOfFree = !!quota && quota.left <= 0
+
+  const sendMessage = useCallback(async (pay = false) => {
     const text = input.trim()
     if (!text || loading) return
+    if (outOfFree && !pay) return
     setInput('')
     setError('')
     setLoading(true)
     const userMsg  = makeUserMsg(text)
     const nextHist = [...history, userMsg]
     try {
-      const reply = await chatWithZad(nextHist)
-      setHistory([...nextHist, makeModelMsg(reply)])
-      setResponse(reply)
-    } catch { setError('Signal interference. Try again.') }
+      const r = await chatWithZad(nextHist, { pay })
+      setHistory([...nextHist, makeModelMsg(r.text)])
+      setResponse(r.text)
+      if (r.quota) setQuota(r.quota)
+      if (r.balance !== undefined) window.dispatchEvent(new CustomEvent('vvc:credits-changed'))
+    } catch (e) {
+      setInput(cur => cur || text)                 // nothing was answered: keep what they wrote
+      const err = e as ApiError
+      const q = err.data?.quota as ZadQuota | undefined
+      if (q) setQuota(q)
+      setError(err.code === 'zad_quota' ? "That's all of today's free messages."
+        : err.code === 'insufficient_credits' ? 'Not enough credits for another message.'
+        : err.status === 429 ? 'Zad needs a moment. Try again in a few minutes.'
+        : 'Signal interference. Try again.')
+    }
     finally { setLoading(false) }
-  }, [input, loading, history])
+  }, [input, loading, history, outOfFree])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(false) }
   }
 
   // ── Position styles ────────────────────────────────────────────────────
@@ -282,15 +303,25 @@ export default function ZadHelper() {
         <textarea
           ref={inputRef}
           className="zad-input"
-          placeholder="Ask Zad…"
+          placeholder={outOfFree ? 'Free messages used up for today' : 'Ask Zad…'}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={loading}
           rows={1}
         />
-        <button className="zad-send" onClick={sendMessage} disabled={loading || !input.trim()} title="Send">↑</button>
+        {outOfFree
+          ? <button className="zad-send zad-send--paid" onClick={() => sendMessage(true)} disabled={loading || !input.trim()}
+              title={`Ask anyway for ${quota!.extraCost} credit${quota!.extraCost === 1 ? '' : 's'}`}>⚡{quota!.extraCost}</button>
+          : <button className="zad-send" onClick={() => sendMessage(false)} disabled={loading || !input.trim()} title="Send">↑</button>}
       </MemberGate>
+      {quota && (
+        <div className={`zad-quota${quota.left <= 3 ? ' zad-quota--low' : ''}`}>
+          {quota.left > 0
+            ? <>{quota.left} of {quota.limit} free messages left today{quota.tier && <> · {quota.tier}</>}</>
+            : <>Free messages refill {new Date(quota.resetsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ⚡{quota.extraCost} per message until then{!quota.tier && <> · holders get more</>}</>}
+        </div>
+      )}
     </div>
   )
 }

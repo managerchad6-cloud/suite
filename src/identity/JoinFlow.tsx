@@ -1,9 +1,10 @@
-// Join = the suite's login: pick a wallet → sign one message → (new wallets) the interview → member.
+// Join = the suite's login: pick a wallet → sign one message → (new wallets) the $VVC wall → the interview → member.
 // Returning members only sign. Closing the overlay keeps everything: the interview resumes later.
 import { useEffect, useState } from 'react'
 import { connectWalletByType } from '../wallet'
 import { useIdentity } from './IdentityProvider'
 import { Interview } from './Interview'
+import { HoldGate } from './HoldGate'
 import { ArchetypeReveal } from './ArchetypeReveal'
 import { isUserRejection, signInWithWallet, walletOptions, type SolanaWalletType } from './walletSignIn'
 
@@ -86,11 +87,13 @@ export function JoinFlow() {
 
           {status === 'pending' && !revealed && (
             <>
-              <p className="quiz-oracle-label join-oracle-label">VVC ARCHETYPE ORACLE · answer honestly</p>
-              <Interview
-                kind="onboarding"
-                onCompleted={(me, interview) => { setMe(me); setRevealed({ rerollsLeft: interview.rerollsLeft }) }}
-              />
+              <HoldGate>
+                <p className="quiz-oracle-label join-oracle-label">VVC ARCHETYPE ORACLE · answer honestly</p>
+                <Interview
+                  kind="onboarding"
+                  onCompleted={(me, interview) => { setMe(me); setRevealed({ rerollsLeft: interview.rerollsLeft }) }}
+                />
+              </HoldGate>
             </>
           )}
 
