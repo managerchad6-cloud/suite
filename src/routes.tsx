@@ -11,7 +11,7 @@ import { MemeStudio } from './views/MemeStudio'
 import { Feed } from './views/Feed'
 import { Brackets } from './views/Brackets'
 import { Treasury } from './views/Treasury'
-import { UnifiedMemeDetail } from './views/UnifiedMemeDetail'
+import { MemePage } from './views/MemePage'
 import { PublicProfile } from './views/PublicProfile'
 import { VideoStudio } from './views/VideoStudio'
 import { VideoFeed } from './views/VideoFeed'
@@ -51,32 +51,9 @@ export function FeedRoute() {
 
 export function UnifiedDetailRoute() {
   const { source, id } = useParams<{ source: string; id: string }>()
-  const navigate = useNavigate()
-
-  const imageUrl =
-    source === 'studio'  ? `/handmade/${id}/image` :
-    source === 'factory' ? `/jobs/${id}/image`      :
-                           `/memebank/${id}/image`
-
-  const item = {
-    key: `${source}:${id}` as string,
-    type: source as MemeSourceType,
-    sourceId: id!,
-    imageUrl,
-    title: '',
-    meta: '',
-    dateIso: '',
-  }
-
-  return (
-    <UnifiedMemeDetail
-      item={item}
-      onBack={() => navigate(-1)}
-      onOpenCharacter={name => navigate(`/cast/${name}`)}
-      onRemix={remixId => navigate(`/studio/edit/${remixId}`)}
-      onOpenSourceMeme={remixId => navigate(`/memes/studio/${remixId}`)}
-    />
-  )
+  const src: MemeSourceType = source === 'studio' || source === 'factory' ? source : 'reddit'
+  // Keyed so every meme starts clean (votes, nudges, scroll)
+  return <MemePage key={`${src}:${id}`} source={src} id={id!} />
 }
 
 export function VoteRoute() {
