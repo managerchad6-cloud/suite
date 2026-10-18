@@ -12,6 +12,7 @@ import { archetypeName, displayName } from '../identity/archetypes'
 import { useMemberGate } from '../identity/gate'
 import { BadgeGrid } from '../components/BadgeGrid'
 import { CommentSection } from '../components/CommentSection'
+import { ProfileXCard } from '../components/ProfileXCard'
 import {
   ActivityList, CharacterCard, EmptyCard, HeroIdentity, MemeGrid, ProfileHero, ProfileTabs, SortToggle, SpectrumBar, Stat,
   alignment, shortWallet, useMemeCards, type MemeSource,
@@ -111,6 +112,28 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
   const art = profile ? profile.avatarUrl ?? profile.fallbackImageUrl : null      // the full character
   const pfp = profile ? bestImage(profile) : null                                   // the square portrait
 
+  // Follow / friend / message (not when you're looking at your own page)
+  const actions = previewOwn ? null : (
+    <>
+      <button className={`pp-btn pp-btn--primary${isFollowing ? ' pp-btn--on' : ''}`} {...gate.lockProps('follow')}
+        onClick={gate.guard(handleFollow, 'follow')} disabled={!gate.locked && followPending}>
+        {followPending ? '…' : isFollowing ? '✓ Following' : '+ Follow'}
+      </button>
+      <button className={`pp-btn${friendStatus === 'friends' ? ' pp-btn--on' : ''}`} {...gate.lockProps('add friends')}
+        onClick={gate.guard(handleFriendAction, 'add friends')}
+        disabled={!gate.locked && (friendPending || friendStatus === 'pending_sent' || friendStatus === 'friends')}>
+        {friendPending ? '…'
+          : friendStatus === 'friends' ? '✓ Friends'
+          : friendStatus === 'pending_sent' ? 'Request sent'
+          : friendStatus === 'pending_received' ? 'Accept request'
+          : '🤝 Add friend'}
+      </button>
+      {onOpenMessages && (
+        <button className="pp-btn" {...gate.lockProps('message')} onClick={gate.guard(() => onOpenMessages(wallet), 'message')}>✉️ Message</button>
+      )}
+    </>
+  )
+
   return (
     <div className="pp-page" style={{ '--pp-accent': accent } as CSSProperties}>
       <div className="pp-topbar">
@@ -121,48 +144,44 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
       </div>
       {previewOwn && <div className="pp-preview-banner">👁 This is how others see your profile</div>}
 
-      <ProfileHero art={art} banner={profile?.bannerUrl} card={profile
-        ? <CharacterCard image={art} name={archetypeName(profile.archetype)} tier={charData?.tier} rarity={charData?.rarity ?? 'common'} accent={accent} />
-        : <EmptyCard loading={profile === undefined} initials={wallet.slice(0, 2).toUpperCase()} />}>
-        <HeroIdentity
-          pfp={pfp}
-          kicker={profile ? `${archetypeName(profile.archetype)}${charData ? ` · ${charData.tier}` : ''}` : 'Member'}
-          sinceIso={profile?.memberSince}
-          loading={profile === undefined}
-          name={profile ? displayName(profile) : null}
-          tagline={charData?.tagline}
-          description={profile?.description}
-        />
-
-        {profile && <SpectrumBar archetype={profile.archetype} player={player} />}
-
-        <div className="pp-stats">
-          <Stat value={followers} label="Followers" />
-          <Stat value={following} label="Following" />
-          <Stat value={memesLoading ? null : cards.length} label="Memes" onClick={() => setTab('memes')} />
-          <Stat value={votesReceived} label="Votes" onClick={() => { setSort('top'); setTab('memes') }} />
-          <Stat value={badgeCount} label="Badges" onClick={() => setTab('badges')} />
+      {profile ? (
+        /* Like a social profile: their banner, their PFP over it, who they are, their character rising into it */
+        <div className="pp-x-hero">
+          <ProfileXCard
+            accent={accent}
+            art={art ?? profile.fallbackImageUrl}
+            pfp={pfp ?? profile.fallbackImageUrl}
+            name={displayName(profile)}
+            bannerUrl={profile.bannerUrl}
+            actions={actions}
+            handle={<>
+              <button onClick={copyWallet} title={wallet}>{copied ? 'Copied ✓' : `@${shortWallet(wallet)}`}</button>
+              <span>{archetypeName(profile.archetype)}</span>
+              {charData && <span className="pc-x-rarity">{charData.rarity} · {charData.tier}</span>}
+            </>}
+            stats={<>
+              <span><b>{followers ?? '…'}</b> followers</span>
+              <span><b>{following ?? '…'}</b> following</span>
+              <button onClick={() => setTab('memes')}><b>{memesLoading ? '…' : cards.length}</b> memes</button>
+              <button onClick={() => { setSort('top'); setTab('memes') }}><b>{votesReceived ?? '…'}</b> votes</button>
+              <button onClick={() => setTab('badges')}><b>{badgeCount ?? '…'}</b> badges</button>
+            </>}
+            bio={profile.description}
+            tagline={charData?.tagline}
+            meta={<>
+              {profile.memberSince && <span>📅 Joined {new Date(profile.memberSince).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>}
+              {player && <span>⚡ {player.total_xp.toLocaleString()} XP</span>}
+            </>}
+          >
+            <SpectrumBar archetype={profile.archetype} player={player} />
+          </ProfileXCard>
         </div>
-
-        {!previewOwn && <div className="pp-actions">
-          <button className={`pp-btn pp-btn--primary${isFollowing ? ' pp-btn--on' : ''}`} {...gate.lockProps('follow')}
-            onClick={gate.guard(handleFollow, 'follow')} disabled={!gate.locked && followPending}>
-            {followPending ? '…' : isFollowing ? '✓ Following' : '+ Follow'}
-          </button>
-          <button className={`pp-btn${friendStatus === 'friends' ? ' pp-btn--on' : ''}`} {...gate.lockProps('add friends')}
-            onClick={gate.guard(handleFriendAction, 'add friends')}
-            disabled={!gate.locked && (friendPending || friendStatus === 'pending_sent' || friendStatus === 'friends')}>
-            {friendPending ? '…'
-              : friendStatus === 'friends' ? '✓ Friends'
-              : friendStatus === 'pending_sent' ? 'Request sent'
-              : friendStatus === 'pending_received' ? 'Accept request'
-              : '🤝 Add friend'}
-          </button>
-          {onOpenMessages && (
-            <button className="pp-btn" {...gate.lockProps('message')} onClick={gate.guard(() => onOpenMessages(wallet), 'message')}>✉️ Message</button>
-          )}
-        </div>}
-      </ProfileHero>
+      ) : (
+        <ProfileHero art={null} card={<EmptyCard loading={profile === undefined} initials={wallet.slice(0, 2).toUpperCase()} />}>
+          <HeroIdentity pfp={null} kicker="Member" loading={profile === undefined} name={null} />
+          {profile === null && actions}
+        </ProfileHero>
+      )}
 
       <ProfileTabs tab={tab} onTab={setTab}
         tabs={[['memes', 'Memes', cards.length], ['badges', 'Badges', badgeCount], ['activity', 'Activity', null], ['wall', 'Wall', null]]}

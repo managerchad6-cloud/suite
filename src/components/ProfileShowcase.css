@@ -341,3 +341,7 @@
 .pp-hero--banner::after {
   background: linear-gradient(90deg, rgba(17,17,17,0.15), rgba(17,17,17,0.85) 45%), linear-gradient(180deg, transparent 60%, #111);
 }
+
+/* The public profile's social-style header card sits with some margin under the top bar */
+.pp-x-hero { padding: 24px 32px 8px; }
+@media (max-width: 860px) { .pp-x-hero { padding: 14px 14px 4px; } }
