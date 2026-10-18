@@ -1,7 +1,7 @@
 // Share a meme to X with the image attached: connect X once (OAuth popup), compose an X-style post,
 // then a live tweet card with confetti and the XP milestones. The same flow as the feed's share.
 import { useEffect, useRef, useState } from 'react'
-import { fetchXStatus, postXTweet, subscribeToMetrics, X_AUTH_URL, type TweetMetrics } from '../api/twitter'
+import { fetchXStatus, postXTweet, subscribeToMetrics, X_AUTH_URL, type TweetMetrics, type TweetResult } from '../api/twitter'
 import { Confetti } from './Confetti'
 import '../views/Feed.css'
 
@@ -15,7 +15,7 @@ export interface ShareableMeme {
 
 type Step = 'loading' | 'connect' | 'compose' | 'posting' | 'success'
 
-export function ShareToX({ meme, onClose, onShared }: { meme: ShareableMeme; onClose: () => void; onShared?: () => void }) {
+export function ShareToX({ meme, onClose, onShared }: { meme: ShareableMeme; onClose: () => void; onShared?: (r: TweetResult) => void }) {
   const [step, setStep] = useState<Step>('loading')
   const [handle, setHandle] = useState<string | null>(null)
   const [text, setText] = useState(`${meme.title}\n\nhttps://virginvschad.vip/memes/${meme.type}/${meme.sourceId}\n\n#VirginVsChad #Memes $VVC`)
@@ -81,7 +81,7 @@ export function ShareToX({ meme, onClose, onShared }: { meme: ShareableMeme; onC
       setTweet({ id: r.tweet_id, url: r.tweet_url })
       setHandle(r.handle)
       setStep('success')
-      onShared?.()
+      onShared?.(r)
     } catch (e) {
       setError((e as Error).message)
       setStep('compose')

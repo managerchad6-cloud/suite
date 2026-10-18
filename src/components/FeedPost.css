@@ -1,0 +1,135 @@
+/* A meme in the feed: a post card that fills its slide. The tier tints the frame (--tier). */
+
+.fp {
+  --tier: #7bd88f;
+  flex: 0 1 680px; min-width: 0; height: 100%;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px 14px; border-radius: 20px;
+  background: #141414; border: 1px solid #262626;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--tier) 16%, transparent), 0 30px 80px -40px color-mix(in srgb, var(--tier) 55%, transparent);
+  user-select: none;
+}
+
+.fp-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.fp-avatar {
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; padding: 0; overflow: hidden; cursor: pointer;
+  border: 2px solid #141414; box-shadow: 0 0 0 2px var(--tier); background: #2a2a2a; color: #aaa;
+  font-family: var(--font-ui); font-size: 13px; display: grid; place-items: center; transition: transform 0.15s;
+}
+.fp-avatar:hover:not(:disabled) { transform: scale(1.07); }
+.fp-avatar:disabled { cursor: default; }
+.fp-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fp-who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.2; }
+.fp-name {
+  padding: 0; border: none; background: none; text-align: left; cursor: pointer; color: #fff;
+  font-family: var(--font-ui); font-size: 15px; letter-spacing: 0.03em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.fp-name:hover:not(:disabled) { text-decoration: underline; }
+.fp-name:disabled { cursor: default; }
+.fp-sub { font-size: 12px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fp-follow {
+  flex-shrink: 0; padding: 6px 16px; border-radius: 999px; border: 1px solid #fff; background: #fff; color: #000;
+  font-weight: 700; font-size: 13px; cursor: pointer; transition: transform 0.1s, background 0.15s;
+}
+.fp-follow:hover { transform: translateY(-1px); background: #ddd; }
+.fp-follow--on { background: transparent; color: #fff; border-color: #444; }
+.fp-follow--on:hover { background: rgba(244,33,46,0.1); color: #f4212e; border-color: #6b1d22; }
+.fp-own { flex-shrink: 0; padding: 4px 11px; border-radius: 999px; background: #1f1a10; color: var(--gold); border: 1px solid #4a3a18; font-size: 12px; }
+
+.fp-title { margin: 0; font-family: var(--font-display); font-weight: normal; font-size: clamp(18px, 2.4vw, 24px); line-height: 1.1; color: #fff; }
+.fp-title--vs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.fp-side { display: inline-flex; flex-direction: column; }
+.fp-side small { font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
+.fp-side--virgin { color: #c9cde0; }
+.fp-side--virgin small { color: #8a90ad; }
+.fp-side--chad { color: #ffd27a; }
+.fp-side--chad small { color: var(--gold); }
+.fp-vs {
+  align-self: center; font-style: normal; font-family: var(--font-ui); font-size: 12px; color: #111; background: #fff;
+  border-radius: 6px; padding: 1px 6px; transform: rotate(-6deg); box-shadow: 2px 2px 0 var(--gold);
+}
+
+/* The meme, and its back (the breakdown) */
+.fp-stage { position: relative; flex: 1; min-height: 0; perspective: 1400px; }
+.fp-flip { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(.3,1.3,.5,1); }
+.fp--flipped .fp-flip { transform: rotateY(180deg); }
+.fp-face {
+  position: absolute; inset: 0; border-radius: 14px; overflow: hidden; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  background: #0a0a0a; border: 1px solid #242424;
+}
+.fp-front { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.fp-front img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.fp-back { transform: rotateY(180deg); overflow-y: auto; background: #111; }
+
+.fp-tier {
+  position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 999px;
+  background: rgba(0,0,0,0.75); border: 1px solid color-mix(in srgb, var(--tier) 60%, transparent); color: var(--tier);
+  font-family: var(--font-ui); font-size: 11px; letter-spacing: 0.06em;
+}
+.fp-remix { position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,0.75); color: #ddd; font-size: 11px; }
+
+.fp-burst {
+  position: absolute; left: 50%; top: 50%; z-index: 3; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; color: var(--gold); font-size: 110px; line-height: 0.9;
+  text-shadow: 0 6px 30px rgba(0,0,0,0.6); animation: fp-burst 0.9s cubic-bezier(.2,1.6,.4,1) forwards;
+}
+.fp-burst b { font-family: var(--font-ui); font-size: 26px; letter-spacing: 0.2em; color: #fff; }
+@keyframes fp-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  60% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
+}
+
+/* The crowd's verdict, right after you vote */
+.fp-verdict {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 2;
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 12px;
+  padding: 10px 14px; border-radius: 14px; background: rgba(12,12,12,0.9); border: 1px solid #333;
+  animation: fp-verdict 3s ease forwards; pointer-events: none;
+}
+.fp-verdict b { grid-row: span 2; font-family: var(--font-display); font-size: 34px; font-weight: normal; line-height: 1; color: #fff; }
+.fp-verdict span { font-size: 13px; color: #ccc; }
+.fp-verdict--with { border-color: #4a3a18; }
+.fp-verdict--with b { color: var(--gold); }
+.fp-verdict--against { border-color: #4a2a5a; }
+.fp-verdict--against b { color: #d9a6ff; }
+.fp-verdict-bar { display: block; height: 6px; border-radius: 999px; background: #3a3d52; overflow: hidden; }
+.fp-verdict-bar s { display: block; height: 100%; background: var(--gold); border-radius: 999px; animation: fp-fill 0.8s cubic-bezier(.2,1.2,.4,1); }
+@keyframes fp-fill { from { width: 0 !important; } }
+@keyframes fp-verdict {
+  0% { opacity: 0; transform: translateY(16px); }
+  10% { opacity: 1; transform: none; }
+  85% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(8px); }
+}
+
+/* Breakdown */
+.fp-back-empty { height: 100%; display: grid; place-items: center; padding: 20px; text-align: center; color: #888; font-size: 14px; }
+.fp-spin { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #333; border-top-color: var(--gold); animation: fp-spin 0.8s linear infinite; }
+@keyframes fp-spin { to { transform: rotate(360deg); } }
+.fp-tape { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; padding: 14px; }
+.fp-tape-col { border-radius: 12px; padding: 12px; border: 1px solid #262626; }
+.fp-tape-col--virgin { background: linear-gradient(180deg, rgba(93,98,128,0.16), transparent 70%); border-color: #2c2f3f; }
+.fp-tape-col--chad { background: linear-gradient(180deg, rgba(240,160,32,0.12), transparent 70%); border-color: #3a2f18; }
+.fp-tape-col h3 { margin: 0 0 8px; display: flex; flex-direction: column; font-family: var(--font-display); font-weight: normal; font-size: 18px; color: #fff; }
+.fp-tape-col h3 small { font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
+.fp-tape-col--virgin h3 small { color: #8a90ad; }
+.fp-tape-col--chad h3 small { color: var(--gold); }
+.fp-tape-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fp-tape-col li { position: relative; padding-left: 15px; font-size: 13px; line-height: 1.4; color: #ccc; animation: fp-li 0.35s ease-out both; }
+.fp-tape-col li::before { content: '›'; position: absolute; left: 2px; top: -1px; font-weight: 700; }
+.fp-tape-col--virgin li::before { color: #8a90ad; }
+.fp-tape-col--chad li::before { color: var(--gold); }
+@keyframes fp-li { from { opacity: 0; transform: translateX(-6px); } }
+
+@media (max-width: 600px) {
+  .fp { padding: 10px; border-radius: 16px; gap: 6px; }
+  .fp-avatar { width: 34px; height: 34px; }
+  .fp-follow { padding: 5px 12px; font-size: 12px; }
+  .fp-burst { font-size: 80px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fp *, .fp { animation: none !important; transition: none !important; }
+}
