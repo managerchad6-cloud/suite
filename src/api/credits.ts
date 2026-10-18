@@ -102,7 +102,22 @@ export interface TokenConfig {
   symbol: string          // always shown as $VVC
   mint: string            // pre-launch: a placeholder set on the server
   buyEnabled: boolean     // false: "Buy $VVC" shows as coming soon
-  holder: { minBalance: number; weeklyCredits: number }
+  holder: { minBalance: number; weeklyCredits: number; joinMinBalance: number }
+  /** Bag-size tiers: from minBalance up, what they earn a week (before the time-held bonus) */
+  tiers: { key: string; name: string; minBalance: number; weekly: number }[]
+  /** Time held above the minimum, and the bonus it adds */
+  loyalty: { key: string; name: string; weeks: number; bonusPct: number }[]
+}
+
+/** A holder's place on the ladder (null when under the minimum) */
+export interface HolderTier {
+  key: string
+  name: string
+  weekly: number
+  weeksHeld: number
+  loyalty: { key: string; name: string; bonusPct: number }
+  nextBag: { name: string; minBalance: number; weekly: number } | null
+  nextLoyalty: { name: string; bonusPct: number; at: string } | null
 }
 
 export interface HolderStatus {
@@ -110,7 +125,10 @@ export interface HolderStatus {
   isHolder: boolean
   tokenBalance: number
   minBalance: number
+  joinMinBalance: number
+  /** This holder's weekly credits (the base amount for non-holders) */
   weeklyCredits: number
+  tier: HolderTier | null
   freeCredits: number     // free credits still unspent (part of the balance)
   granted: number         // credits added by this check
   nextRefillAt: string | null

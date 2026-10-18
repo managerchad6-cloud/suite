@@ -1,4 +1,5 @@
 import { api } from './client'
+import { SUITE_ORIGIN } from '../lib/links'
 import { dispatchBadges, type BadgeDef } from './player'
 
 const BASE = '';
@@ -153,7 +154,7 @@ export function buildTweetUrl(virgin: string, chad: string): string {
     '',
     '#VirginVsChad #Memes $VVC',
   ].join('\n')
-  const url = 'https://virginvschad.vip/memes'
+  const url = `${SUITE_ORIGIN}/#/memes`
   return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`
 }
 

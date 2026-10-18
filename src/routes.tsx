@@ -1,4 +1,4 @@
-import { useOutletContext, useParams, useNavigate, useSearchParams, Navigate } from 'react-router-dom'
+import { useOutletContext, useParams, useNavigate, useSearchParams, useRouteError, Navigate } from 'react-router-dom'
 import { Live } from './views/Live'
 import { Memes } from './views/Memes'
 import { Forum } from './views/Forum'
@@ -17,6 +17,8 @@ import { VideoStudio } from './views/VideoStudio'
 import { VideoFeed } from './views/VideoFeed'
 import type { AppOutletContext } from './App'
 import type { MemeSourceType } from './types/unified'
+import { useBack } from './lib/links'
+import { openQuickJump } from './components/QuickJump'
 
 // Every page is open to everyone; participation inside them is locked for non-members.
 // The two pages about *your* account (profile, retake) send non-members to the memes.
@@ -152,12 +154,12 @@ export function ForumBoardRoute() {
 
 export function ForumThreadRoute() {
   const { threadId } = useParams<{ threadId: string }>()
-  const navigate = useNavigate()
+  const back = useBack('/forum')
   return (
     <Forum
       view="thread"
       threadId={threadId}
-      onBack={() => navigate(-1)}
+      onBack={back}
     />
   )
 }
@@ -175,6 +177,39 @@ export function VideoFeedRoute() {
   return <VideoFeed address={memberWallet ?? ''} />
 }
 
+/** Something on the page broke: say so plainly, and offer a way out instead of a stack trace */
+export function RouteError({ full = false }: { full?: boolean }) {
+  const error = useRouteError() as Error | undefined
+  console.error('[suite] page error:', error)
+  return (
+    <div className={`nf-page${full ? ' nf-page--full' : ''}`}>
+      <div className="nf-emoji" aria-hidden>💥</div>
+      <h1>This page tripped over itself</h1>
+      <p>Something went wrong showing it. Reloading usually fixes it.</p>
+      <div className="nf-actions">
+        <button className="nf-btn nf-btn--gold" onClick={() => window.location.reload()}>Reload</button>
+        <button className="nf-btn" onClick={() => { window.location.hash = '#/memes' }}>Go to the memes</button>
+      </div>
+    </div>
+  )
+}
+
+/** A link to somewhere that isn't here (a mistyped or old link) */
+export function NotFoundRoute() {
+  const navigate = useNavigate()
+  return (
+    <div className="nf-page">
+      <div className="nf-emoji" aria-hidden>🫥</div>
+      <h1>Nothing lives here</h1>
+      <p>That link is mistyped, or the page moved.</p>
+      <div className="nf-actions">
+        <button className="nf-btn nf-btn--gold" onClick={() => navigate('/memes', { replace: true })}>Go to the memes</button>
+        <button className="nf-btn" onClick={openQuickJump}>Search · Ctrl K</button>
+      </div>
+    </div>
+  )
+}
+
 export function PublicProfileRoute() {
   const { wallet } = useParams<{ wallet: string }>()
   const { openChat } = useOutletContext<AppOutletContext>()
@@ -182,6 +217,7 @@ export function PublicProfileRoute() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const own = wallet === memberWallet
+  const back = useBack('/memes')
   // Your own public page is your control room, unless you asked to see it as others do
   if (own && params.get('as') !== 'public') return <Navigate to="/profile" replace />
 
@@ -189,7 +225,7 @@ export function PublicProfileRoute() {
     <PublicProfile
       wallet={wallet!}
       previewOwn={own}
-      onBack={() => (own ? navigate('/profile') : navigate(-1))}
+      onBack={() => (own ? navigate('/profile') : back())}
       onOpenMeme={(source, id) => navigate(`/memes/${source}/${id}`)}
       onOpenProfile={w => navigate(`/u/${w}`)}
       onOpenMessages={openChat}

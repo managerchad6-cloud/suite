@@ -19,6 +19,7 @@ import { MemeTweetGallery } from '../components/MemeTweetGallery'
 import { ShareToX } from '../components/ShareToX'
 import { shortWallet } from '../components/ProfileShowcase'
 import type { MemeSourceType } from '../types/unified'
+import { memeLink, useBack } from '../lib/links'
 import './MemePage.css'
 
 // ── Up next: memes you haven't seen this visit ───────────────────────────────
@@ -101,7 +102,8 @@ export function MemePage({ source, id }: { source: MemeSourceType; id: string })
   const gate = useMemberGate()
   const key = `${source}:${id}`
   const image = source === 'studio' ? studioMemeImageUrl(id) : source === 'factory' ? factoryImageUrl(id) : `/memebank/${id}/image`
-  const shareUrl = `https://virginvschad.vip/memes/${source}/${id}`
+  const shareUrl = memeLink(source, id)
+  const back = useBack('/memes')
 
   const { info, missing } = useMeme(source, id)
   const meme = info ?? EMPTY
@@ -205,13 +207,13 @@ export function MemePage({ source, id }: { source: MemeSourceType; id: string })
       const el = e.target instanceof Element ? e.target : null
       if (sharing || zoom || el?.closest('input, textarea, select, [contenteditable="true"]') || e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'ArrowRight' || e.key === 'j') goNext()
-      else if (e.key === 'ArrowLeft' || e.key === 'k') navigate(-1)
+      else if (e.key === 'ArrowLeft' || e.key === 'k') back()
       else if (e.key === 'b') vote(1)
       else if (e.key === 'c') vote(-1)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, navigate, vote, sharing, zoom])
+  }, [goNext, back, vote, sharing, zoom])
 
   useEffect(() => { if (meme.title) document.title = `${meme.title} · Virgin vs Chad` }, [meme.title])
 
@@ -247,7 +249,7 @@ export function MemePage({ source, id }: { source: MemeSourceType; id: string })
   return (
     <div className="mp-root" ref={root} style={{ '--tier': t.color } as CSSProperties}>
       <header className="mp-top">
-        <button className="mp-top-back" onClick={() => navigate(-1)} aria-label="Back">←</button>
+        <button className="mp-top-back" onClick={back} aria-label="Back">←</button>
         <div className="mp-top-title">
           <b>Meme</b>
           {votes && <span>{compact(total)} votes · {replies ?? '…'} replies</span>}

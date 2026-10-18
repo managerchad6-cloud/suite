@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { fetchXStatus, postXTweet, subscribeToMetrics, X_AUTH_URL, type TweetMetrics, type TweetResult } from '../api/twitter'
 import { Confetti } from './Confetti'
+import { memeLink } from '../lib/links'
 import '../views/Feed.css'
 
 export interface ShareableMeme {
@@ -18,7 +19,7 @@ type Step = 'loading' | 'connect' | 'compose' | 'posting' | 'success'
 export function ShareToX({ meme, onClose, onShared }: { meme: ShareableMeme; onClose: () => void; onShared?: (r: TweetResult) => void }) {
   const [step, setStep] = useState<Step>('loading')
   const [handle, setHandle] = useState<string | null>(null)
-  const [text, setText] = useState(`${meme.title}\n\nhttps://virginvschad.vip/memes/${meme.type}/${meme.sourceId}\n\n#VirginVsChad #Memes $VVC`)
+  const [text, setText] = useState(`${meme.title}\n\n${memeLink(meme.type, meme.sourceId)}\n\n#VirginVsChad #Memes $VVC`)
   const [community, setCommunity] = useState(false)
   const [tweet, setTweet] = useState<{ id: string; url: string } | null>(null)
   const [metrics, setMetrics] = useState<TweetMetrics | null>(null)

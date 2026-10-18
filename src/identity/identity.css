@@ -162,3 +162,39 @@
 /* Big image buttons (bracket sides): the lock sits in a corner instead of before the content */
 .matchup-side[data-locked] { position: relative; }
 .matchup-side[data-locked]::before { position: absolute; top: 8px; left: 8px; z-index: 2; font-size: 16px; margin: 0; }
+
+/* ── Holders only: the $VVC wall before the interview ── */
+.hold-gate { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; margin: 10px auto 0; text-align: center; color: #ccc; }
+.hold-gate--loading { flex-direction: row; justify-content: center; color: #888; padding: 40px 0; }
+.hold-gate-spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #333; border-top-color: var(--gold); animation: hold-spin 0.8s linear infinite; }
+@keyframes hold-spin { to { transform: rotate(360deg); } }
+.hold-gate-seal {
+  width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 28px;
+  background: radial-gradient(circle at 30% 30%, #3a2a0e, #171717); border: 1px solid var(--gold);
+  box-shadow: 0 0 30px -6px rgba(240,160,32,0.6); animation: hold-float 3s ease-in-out infinite;
+}
+@keyframes hold-float { 50% { transform: translateY(-4px); } }
+.hold-gate-title { margin: 0; font-family: var(--font-display); font-weight: normal; font-size: 30px; color: #fff; }
+.hold-gate-sub { margin: 0; font-size: 14px; line-height: 1.55; color: #aaa; }
+.hold-gate-sub strong { color: var(--gold); }
+.hold-gate-sub code { font-size: 12px; color: #ddd; background: #1f1f1f; padding: 1px 6px; border-radius: 6px; }
+.hold-gate-meter { width: 100%; padding: 14px 16px; border-radius: 14px; background: #141414; border: 1px solid #262626; display: flex; flex-direction: column; gap: 8px; }
+.hold-gate-meter-row { display: flex; justify-content: space-between; font-size: 13px; }
+.hold-gate-meter-row b { color: #fff; }
+.hold-gate-meter-row--dim { color: #777; font-size: 12px; }
+.hold-gate-bar { height: 10px; border-radius: 999px; background: #262626; overflow: hidden; }
+.hold-gate-bar span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #b07018, var(--gold), #ffd27a); transition: width 0.6s cubic-bezier(.2,1.2,.4,1); }
+.hold-gate-bar--nudge { animation: hold-nudge 0.4s ease; }
+@keyframes hold-nudge { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.hold-gate-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.hold-gate-btn {
+  padding: 10px 18px; border-radius: 999px; border: 1px solid #3a3a3a; background: #1b1b1b; color: #eee; cursor: pointer;
+  font-family: var(--font-ui); font-size: 14px; letter-spacing: 0.04em; transition: transform 0.1s, border-color 0.15s;
+}
+.hold-gate-btn:hover:not(:disabled) { transform: translateY(-1px); border-color: #666; }
+.hold-gate-btn:disabled { opacity: 0.6; cursor: default; }
+.hold-gate-btn--gold { background: var(--gold); border-color: var(--gold); color: #1a1000; }
+.hold-gate-btn--gold:hover { background: #ffb43a; }
+.hold-gate-error { margin: 0; color: #f0a0a0; font-size: 13px; }
+.hold-gate-fine { margin: 0; font-size: 12px; color: #777; }
+.hold-gate-link { padding: 0; border: none; background: none; color: var(--gold); cursor: pointer; font-size: 12px; text-decoration: underline; }

@@ -9,6 +9,7 @@ import {
   checkHolderNow, fetchHolderStatus, fetchTokenConfig, openBuyVvc,
   type HolderStatus, type TokenConfig,
 } from '../api/credits'
+import { HolderLadder } from './HolderLadder'
 import { Confetti } from './Confetti'
 import './BuyVvc.css'
 
@@ -126,7 +127,8 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
     timers.current = []
     setBurst(b => b + 1)
     setOutcome(null)
-    if (!isMember) { setSwap('done'); setOutcome({ kind: 'pending' }); return }
+    // Not a member yet (e.g. buying to pass the join wall): the join screen re-checks the balance itself
+    if (!isMember) { setSwap('done'); setOutcome({ kind: 'pending' }); window.dispatchEvent(new CustomEvent('vvc:vvc-swapped')); return }
     setSwap('checking')
     const from = extensionWallet()
     const elsewhere = !!from && from !== memberWallet
@@ -206,11 +208,12 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
           <p className="buyvvc-pitch-main">Hold {sym}, create for free.</p>
           {config && (
             <p className="buyvvc-pitch-sub">
-              Hold at least <strong>{fmt(min)} {sym}</strong> and get <strong>{weekly} free credits every week</strong> for
-              memes, reskins and art. Free credits are for holders only.
+              Hold at least <strong>{fmt(min)} {sym}</strong> and get <strong>free credits every week</strong> for
+              memes, reskins and art: <strong>⚡ {weekly}</strong> to start, up to <strong>⚡ {fmt(Math.max(...(config.tiers?.map(t => t.weekly) ?? [weekly])) * (1 + Math.max(0, ...(config.loyalty?.map(l => l.bonusPct) ?? [0])) / 100))}</strong> for the biggest, longest-held bags.
             </p>
           )}
         </div>
+        {config?.tiers?.length ? <HolderLadder config={config} holder={isMember ? holder : null} compact /> : null}
 
         {isMember ? (
           holder && (
@@ -228,7 +231,7 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
                 </>
               ) : (
                 <div className="buyvvc-status-row buyvvc-status-row--hint">
-                  <span>{fmt(missing)} more {sym} to unlock {holder.weeklyCredits} free credits a week</span>
+                  <span>{fmt(missing)} more {sym} to unlock ⚡ {holder.weeklyCredits} free credits a week</span>
                 </div>
               )}
               {holder.error && <div className="buyvvc-status-error">{holder.error}</div>}
@@ -237,10 +240,12 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
         ) : (
           <div className="buyvvc-status">
             <div className="buyvvc-status-row buyvvc-status-row--hint">
-              <span>Join with the wallet you hold {sym} in to get your weekly credits.</span>
+              <span>{status === 'pending'
+                ? `Buy with the wallet you signed in with, then come back to meet the Oracle.`
+                : `Join with the wallet you hold ${sym} in to get your weekly credits.`}</span>
             </div>
             <button className="buyvvc-join" onClick={() => { onClose(); join() }}>
-              {status === 'pending' ? 'Finish joining' : 'Join'}
+              {status === 'pending' ? 'Back to joining' : 'Join'}
             </button>
           </div>
         )}

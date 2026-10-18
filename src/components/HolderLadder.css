@@ -1,0 +1,32 @@
+/* The $VVC holder ladder */
+.hl { display: flex; flex-direction: column; gap: 10px; }
+.hl-rungs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.hl-rung {
+  position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px 10px 12px; border-radius: 12px;
+  background: #161616; border: 1px solid #262626; color: #888; overflow: hidden; min-width: 0;
+}
+.hl-rung.is-reached { color: #ccc; border-color: #3a2f18; background: linear-gradient(180deg, #1d170c, #151515); }
+.hl-rung.is-mine { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold), 0 10px 30px -14px rgba(240,160,32,0.7); color: #fff; }
+.hl-icon { font-size: 20px; line-height: 1; filter: grayscale(1) opacity(0.5); }
+.hl-rung.is-reached .hl-icon { filter: none; }
+.hl-name { display: flex; align-items: center; gap: 6px; font-family: var(--font-ui); font-size: 14px; letter-spacing: 0.03em; white-space: nowrap; }
+.hl-name em { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--gold); color: #1a1000; }
+.hl-min { font-size: 11px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hl-weekly { font-size: 11px; color: #888; }
+.hl-weekly b { font-size: 14px; color: #ffd27a; font-weight: 700; }
+.hl-rung:not(.is-reached) .hl-weekly b { color: #999; }
+.hl-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #222; }
+.hl-bar s { display: block; height: 100%; background: var(--gold); }
+
+.hl-next { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12.5px; color: #aaa; }
+.hl-next b { color: #fff; font-weight: 600; }
+.hl-loyalty { padding: 3px 10px; border-radius: 999px; font-size: 12px; background: #1f1f1f; border: 1px solid #333; color: #ccc; }
+.hl-loyalty--steady { border-color: #2a5a8a; color: #9cc8ff; }
+.hl-loyalty--diamond { border-color: #4dc8ff; color: #b8ecff; box-shadow: 0 0 14px -4px rgba(77,200,255,0.6); }
+.hl-loyalty--og { border-color: var(--gold); color: #ffd27a; box-shadow: 0 0 14px -4px rgba(240,160,32,0.7); }
+.hl-hint { margin: 0; font-size: 12px; color: #888; }
+
+.hl--compact .hl-rungs { gap: 4px; }
+.hl--compact .hl-rung { padding: 8px 8px 10px; }
+.hl--compact .hl-name { font-size: 12px; }
+@media (max-width: 560px) { .hl-rungs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

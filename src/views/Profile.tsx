@@ -8,7 +8,7 @@ import { fetchStudioMemesByWallet, type StudioMeme } from '../api/studio'
 import { fetchCreatorEngagement, type CreatorEngagement } from '../api/twitter'
 import {
   fetchCreditBalance, fetchCreditHistory, fetchCreditPacks, fetchHolderStatus, generateBanner, refundBanner, regenerateCharacter, openBuyVvc,
-  type CreditHistoryItem, type HolderStatus,
+  fetchTokenConfig, type CreditHistoryItem, type HolderStatus, type TokenConfig,
 } from '../api/credits'
 import { ApiError } from '../api/client'
 import { keepRegenerated, requestPortrait, retryAvatar, revertRegenerated, type Profile as ProfileData } from '../identity/api'
@@ -21,6 +21,7 @@ import { CHARACTERS } from '../data/characterLore'
 import { BadgeGrid } from '../components/BadgeGrid'
 import { BuyCreditsModal } from '../components/BuyCreditsModal'
 import { Confetti } from '../components/Confetti'
+import { HolderLadder } from '../components/HolderLadder'
 import { ProfileXCard } from '../components/ProfileXCard'
 import { ShadowEconomy } from '../components/ShadowEconomy'
 import { UserChip } from '../components/UserChip'
@@ -29,6 +30,7 @@ import { CommentSection } from '../components/CommentSection'
 import {
   ActivityList, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, type MemeSource,
 } from '../components/ProfileShowcase'
+import { profileLink } from '../lib/links'
 import './ProfileControl.css'
 
 interface Props {
@@ -162,7 +164,7 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
   const banner = profile.banner ?? { status: 'none' as const, url: null }
 
   const copy = (what: 'wallet' | 'link') => {
-    const text = what === 'wallet' ? wallet : `${window.location.origin}/#/u/${wallet}`
+    const text = what === 'wallet' ? wallet : profileLink(wallet)
     navigator.clipboard?.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(null), 1400) }).catch(() => {})
   }
 
@@ -379,6 +381,8 @@ function CharacterSection({ profile, wallet, memberSince, player, balance, regen
 
 function CreditsSection({ balance, holder, onBuyCredits }: { balance: number | null; holder: HolderStatus | null; onBuyCredits: () => void }) {
   const [history, setHistory] = useState<CreditHistoryItem[] | null>(null)
+  const [token, setToken] = useState<TokenConfig | null>(null)
+  useEffect(() => { fetchTokenConfig().then(setToken).catch(() => {}) }, [])
   useEffect(() => { fetchCreditHistory().then(setHistory) }, [balance])
   const progress = holder && !holder.isHolder && holder.minBalance > 0 ? Math.min(1, holder.tokenBalance / holder.minBalance) : 1
 
@@ -395,8 +399,8 @@ function CreditsSection({ balance, holder, onBuyCredits }: { balance: number | n
           {holder ? (
             holder.isHolder ? (
               <>
-                <div className="pc-big pc-big--gold">Holder ✓</div>
-                <p className="pc-fine">{holder.weeklyCredits} free credits a week · you hold {holder.tokenBalance.toLocaleString()} ${holder.symbol}
+                <div className="pc-big pc-big--gold">{holder.tier?.name ?? 'Holder'} ✓</div>
+                <p className="pc-fine">⚡ {holder.weeklyCredits} free credits a week · you hold {holder.tokenBalance.toLocaleString()} ${holder.symbol}
                   {holder.nextRefillAt && <> · next top-up {new Date(holder.nextRefillAt).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</>}</p>
               </>
             ) : (
@@ -409,6 +413,12 @@ function CreditsSection({ balance, holder, onBuyCredits }: { balance: number | n
           <div className="pc-actions"><button className="pc-btn" onClick={openBuyVvc}>{holder?.isHolder ? `Get more $${holder.symbol}` : `Buy $${holder?.symbol ?? 'VVC'}`}</button></div>
         </Panel>
       </div>
+
+      {token?.tiers?.length ? (
+        <Panel title="Holder tiers" hint="A bigger bag earns more each week, and holding longer adds a bonus.">
+          <HolderLadder config={token} holder={holder} />
+        </Panel>
+      ) : null}
 
       <Panel title="Recent activity" hint="What came in and what you spent.">
         {history === null ? <p className="pc-fine">Loading…</p> : history.length === 0 ? <p className="pc-fine">Nothing yet.</p> : (

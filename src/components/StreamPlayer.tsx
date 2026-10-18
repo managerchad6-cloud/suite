@@ -15,6 +15,14 @@ const LIVE_SLACK = 2.5       // within TARGET + this still reads as "LIVE"
 const RETRY_MS = 3000
 const HIDE_CONTROLS_MS = 2500
 const VOLUME_KEY = 'vvc:live-volume'
+const FIT_KEY = 'vvc:live-fit'
+const AMBIENT_MS = 200        // how often the ambient light samples the picture
+
+/** Fit shows the whole picture (bars where the screen's shape differs); Fill crops to cover the screen */
+type Fit = 'fit' | 'fill'
+function savedFit(): Fit {
+  try { return localStorage.getItem(FIT_KEY) === 'fill' ? 'fill' : 'fit' } catch { return 'fit' }
+}
 
 type Status = 'connecting' | 'playing' | 'buffering' | 'offline'
 
@@ -37,6 +45,10 @@ export function StreamPlayer() {
   const [latency, setLatency] = useState<number | null>(null)
   const [controlsShown, setControlsShown] = useState(true)
   const [fullscreen, setFullscreen] = useState(false)
+  // The picture's shape, read from the stream (16:9 until it says otherwise)
+  const [ratio, setRatio] = useState(16 / 9)
+  const [fit, setFit] = useState<Fit>(savedFit)
+  const ambientRef = useRef<HTMLCanvasElement>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   /** Seconds behind the live edge (null until known) */
@@ -132,6 +144,9 @@ export function StreamPlayer() {
       try { localStorage.setItem(VOLUME_KEY, String(video.volume)) } catch { /* private mode */ }
     }
     const onError = () => setStatus('offline')
+    const onSize = () => { if (video.videoWidth && video.videoHeight) setRatio(video.videoWidth / video.videoHeight) }
+    video.addEventListener('loadedmetadata', onSize)
+    video.addEventListener('resize', onSize)
     video.addEventListener('playing', onPlaying)
     video.addEventListener('waiting', onWaiting)
     video.addEventListener('pause', onPause)
@@ -145,8 +160,23 @@ export function StreamPlayer() {
       video.removeEventListener('play', onPlay)
       video.removeEventListener('volumechange', onVolume)
       video.removeEventListener('error', onError)
+      video.removeEventListener('loadedmetadata', onSize)
+      video.removeEventListener('resize', onSize)
     }
   }, [goLive, measureLatency])
+
+  // ── Ambient light: a tiny, blurred copy of the picture fills the space around it ─
+  useEffect(() => {
+    const video = videoRef.current
+    const canvas = ambientRef.current
+    const ctx = canvas?.getContext('2d', { alpha: false })
+    if (!video || !canvas || !ctx || fit === 'fill' || status !== 'playing' || paused) return
+    const t = setInterval(() => {
+      if (document.visibilityState !== 'visible' || video.readyState < 2) return
+      try { ctx.drawImage(video, 0, 0, canvas.width, canvas.height) } catch { /* not drawable (cross-origin): no glow */ }
+    }, AMBIENT_MS)
+    return () => clearInterval(t)
+  }, [fit, status, paused])
 
   // ── Latency watchdog: show it, and never let it grow ─────────────────────────
   useEffect(() => {
@@ -181,7 +211,7 @@ export function StreamPlayer() {
   useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current) }, [])
 
   useEffect(() => {
-    const onFs = () => setFullscreen(document.fullscreenElement === wrapRef.current)
+    const onFs = () => setFullscreen(!!document.fullscreenElement?.contains(wrapRef.current))
     document.addEventListener('fullscreenchange', onFs)
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
@@ -205,16 +235,26 @@ export function StreamPlayer() {
     video.volume = v
     video.muted = v === 0
   }
+  // Full screen takes the whole live view, so the chat comes along
   const toggleFullscreen = () => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
-    else wrapRef.current?.requestFullscreen?.().catch(() => {})
+    else {
+      const el = wrapRef.current?.closest<HTMLElement>('.live-center') ?? wrapRef.current
+      el?.requestFullscreen?.().catch(() => {})
+    }
   }
+  const toggleFit = () => setFit(f => {
+    const next: Fit = f === 'fit' ? 'fill' : 'fit'
+    try { localStorage.setItem(FIT_KEY, next) } catch { /* private mode */ }
+    return next
+  })
   const onKey = (e: React.KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement) return
     if (e.key === ' ' || e.key === 'k') { e.preventDefault(); togglePlay() }
     else if (e.key === 'm') toggleMute()
     else if (e.key === 'f') toggleFullscreen()
     else if (e.key === 'l') goLive()
+    else if (e.key === 'z') toggleFit()
     else return
     pokeControls()
   }
@@ -224,9 +264,12 @@ export function StreamPlayer() {
   const showControls = controlsShown || paused || behind || status !== 'playing'
 
   return (
+    <>
+    <canvas ref={ambientRef} className={`stream-ambient${fit === 'fit' && status === 'playing' ? ' stream-ambient--on' : ''}`} width={32} height={18} aria-hidden />
     <div
       ref={wrapRef}
-      className={`stream-wrap${showControls ? ' stream-wrap--controls' : ''}`}
+      className={`stream-wrap stream-wrap--${fit}${showControls ? ' stream-wrap--controls' : ''}`}
+      style={{ ['--ar' as string]: ratio }}
       tabIndex={0}
       onMouseMove={pokeControls}
       onTouchStart={pokeControls}
@@ -278,10 +321,16 @@ export function StreamPlayer() {
           {atLive || latency == null ? 'LIVE' : `−${Math.round(latency)}s · GO LIVE`}
         </button>
         <span className="stream-spacer" />
-        <button type="button" className="stream-btn" onClick={toggleFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}>
+        <button type="button" className="stream-btn stream-fit" onClick={toggleFit}
+          title={fit === 'fit' ? 'Fill the screen (crops the edges) · Z' : 'Show the whole picture · Z'}
+          aria-label={fit === 'fit' ? 'Fill the screen' : 'Fit the whole picture'}>
+          {fit === 'fit' ? '⛶' : '▣'}
+        </button>
+        <button type="button" className="stream-btn" onClick={toggleFullscreen} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'} title="Full screen · F">
           {fullscreen ? '⤡' : '⤢'}
         </button>
       </div>
     </div>
+    </>
   )
 }
