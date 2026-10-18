@@ -31,6 +31,7 @@ import {
   ActivityList, MemeGrid, SortToggle, SpectrumBar, alignment, shortWallet, useMemeCards, type MemeSource,
 } from '../components/ProfileShowcase'
 import { profileLink } from '../lib/links'
+import { useUrlState } from '../lib/urlState'
 import './ProfileControl.css'
 
 interface Props {
@@ -476,7 +477,7 @@ export function Profile({ onGoToOracle, onOpenMeme, onOpenProfile, onViewPublic,
   const [regenCost, setRegenCost] = useState(DEFAULT_REGEN_COST)
   const [bannerCost, setBannerCost] = useState(DEFAULT_BANNER_COST)
   const [buyOpen, setBuyOpen] = useState(false)
-  const [sort, setSort] = useState<'top' | 'new'>('top')
+  const [sort, setSort] = useUrlState<'top' | 'new'>('sort', 'top', ['top', 'new'])
 
   useEffect(() => {
     setMemesLoading(true)

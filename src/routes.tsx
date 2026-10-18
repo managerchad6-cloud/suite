@@ -67,6 +67,7 @@ export function CastRoute() {
   return (
     <Characters
       initialChar={charKey ?? null}
+      onSelectChar={key => navigate(key ? `/cast/${key}` : '/cast')}
       onOpenDetail={meme => navigate(`/memes/factory/${meme.job_id}`)}
       onOpenUnifiedItem={item => navigate(`/memes/${item.type}/${item.sourceId}`)}
     />
@@ -81,10 +82,15 @@ export function TreasuryRoute() {
   return <Treasury />
 }
 
+// /studio is the studio home, /studio/canvas the editor (so a reload stays on the canvas)
 export function StudioRoute() {
+  const { view } = useParams<{ view?: string }>()
   const navigate = useNavigate()
+  if (view && view !== 'canvas') return <Navigate to="/studio" replace />
   return (
     <MemeStudio
+      view={view === 'canvas' ? 'editor' : 'home'}
+      onViewChange={v => navigate(v === 'editor' ? '/studio/canvas' : '/studio')}
       onPublished={id => navigate(`/memes/studio/${id}`)}
     />
   )
@@ -96,6 +102,8 @@ export function StudioEditRoute() {
   return (
     <MemeStudio
       remixSourceId={id}
+      view="editor"
+      onViewChange={v => { if (v === 'home') navigate('/studio') }}
       onPublished={pubId => navigate(`/memes/studio/${pubId}`)}
     />
   )

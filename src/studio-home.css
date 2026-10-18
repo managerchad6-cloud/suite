@@ -293,3 +293,14 @@
 }
 .sh-card:hover .sh-card-delete { opacity: 1; }
 .sh-card-delete:hover { color: #ff6655; border-color: #ff6655; }
+
+/* Work in progress in this browser */
+.sh-resume-btn {
+  display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 10px;
+  border: 1px solid #4a3a18; background: #1d170c; color: #eee; cursor: pointer; text-align: left;
+}
+.sh-resume-btn:hover { border-color: var(--gold); }
+.sh-resume-btn img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; background: #fff; }
+.sh-resume-btn span { display: flex; flex-direction: column; }
+.sh-resume-btn b { font-family: var(--font-ui); font-weight: normal; color: var(--gold); letter-spacing: 0.04em; }
+.sh-resume-btn small { font-size: 11px; color: #999; }

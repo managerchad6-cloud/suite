@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useUrlNumber } from '../lib/urlState'
 import { useNavigate } from 'react-router-dom'
 import { getPublicProfiles, bestImage, type PublicProfile } from '../identity/api'
 import { displayName } from '../identity/archetypes'
@@ -243,7 +244,10 @@ export function Brackets() {
   const [bracket,  setBracket]  = useState<Bracket | null>(null)
   const [matchups, setMatchups] = useState<Matchup[]>([])
   const [loading,  setLoading]  = useState(true)
-  const [activeRound, setActiveRound] = useState(1)
+  const [latestRound, setLatestRound] = useState(1)
+  const [urlRound, setUrlRound] = useUrlNumber('round', 0, 0)      // 0 = the latest round
+  const activeRound = urlRound || latestRound
+  const setActiveRound = setUrlRound
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([])
   const [lbProfiles, setLbProfiles]   = useState<Record<string, PublicProfile>>({})
   const [lbLoading, setLbLoading]     = useState(true)
@@ -257,7 +261,7 @@ export function Brackets() {
         // Default to latest round with active matchups
         if (d.matchups?.length) {
           const maxRound = Math.max(...d.matchups.map((m: Matchup) => m.round))
-          setActiveRound(maxRound)
+          setLatestRound(maxRound)
         }
       })
       .catch(() => {})
