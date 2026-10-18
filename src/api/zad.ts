@@ -10,21 +10,13 @@ export interface Message {
 export const makeUserMsg  = (text: string): Message => ({ role: 'user',  parts: [{ text }] })
 export const makeModelMsg = (text: string): Message => ({ role: 'model', parts: [{ text }] })
 
-/** Today's free Zad messages (more for bigger $VVC holder tiers); past them a message costs credits */
-export interface ZadQuota { used: number; limit: number; left: number; tier: string | null; extraCost: number; resetsAt: string }
-
-export const fetchZadQuota = () => api<ZadQuota>('/api/ai/zad/quota')
-
-/**
- * `history` already ends with the new user message. `pay` spends credits once today's free messages
- * are used up. Errors: 429 {code: 'zad_quota', quota}, 402 {code: 'insufficient_credits'}.
- */
-export async function chatWithZad(history: Message[], { pay = false } = {}): Promise<{ text: string; quota?: ZadQuota; balance?: number }> {
-  const r = await api<{ text: string; quota?: ZadQuota; balance?: number }>('/api/ai/zad', {
+/** `history` already ends with the new user message. */
+export async function chatWithZad(history: Message[]): Promise<string> {
+  const { text } = await api<{ text: string }>('/api/ai/zad', {
     method: 'POST',
-    body: { history: history.map(m => ({ role: m.role, text: m.parts[0].text })), ...(pay ? { pay: true } : {}) },
+    body: { history: history.map(m => ({ role: m.role, text: m.parts[0].text })) },
   })
-  return { ...r, text: r.text.trim() }
+  return text.trim()
 }
 
 /** Twelve meme annotation labels for a character in a scene (Studio "magic labels"). */
