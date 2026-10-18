@@ -397,7 +397,9 @@ function SpectrumRow({ chars, chadLabel, virginLabel, onSelect, stateMap }: {
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar }: {
+export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar, onSelectChar }: {
+  /** When given, opening/closing a character goes through the URL (/cast/:key) */
+  onSelectChar?: (key: string | null) => void
   onOpenDetail?: (meme: Meme) => void
   onOpenUnifiedItem?: (item: UnifiedMemeItem) => void
   initialChar?: string | null
@@ -416,12 +418,12 @@ export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar }: {
   const [stateMap,  setStateMap]  = useState<Record<string, Character>>({})
 
   useEffect(() => {
-    if (initialChar) {
-      const char = findChar(initialChar)
-      if (char) setSelected(char)
-    }
+    setSelected(initialChar ? findChar(initialChar) : null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialChar])
+
+  /** Open a character: through the URL when the route manages it */
+  const select = (c: CharData) => (onSelectChar ? onSelectChar(c.key) : setSelected(c))
 
   const loadCollection = () => {
     if (!address) return
@@ -436,7 +438,7 @@ export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar }: {
     return (
       <CharacterDetail
         char={selected}
-        onBack={() => setSelected(null)}
+        onBack={() => (onSelectChar ? onSelectChar(null) : setSelected(null))}
         onOpenDetail={onOpenDetail}
         onOpenUnifiedItem={onOpenUnifiedItem}
         colState={stateMap[selected.key]}
@@ -471,7 +473,7 @@ export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar }: {
           <h2 className="characters-section-title">Male</h2>
           <span className="characters-section-count">{MALE.length} characters</span>
         </div>
-        <SpectrumRow chars={MALE} chadLabel="CHAD" virginLabel="VIRGIN" onSelect={setSelected} stateMap={stateMap} />
+        <SpectrumRow chars={MALE} chadLabel="CHAD" virginLabel="VIRGIN" onSelect={select} stateMap={stateMap} />
       </div>
 
       <div className="characters-section">
@@ -479,7 +481,7 @@ export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar }: {
           <h2 className="characters-section-title">Female</h2>
           <span className="characters-section-count">{FEMALE.length} characters</span>
         </div>
-        <SpectrumRow chars={FEMALE} chadLabel="STACY" virginLabel="WITCH" onSelect={setSelected} stateMap={stateMap} />
+        <SpectrumRow chars={FEMALE} chadLabel="STACY" virginLabel="WITCH" onSelect={select} stateMap={stateMap} />
       </div>
 
       <div className="characters-section">
@@ -489,7 +491,7 @@ export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar }: {
         </div>
         <div className="char-row char-row--deities">
           {DEITIES.map(c => (
-            <CharCard key={c.key} char={c} onSelect={() => setSelected(c)} colState={stateMap[c.key]} />
+            <CharCard key={c.key} char={c} onSelect={() => select(c)} colState={stateMap[c.key]} />
           ))}
         </div>
       </div>
@@ -502,7 +504,7 @@ export function Characters({ onOpenDetail, onOpenUnifiedItem, initialChar }: {
         <span className="characters-section-sub">Spin-offs, deities, and deep lore from the wider Chadiverse</span>
         <div className="char-row char-row--extended">
           {EXTENDED_CAST.map(c => (
-            <CharCard key={c.key} char={c} onSelect={() => setSelected(c)} colState={stateMap[c.key]} />
+            <CharCard key={c.key} char={c} onSelect={() => select(c)} colState={stateMap[c.key]} />
           ))}
         </div>
       </div>

@@ -18,7 +18,6 @@ import { VideoFeed } from './views/VideoFeed'
 import type { AppOutletContext } from './App'
 import type { MemeSourceType } from './types/unified'
 import { useBack } from './lib/links'
-import { openQuickJump } from './components/QuickJump'
 
 // Every page is open to everyone; participation inside them is locked for non-members.
 // The two pages about *your* account (profile, retake) send non-members to the memes.
@@ -68,6 +67,7 @@ export function CastRoute() {
   return (
     <Characters
       initialChar={charKey ?? null}
+      onSelectChar={key => navigate(key ? `/cast/${key}` : '/cast')}
       onOpenDetail={meme => navigate(`/memes/factory/${meme.job_id}`)}
       onOpenUnifiedItem={item => navigate(`/memes/${item.type}/${item.sourceId}`)}
     />
@@ -82,10 +82,15 @@ export function TreasuryRoute() {
   return <Treasury />
 }
 
+// /studio is the studio home, /studio/canvas the editor (so a reload stays on the canvas)
 export function StudioRoute() {
+  const { view } = useParams<{ view?: string }>()
   const navigate = useNavigate()
+  if (view && view !== 'canvas') return <Navigate to="/studio" replace />
   return (
     <MemeStudio
+      view={view === 'canvas' ? 'editor' : 'home'}
+      onViewChange={v => navigate(v === 'editor' ? '/studio/canvas' : '/studio')}
       onPublished={id => navigate(`/memes/studio/${id}`)}
     />
   )
@@ -97,6 +102,8 @@ export function StudioEditRoute() {
   return (
     <MemeStudio
       remixSourceId={id}
+      view="editor"
+      onViewChange={v => { if (v === 'home') navigate('/studio') }}
       onPublished={pubId => navigate(`/memes/studio/${pubId}`)}
     />
   )
@@ -197,6 +204,7 @@ export function RouteError({ full = false }: { full?: boolean }) {
 /** A link to somewhere that isn't here (a mistyped or old link) */
 export function NotFoundRoute() {
   const navigate = useNavigate()
+  const back = useBack('/memes')
   return (
     <div className="nf-page">
       <div className="nf-emoji" aria-hidden>🫥</div>
@@ -204,7 +212,7 @@ export function NotFoundRoute() {
       <p>That link is mistyped, or the page moved.</p>
       <div className="nf-actions">
         <button className="nf-btn nf-btn--gold" onClick={() => navigate('/memes', { replace: true })}>Go to the memes</button>
-        <button className="nf-btn" onClick={openQuickJump}>Search · Ctrl K</button>
+        <button className="nf-btn" onClick={back}>Go back</button>
       </div>
     </div>
   )

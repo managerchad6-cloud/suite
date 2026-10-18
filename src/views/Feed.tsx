@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useMemberGate } from '../identity/gate'
 import { fetchGalleryMemes, studioMemeImageUrl } from '../api/studio'
 import { fetchMemes, imageUrl } from '../api/memes'
@@ -57,6 +58,25 @@ function writeFeedCache(c: FeedCache) {
   try { sessionStorage.setItem(FEED_CACHE_KEY, JSON.stringify(c)) } catch {}
 }
 // ─────────────────────────────────────────────────────────────────────────────
+
+const ALL_SOURCES: MemeSourceType[] = ['studio', 'factory', 'reddit']
+const SORT_MODES = ['foryou', 'hot', 'rising', 'fresh', 'top'] as const
+const TOP_PERIODS = ['day', 'week', 'month', 'year', 'all'] as const
+
+/** The feed the URL asks for (null = not given) */
+function urlFeed(p: URLSearchParams) {
+  const sort = SORT_MODES.find(m => m === p.get('sort')) ?? null
+  const period = TOP_PERIODS.find(m => m === p.get('period')) ?? null
+  const src = ALL_SOURCES.find(m => m === p.get('src'))
+  const chars = p.get('chars')?.split(',').map(c => c.trim()).filter(Boolean) ?? null
+  return { sort, period, src: src ? [src] : null, chars }
+}
+/** Was this cache saved for the feed the URL asks for? (nothing in the URL: any cache fits) */
+function sameFeed(c: FeedCache, u: ReturnType<typeof urlFeed>) {
+  const eq = (a: string[], b: string[]) => a.length === b.length && a.every(x => b.includes(x))
+  return (!u.sort || u.sort === c.sort) && (!u.period || u.period === c.topPeriod) &&
+    (!u.src || eq(u.src, c.filter)) && (!u.chars || eq(u.chars, c.filterChars))
+}
 
 interface BankPost {
   id: string; title: string; image_url: string; score: number; date: string
@@ -171,7 +191,15 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
   const wallet = gate.wallet
   // Read session cache exactly once on first render
   const _initCache = useRef<FeedCache | null | undefined>(undefined)
-  if (_initCache.current === undefined) _initCache.current = readFeedCache()
+  // Sort and filters live in the URL (?sort=hot&period=day&src=studio&chars=chad,wizard): a reload, a
+  // shared link or the back button opens the same feed. The session cache only restores the position
+  // when it was saved for that same feed.
+  const [params, setParams] = useSearchParams()
+  const fromUrl = useRef(urlFeed(params)).current
+  if (_initCache.current === undefined) {
+    const c = readFeedCache()
+    _initCache.current = c && sameFeed(c, fromUrl) ? c : null
+  }
   const cache = _initCache.current
 
   const [items,       setItems]       = useState<UnifiedMemeItem[]>(() => cache?.items ?? [])
@@ -180,10 +208,22 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
   const [heroActive,  setHeroActive]  = useState(() => cache?.heroActive ?? true)
   const [heroLeaving, setHeroLeaving] = useState(false)
   const heroLeavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [sort,        setSort]        = useState<SortMode>(() => cache?.sort ?? 'foryou')
-  const [topPeriod,   setTopPeriod]   = useState<TopPeriod>(() => cache?.topPeriod ?? 'week')
-  const [filter,      setFilter]      = useState<Set<MemeSourceType>>(() => new Set(cache?.filter ?? ['studio', 'factory', 'reddit']))
-  const [filterChars, setFilterChars] = useState<Set<string>>(() => new Set(cache?.filterChars ?? []))
+  const [sort,        setSort]        = useState<SortMode>(() => fromUrl.sort ?? cache?.sort ?? 'foryou')
+  const [topPeriod,   setTopPeriod]   = useState<TopPeriod>(() => fromUrl.period ?? cache?.topPeriod ?? 'week')
+  const [filter,      setFilter]      = useState<Set<MemeSourceType>>(() => new Set(fromUrl.src ?? cache?.filter ?? ALL_SOURCES))
+  const [filterChars, setFilterChars] = useState<Set<string>>(() => new Set(fromUrl.chars ?? cache?.filterChars ?? []))
+  // Keep the URL in step (defaults stay out of it)
+  useEffect(() => {
+    setParams(prev => {
+      const next = new URLSearchParams(prev)
+      const put = (k: string, v: string | null) => { if (v) next.set(k, v); else next.delete(k) }
+      put('sort', sort === 'foryou' ? null : sort)
+      put('period', sort === 'top' && topPeriod !== 'week' ? topPeriod : null)
+      put('src', filter.size === 1 ? [...filter][0] : null)
+      put('chars', filterChars.size ? [...filterChars].join(',') : null)
+      return next.toString() === prev.toString() ? prev : next
+    }, { replace: true })
+  }, [sort, topPeriod, filter, filterChars, setParams])
   const [localVote,     setLocalVote]     = useState<{
     upVotes: number; downVotes: number; yourVote: 1|-1|null; tier: MemeTier; voting: boolean
   } | null>(null)
@@ -295,11 +335,13 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, sort])
 
-  // Persist full feed state (incl. noise map + prefs snapshot) when navigating away.
-  // Restored on remount so tab-switching never changes the sort order.
+  // Persist full feed state (incl. noise map + prefs snapshot) when navigating away, and when the page
+  // is reloaded or closed (unmount cleanups don't run then). Restored on remount and after a reload,
+  // so you come back to the meme you were on, in the same order.
   useEffect(() => {
-    return () => {
+    const save = () => {
       const s = latestRef.current
+      if (!s.items.length) return
       writeFeedCache({
         items: s.items, idx: s.idx, sort: s.sort, topPeriod: s.topPeriod,
         filter: [...s.filter], filterChars: [...s.filterChars],
@@ -311,6 +353,8 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
         sortedKeys: sessionSortRef.current ?? visibleRef.current.map(i => i.key),
       })
     }
+    window.addEventListener('pagehide', save)
+    return () => { window.removeEventListener('pagehide', save); save() }
   }, [])
 
   // Enrich items array with tier/vote data from the cache
@@ -586,7 +630,7 @@ export function Feed({ onOpenItem, onOpenProfile, onRemix, onOpenStudio, onOpenF
   const [progress, setProgress] = useState<FeedProgress | null>(null)
   useEffect(() => {
     if (!wallet) { setProgress(null); return }
-    getFeedProgress().then(setProgress).catch(() => {})
+    getFeedProgress().then(p => { if (p?.streak && p?.daily) setProgress(p) }).catch(() => {})
   }, [wallet])
   // The streak runs out when its window passes without a vote
   useEffect(() => {

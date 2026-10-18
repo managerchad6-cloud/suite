@@ -11,9 +11,11 @@ interface Props {
   onNew: () => void
   onOpenDraft: (payload: DraftPayload) => void
   onImportVvc?: (payload: DraftPayload) => void
+  /** Unsaved work in progress in this browser: pick up where you left off */
+  resume?: { thumbnail?: string | null; savedAt: string; open: () => void } | null
 }
 
-export function StudioHome({ onNew, onOpenDraft, onImportVvc }: Props) {
+export function StudioHome({ onNew, onOpenDraft, onImportVvc, resume }: Props) {
   // Everyone sees the studio; only members can open the editor or have drafts
   const gate = useMemberGate()
   const address = gate.wallet
@@ -109,6 +111,12 @@ export function StudioHome({ onNew, onOpenDraft, onImportVvc }: Props) {
           <p className="sh-sub">{address ? truncateAddress(address) : 'Build memes by hand, layer by layer.'}</p>
         </div>
         <div className="sh-header-btns">
+          {resume && !gate.locked && (
+            <button className="sh-resume-btn" onClick={resume.open} title="Pick up where you left off">
+              {resume.thumbnail && <img src={resume.thumbnail} alt="" />}
+              <span><b>Continue editing</b><small>{new Date(resume.savedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</small></span>
+            </button>
+          )}
           <button className="sh-new-btn" {...gate.lockProps('create')} onClick={gate.guard(onNew, 'create')}>
             <span className="sh-new-icon">+</span>
             New Document

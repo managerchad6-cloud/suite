@@ -15,6 +15,7 @@ import {
 import '../forum.css'
 
 type SortMode = 'latest' | 'top' | 'unanswered'
+import { useUrlState } from '../lib/urlState'
 
 const ALL_TAGS = ['general', 'factory', 'studio', 'live', 'vote', 'cast', 'help', 'feedback', 'offtopic'] as const
 
@@ -186,7 +187,7 @@ function BoardView({ address, boardId, onOpenThread, onBack }: {
 }) {
   const [board,    setBoard]    = useState<ForumBoard | null>(null)
   const [threads,  setThreads]  = useState<ForumThread[]>([])
-  const [sort,     setSort]     = useState<SortMode>('latest')
+  const [sort,     setSort]     = useUrlState<SortMode>('sort', 'latest', ['latest', 'top', 'unanswered'])
   const [page,     setPage]     = useState(1)
   const [hasMore,  setHasMore]  = useState(true)
   const [loading,  setLoading]  = useState(true)

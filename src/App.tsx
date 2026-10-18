@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { tryAutoConnect, truncateAddress } from '@mf/wallet'
 import { BadgeUnlockedToast } from './components/BadgeUnlockedToast'
@@ -15,7 +15,6 @@ import { useIdentity } from './identity/IdentityProvider'
 import { JoinFlow } from './identity/JoinFlow'
 import { PfpReadyToast } from './identity/PfpReadyToast'
 import { profileImage } from './identity/api'
-import { QuickJump, openQuickJump } from './components/QuickJump'
 
 const NAV_MODE = (import.meta.env.VITE_NAV_MODE ?? 'side') as 'side' | 'top'
 
@@ -39,18 +38,10 @@ export const NAV_ITEMS = [
   { path: '/forum',   icon: '💬', label: 'FORUM',  zadTarget: 'forum'   },
 ] as const
 
-// What each page is, for Quick Jump and the browser tab
-const PAGE_INFO: Record<string, { title: string; hint: string }> = {
-  '/live':     { title: 'Live',     hint: 'The 24/7 stream: chat with Chad and Virgin' },
-  '/memes':    { title: 'Memes',    hint: 'For you, hot, rising, fresh and top' },
-  '/vote':     { title: 'Vote',     hint: 'Pick the better meme' },
-  '/cast':     { title: 'Cast',     hint: 'Every character and their memes' },
-  '/prizes':   { title: 'Prizes',   hint: 'Brackets and what you can win' },
-  '/treasury': { title: 'Treasury', hint: 'Where the $VVC goes' },
-  '/studio':   { title: 'Studio',   hint: 'Make a meme by hand' },
-  '/factory':  { title: 'Factory',  hint: 'Make a meme in seconds' },
-  '/forum':    { title: 'Forum',    hint: 'Boards and threads' },
-  '/profile':  { title: 'Your profile', hint: 'Character, credits, memes and progress' },
+// Browser tab titles by section
+const PAGE_TITLE: Record<string, string> = {
+  '/live': 'Live', '/memes': 'Memes', '/vote': 'Vote', '/cast': 'Cast', '/prizes': 'Prizes',
+  '/treasury': 'Treasury', '/studio': 'Studio', '/factory': 'Factory', '/forum': 'Forum', '/profile': 'Your profile',
 }
 // Pages that name the tab themselves (a meme's title, a member's name)
 const OWN_TITLE = /^\/(memes\/[^/]+\/[^/]+|u\/)/
@@ -166,14 +157,9 @@ export default function App() {
   // Name the browser tab after the page (detail pages set their own)
   useEffect(() => {
     if (OWN_TITLE.test(location.pathname)) return
-    const section = Object.keys(PAGE_INFO).find(p => location.pathname === p || location.pathname.startsWith(`${p}/`))
-    document.title = section ? `${PAGE_INFO[section].title} · Virgin vs Chad` : 'Virgin vs Chad'
+    const section = Object.keys(PAGE_TITLE).find(p => location.pathname === p || location.pathname.startsWith(`${p}/`))
+    document.title = section ? `${PAGE_TITLE[section]} · Virgin vs Chad` : 'Virgin vs Chad'
   }, [location.pathname])
-
-  const jumpPlaces = useMemo(() => [
-    ...NAV_ITEMS.map(n => ({ label: PAGE_INFO[n.path]?.title ?? n.label, hint: PAGE_INFO[n.path]?.hint ?? '', icon: n.icon, path: n.path })),
-    ...(memberWallet ? [{ label: 'Your profile', hint: PAGE_INFO['/profile'].hint, icon: '👤', path: '/profile', keywords: 'me account credits character' }] : []),
-  ], [memberWallet])
 
   if (status === 'loading') return null
 
@@ -193,7 +179,6 @@ export default function App() {
       />
       <JobTrackerPill />
       <ZadHelper />
-      <QuickJump navigate={navigate} places={jumpPlaces} />
 
       {NAV_MODE === 'top' ? (
         <TopNav
@@ -208,11 +193,6 @@ export default function App() {
         <nav className="suite-nav">
           <img src="/assets/logo.png" alt="Virgin VS Chad" className="suite-nav-brand" />
           <div className="suite-nav-links">
-            <button className="suite-nav-item" onClick={openQuickJump} title="Jump to a page, meme or member (Ctrl K)">
-              <span className="nav-icon">⌕</span>
-              <span>SEARCH</span>
-              <kbd className="qj-nav-kbd">Ctrl K</kbd>
-            </button>
             {NAV_ITEMS.map(({ path, icon, label, zadTarget }) => (
               <button
                 key={path}

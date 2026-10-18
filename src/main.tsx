@@ -40,7 +40,7 @@ const router = createHashRouter([
         { path: 'cast/:charKey',     element: <CastRoute /> },
         { path: 'prizes',            element: <PrizesRoute /> },
         { path: 'treasury',          element: <TreasuryRoute /> },
-        { path: 'studio',            element: <StudioRoute /> },
+        { path: 'studio/:view?',     element: <StudioRoute /> },
         { path: 'studio/edit/:id',   element: <StudioEditRoute /> },
         { path: 'factory',           element: <FactoryRoute /> },
         { path: 'forum',               element: <ForumRoute /> },

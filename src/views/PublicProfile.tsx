@@ -30,6 +30,7 @@ interface Props {
 }
 
 type Tab = 'memes' | 'badges' | 'activity' | 'wall'
+import { useUrlState } from '../lib/urlState'
 
 export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpenMessages, previewOwn }: Props) {
   const gate = useMemberGate()
@@ -50,12 +51,13 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
   const [friendStatus, setFriendStatus] = useState<FriendStatus>('none')
   const [friendRequestId, setFriendRequestId] = useState<number | undefined>(undefined)
   const [friendPending, setFriendPending] = useState(false)
-  const [tab, setTab] = useState<Tab>('memes')
-  const [sort, setSort] = useState<'top' | 'new'>('top')
+  // In the URL, so a reload or a shared link opens the same tab
+  const [tab, setTab] = useUrlState<Tab>('tab', 'memes', ['memes', 'badges', 'activity', 'wall'])
+  const [sort, setSort] = useUrlState<'top' | 'new'>('sort', 'top', ['top', 'new'])
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    setProfile(undefined); setTab('memes')
+    setProfile(undefined)
     getPublicProfile(wallet).then(setProfile)
     fetchPlayer(wallet).then(setPlayer).catch(() => setPlayer(null))
     fetchPlayerBadges(wallet).then(b => setBadgeCount(b.badges.length))

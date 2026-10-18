@@ -488,7 +488,16 @@ function StudioJoysticks({ onZoomDelta, onPanDelta }: { onZoomDelta: (d: number)
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: string) => void; remixSourceId?: string }) {
+/**
+ * `view` comes from the URL (/studio = home, /studio/canvas = the editor), so a reload or a shared link
+ * lands on the same screen; `onViewChange` moves the URL. Without them the studio keeps its own view.
+ */
+export function MemeStudio({ onPublished, remixSourceId, view, onViewChange }: {
+  onPublished?: (id: string) => void
+  remixSourceId?: string
+  view?: 'home' | 'editor'
+  onViewChange?: (view: 'home' | 'editor') => void
+}) {
   // The editor opens only from StudioHome's New/Open, which are member-only, so inside it
   // there is always a member. '' just keeps the guest-visible home from doing member work.
   const memberWallet = useMemberGate().wallet
@@ -902,8 +911,12 @@ export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: 
   const marqueeDragRef = useRef<{startX: number; startY: number; currX: number; currY: number} | null>(null)
   const strokePreRef = useRef<HTMLCanvasElement | null>(null)
 
-  // Studio routing
-  const [studioView, setStudioView] = useState<'home' | 'editor'>('home')
+  // Studio routing: the URL owns the view when the route passes one
+  const [localView, setLocalView] = useState<'home' | 'editor'>('home')
+  const studioView = view ?? localView
+  const setStudioView = (v: 'home' | 'editor') => { if (onViewChange) { if (v !== view) onViewChange(v) } else setLocalView(v) }
+  // Work in progress kept in this browser (IndexedDB), offered on the home screen as "Continue"
+  const [sessionWaiting, setSessionWaiting] = useState<SessionSnapshot | null>(null)
 
   // Draft state
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
@@ -1006,6 +1019,12 @@ export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Back on the home screen (the Studio Home button, or the browser's back): offer the work in progress
+  useEffect(() => {
+    if (studioView !== 'home' || !address || remixSourceId) return
+    loadSession(address).then(snap => setSessionWaiting(snap ?? null)).catch(() => {})
+  }, [studioView, address, remixSourceId])
+
   // ─── Auto-restore from IndexedDB on mount ──────────────────────────────────
   useEffect(() => {
     if (!address) return
@@ -1023,8 +1042,11 @@ export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: 
       }).catch(() => {})
       return
     }
+    // On the canvas (also after a reload) the work in progress comes back; on the home screen it's offered
     loadSession(address).then(snapshot => {
-      if (snapshot) void handleLoadDraft(snapshot)
+      if (!snapshot) return
+      if (studioView === 'editor') void handleLoadDraft(snapshot)
+      else setSessionWaiting(snapshot)
     }).catch(() => { /* no stored session */ })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, remixSourceId])
@@ -2029,6 +2051,9 @@ export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: 
   // ─── Draft / New Document ──────────────────────────────────────────────────
 
   function handleNewDocument() {
+    // A new document replaces the work in progress kept for "Continue" / reload
+    if (address) void clearSession(address)
+    setSessionWaiting(null)
     const c = makeCanvas(DEFAULT_W, DEFAULT_H)
     const ctx = c.getContext('2d')!
     ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, DEFAULT_W, DEFAULT_H)
@@ -4241,7 +4266,8 @@ export function MemeStudio({ onPublished, remixSourceId }: { onPublished?: (id: 
   if (studioView === 'home') {
     return (
       <div className="mstudio">
-        <StudioHome onNew={handleNewDocument} onOpenDraft={handleLoadDraft} />
+        <StudioHome onNew={handleNewDocument} onOpenDraft={handleLoadDraft}
+          resume={sessionWaiting ? { thumbnail: sessionWaiting.thumbnail, savedAt: sessionWaiting.savedAt, open: () => void handleLoadDraft(sessionWaiting) } : null} />
       </div>
     )
   }

@@ -31,6 +31,7 @@ function CreatorAvatar({ wallet }: { wallet: string }) {
 }
 
 type Tab = 'daily' | 'weekly' | 'monthly' | 'all' | 'winners'
+import { useUrlState } from '../lib/urlState'
 
 const CUTOFFS: Partial<Record<Tab, number>> = {
   daily:   1 * 24 * 60 * 60 * 1000,
@@ -323,7 +324,7 @@ interface MemeGalleryProps {
 
 export const MemeGallery = forwardRef<HTMLElement, MemeGalleryProps>(
   ({ onSelectMeme, onAutoSelect, onOpenDetail, onOpenProfile, characterFilter, onClearCharacterFilter }, ref) => {
-    const [tab, setTab] = useState<Tab>('all')
+    const [tab, setTab] = useUrlState<Tab>('tab', 'all', ['daily', 'weekly', 'monthly', 'all', 'winners'])
     const [allMemes, setAllMemes] = useState<Meme[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
