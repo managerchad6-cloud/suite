@@ -111,10 +111,6 @@
 .fx-backdrop.is-on { opacity: 1; }
 .feed-carousel .feed-slide { z-index: 2; }
 .feed-carousel .feed-slide--current { z-index: 3; }
-.fx-next-label {
-  position: absolute; top: -26px; left: 50%; transform: translateX(-50%); z-index: 1;
-  font-family: var(--font-ui); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.8);
-}
 
 /* The action rail */
 .fx-rail { position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; z-index: 4; }
@@ -256,13 +252,16 @@
   flex: 0 0 auto;
   width: min(calc(100cqw - 86px), calc((100cqh - var(--chrome)) * var(--ar)), 1500px);
 }
-/* Neighbours sit just off the edges with a sliver showing, so the current meme gets the stage */
-.feed-carousel .feed-slide--prev  { transform: translateY(calc(-50% - 92%)) scale(0.8); }
-.feed-carousel .feed-slide--next  { transform: translateY(calc(-50% + 92%)) scale(0.8); }
-.feed-carousel .feed-slide--above { transform: translateY(calc(-50% - 150%)) scale(0.7); }
-.feed-carousel .feed-slide--below { transform: translateY(calc(-50% + 150%)) scale(0.7); }
-.feed-carousel .feed-slide--hero-peek { transform: translateY(calc(-50% + 60%)) scale(0.8); }
-.fx-next-label { top: -22px; }
+/* Slot positions come from Feed.tsx (inline transforms): neighbours stay small and tuck behind the
+   current card's edges. These are only the first-paint fallback. */
+.feed-carousel .feed-slide--prev  { transform: translateY(calc(-50% - 70%)) scale(0.5); }
+.feed-carousel .feed-slide--next  { transform: translateY(calc(-50% + 70%)) scale(0.5); }
+.feed-carousel .feed-slide--above { transform: translateY(calc(-50% - 120%)) scale(0.4); }
+.feed-carousel .feed-slide--below { transform: translateY(calc(-50% + 120%)) scale(0.4); }
+.feed-carousel .feed-slide--hero-peek { transform: translateY(calc(-50% + 60%)) scale(0.6); }
+/* The neighbours read as a stack: dimmed, behind */
+.feed-carousel .feed-slide--prev, .feed-carousel .feed-slide--next { filter: brightness(0.55) saturate(0.8); opacity: 0.85; }
+.feed-carousel .feed-slide--hero-peek { filter: none; opacity: 1; }
 
 @media (max-width: 600px) {
   .feed-carousel .feed-slide { left: 2%; right: 2%; height: 74%; top: 55%; gap: 8px; }
