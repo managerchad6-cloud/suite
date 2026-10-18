@@ -246,3 +246,25 @@
 .feed-slide--current .fx-rail { animation: fx-rail-in 0.5s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes fx-rail-in { from { opacity: 0; transform: translateX(12px); } }
 @media (max-width: 600px) { @keyframes fx-rail-in { from { opacity: 0; transform: translateY(10px); } } }
+
+/* ── Size: the meme takes all the room it can ──
+   Each slide is a size container; the card is as wide as the slide allows (minus the rail) or as wide
+   as its meme can be at the slide's height (minus the header), whichever is smaller. */
+.feed-carousel .feed-slide { container-type: size; left: 2.5%; right: 2.5%; height: 82%; gap: 16px; }
+.feed-carousel .feed-slide .fp {
+  --chrome: 128px;   /* header + title + padding above the meme */
+  flex: 0 0 auto;
+  width: min(calc(100cqw - 86px), calc((100cqh - var(--chrome)) * var(--ar)), 1500px);
+}
+/* Neighbours sit just off the edges with a sliver showing, so the current meme gets the stage */
+.feed-carousel .feed-slide--prev  { transform: translateY(calc(-50% - 92%)) scale(0.8); }
+.feed-carousel .feed-slide--next  { transform: translateY(calc(-50% + 92%)) scale(0.8); }
+.feed-carousel .feed-slide--above { transform: translateY(calc(-50% - 150%)) scale(0.7); }
+.feed-carousel .feed-slide--below { transform: translateY(calc(-50% + 150%)) scale(0.7); }
+.feed-carousel .feed-slide--hero-peek { transform: translateY(calc(-50% + 60%)) scale(0.8); }
+.fx-next-label { top: -22px; }
+
+@media (max-width: 600px) {
+  .feed-carousel .feed-slide { left: 2%; right: 2%; height: 74%; top: 55%; gap: 8px; }
+  .feed-carousel .feed-slide .fp { --chrome: 116px; width: min(100cqw, calc((100cqh - var(--chrome) - 70px) * var(--ar))); }
+}

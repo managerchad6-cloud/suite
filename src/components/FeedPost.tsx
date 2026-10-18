@@ -64,7 +64,7 @@ export function FeedPost({ item, current, following, own, onFollow, onOpen, onOp
   const name = creator ? displayName(creator) : item.wallet ? shortWallet(item.wallet) : item.type === 'reddit' ? 'r/VirginVsChad' : 'Anonymous'
 
   return (
-    <article className={`fp${flipped ? ' fp--flipped' : ''}`} style={{ ['--tier' as string]: tier.color }}>
+    <article className={`fp${flipped ? ' fp--flipped' : ''}`} style={{ ['--tier' as string]: tier.color, ['--ar' as string]: ratio ?? 4 / 3 }}>
       <header className="fp-head">
         <button className="fp-avatar" onClick={() => item.wallet && onOpenProfile?.(item.wallet)} disabled={!item.wallet} tabIndex={current ? 0 : -1}>
           {creator ? <img src={bestImage(creator)} alt="" /> : <span>{(item.wallet ?? 'VC').slice(0, 2).toUpperCase()}</span>}
