@@ -47,6 +47,11 @@
 
 .buyvvc-header { display: flex; align-items: center; justify-content: space-between; }
 .buyvvc-title { font-size: 16px; font-weight: 800; color: #eee; letter-spacing: -0.01em; }
+.buyvvc-reason {
+  margin: 10px 0 0; padding: 8px 10px; border-radius: 6px;
+  background: rgba(255, 196, 0, 0.08); border: 1px solid rgba(255, 196, 0, 0.25);
+  color: #f5d76e; font-size: 13px; line-height: 1.4;
+}
 .buyvvc-close {
   background: none; border: none; color: #555; font-size: 16px;
   cursor: pointer; padding: 4px; border-radius: 4px; transition: color 0.12s;

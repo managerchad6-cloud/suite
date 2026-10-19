@@ -71,19 +71,21 @@ export function BuyVvcButton({ className = '' }: { className?: string }) {
 
 export function BuyVvcHost() {
   const [open, setOpen] = useState(false)
+  // Why it opened, when a holder perk sent us here (403 hold_required)
+  const [reason, setReason] = useState<string | null>(null)
   useEffect(() => {
-    const h = () => setOpen(true)
+    const h = (e: Event) => { setReason((e as CustomEvent<{ reason?: string } | null>).detail?.reason ?? null); setOpen(true) }
     window.addEventListener('vvc:buy-vvc', h)
     return () => window.removeEventListener('vvc:buy-vvc', h)
   }, [])
-  return open ? <BuyVvcModal onClose={() => setOpen(false)} /> : null
+  return open ? <BuyVvcModal reason={reason} onClose={() => setOpen(false)} /> : null
 }
 
 type SwapState = 'idle' | 'loading' | 'ready' | 'unavailable' | 'checking' | 'done'
 /** What the last swap did for the signed-in wallet. */
 type Outcome = { kind: 'credits' | 'holder' | 'more' | 'elsewhere' | 'pending'; bought?: number; from?: string }
 
-function BuyVvcModal({ onClose }: { onClose: () => void }) {
+function BuyVvcModal({ reason, onClose }: { reason: string | null; onClose: () => void }) {
   const { status, memberWallet, join } = useIdentity()
   const isMember = status === 'member' && !!memberWallet
   const [config, setConfig] = useState<TokenConfig | null>(null)
@@ -204,12 +206,13 @@ function BuyVvcModal({ onClose }: { onClose: () => void }) {
           <button className="buyvvc-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 
+        {reason && <p className="buyvvc-reason">{reason}</p>}
         <div className="buyvvc-pitch">
           <p className="buyvvc-pitch-main">Hold {sym}, create for free.</p>
           {config && (
             <p className="buyvvc-pitch-sub">
-              Hold at least <strong>{fmt(min)} {sym}</strong> and get <strong>free credits every week</strong> for
-              memes, reskins and art: <strong>⚡ {weekly}</strong> to start, up to <strong>⚡ {fmt(Math.max(...(config.tiers?.map(t => t.weekly) ?? [weekly])) * (1 + Math.max(0, ...(config.loyalty?.map(l => l.bonusPct) ?? [0])) / 100))}</strong> for the biggest, longest-held bags.
+              Hold at least <strong>{fmt(min)} {sym}</strong> to unlock Zad, magic labels and stream chat, and
+              get <strong>free credits every week</strong> (from your first full week holding) for memes, reskins and art: <strong>⚡ {weekly}</strong> to start, up to <strong>⚡ {fmt(Math.max(...(config.tiers?.map(t => t.weekly) ?? [weekly])) * (1 + Math.max(0, ...(config.loyalty?.map(l => l.bonusPct) ?? [0])) / 100))}</strong> for the biggest, longest-held bags.
             </p>
           )}
         </div>

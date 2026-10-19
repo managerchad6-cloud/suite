@@ -79,16 +79,23 @@ export function deductCredits(action: CreditAction, refId?: string): Promise<{ o
   return withBadges(api('/api/credits/deduct', { method: 'POST', body: { action, ref_id: refId } }))
 }
 
-/** Credit a purchase; the transaction must be signed by the signed-in wallet. */
+export interface PriceQuote { quote_id: string; pack_id: string; method: 'sol' | 'vvc'; amount_raw: number; decimals: number; expires_at: string }
+
+/** The server fixes a pack's price in SOL or $VVC for 10 minutes; pay exactly amount_raw (lamports / base units). */
+export function getPriceQuote(packId: string, method: 'sol' | 'vvc'): Promise<PriceQuote> {
+  return api('/api/credits/quote', { method: 'POST', body: { pack_id: packId, method } })
+}
+
+/** Credit a purchase; the transaction must be signed by the signed-in wallet. SOL and $VVC need the quote it paid. */
 export function verifyPurchase(
   packId: string,
   txSignature: string,
   paymentMethod: 'usdc' | 'sol' | 'vvc' = 'usdc',
-  expectedLamports?: number,
+  quoteId?: string,
 ): Promise<{ ok: boolean; credits_added: number; new_balance: number }> {
   return withBadges(api('/api/credits/purchase', {
     method: 'POST',
-    body: { pack_id: packId, tx_signature: txSignature, payment_method: paymentMethod, expected_lamports: expectedLamports },
+    body: { pack_id: packId, tx_signature: txSignature, payment_method: paymentMethod, quote_id: quoteId },
   }))
 }
 
