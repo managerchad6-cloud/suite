@@ -1,6 +1,6 @@
 import { api } from './client'
 import { SUITE_ORIGIN } from '../lib/links'
-import { dispatchBadges, type BadgeDef } from './player'
+import { dispatchBadges, dispatchXP, type BadgeDef } from './player'
 
 const BASE = '';
 
@@ -118,8 +118,10 @@ export async function publishHandmade(params: {
   draftPayloadInline?: unknown;
 }): Promise<{ job_id: string }> {
   // Published as the signed-in member
-  const data = await api<{ job_id: string; new_badges?: BadgeDef[] }>(`${BASE}/publish/handmade`, { method: 'POST', body: params });
+  // XP comes with the first few memes of the day; later ones publish without it
+  const data = await api<{ job_id: string; new_badges?: BadgeDef[]; xp_awarded?: number }>(`${BASE}/publish/handmade`, { method: 'POST', body: params });
   dispatchBadges(data.new_badges);
+  if (data.xp_awarded) dispatchXP(data.xp_awarded);
   return data;
 }
 

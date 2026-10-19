@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getSigningProvider } from '../wallet'
-import { fetchCreditPacks, fetchTokenConfig, openBuyVvc, verifyPurchase, type CreditPack, type TokenConfig } from '../api/credits'
+import { fetchCreditPacks, fetchTokenConfig, getPriceQuote, openBuyVvc, verifyPurchase, type CreditPack, type TokenConfig } from '../api/credits'
 import './BuyCreditsModal.css'
 import './BuyVvc.css'
 
@@ -11,7 +11,6 @@ const TREASURY_PK = 'BvqPmrhAMJHozjpmJ9r7zLwkbZbS99pSaEkfQw3HxUQS'
 // ─── VVC Token ───────────────────────────────────────────────────────────────
 // The mint comes from the server's token config (pre-launch: a placeholder); this is only a fallback
 const VVC_MINT_FALLBACK = 'MukLDtJ8Cx9DxLbeyLRSWPSposTMWuwHANbuaudpump'
-const VVC_DECIMALS = 6  // standard SPL token decimals — confirm on deploy
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Step = 'pick' | 'building' | 'approving' | 'confirming' | 'verifying' | 'done' | 'error'
@@ -118,19 +117,22 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
 
       let tx: InstanceType<typeof Transaction>
-      let expectedLamports: number | undefined
+      // SOL and $VVC: the server prices the pack (the price shown here is only a preview)
+      let quoteId: string | undefined
 
       if (payMethod === 'sol') {
-        if (!solPrice) throw new Error('SOL price unavailable. Switch to USDC.')
-        expectedLamports = Math.round((pack.usdc / solPrice) * 1_000_000_000)
+        const quote = await getPriceQuote(pack.id, 'sol').catch(() => { throw new Error('SOL price unavailable. Switch to USDC.') })
+        quoteId = quote.quote_id
+        const lamports = quote.amount_raw
         const solBal = await connection.getBalance(walletPk)
-        if (solBal < expectedLamports + 15_000) throw new Error('Insufficient SOL balance.')
+        if (solBal < lamports + 15_000) throw new Error('Insufficient SOL balance.')
         tx = new Transaction({ recentBlockhash: blockhash, feePayer: walletPk })
-          .add(SystemProgram.transfer({ fromPubkey: walletPk, toPubkey: treasury, lamports: expectedLamports }))
+          .add(SystemProgram.transfer({ fromPubkey: walletPk, toPubkey: treasury, lamports }))
 
       } else if (payMethod === 'vvc') {
         // VVC Token — swap VVC_MINT for real mint after deploy
-        if (!vvcPrice) throw new Error('VVC price unavailable. Switch to USDC.')
+        const quote = await getPriceQuote(pack.id, 'vvc').catch(() => { throw new Error('VVC price unavailable. Switch to USDC.') })
+        quoteId = quote.quote_id
         const vvcMint     = new PublicKey(VVC_MINT)
         const senderATA   = getAssociatedTokenAddressSync(vvcMint, walletPk)
         const treasuryATA = getAssociatedTokenAddressSync(vvcMint, treasury)
@@ -146,10 +148,9 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
           const min = (minLamports / 1e9).toFixed(6).replace(/0+$/, '')
           throw new Error(`Need at least ${min} SOL for network fees.`)
         }
-        expectedLamports = Math.round((pack.usdc / vvcPrice) * Math.pow(10, VVC_DECIMALS))
         tx = new Transaction({ recentBlockhash: blockhash, feePayer: walletPk })
           .add(createAssociatedTokenAccountIdempotentInstruction(walletPk, treasuryATA, treasury, vvcMint))
-          .add(createTransferInstruction(senderATA, treasuryATA, walletPk, expectedLamports))
+          .add(createTransferInstruction(senderATA, treasuryATA, walletPk, quote.amount_raw))
 
       } else {
         // USDC
@@ -193,7 +194,7 @@ export function BuyCreditsModal({ wallet, currentBalance, requiredCredits, onClo
       await connection.confirmTransaction({ signature: txSig, blockhash, lastValidBlockHeight }, 'confirmed')
 
       setStep('verifying')
-      const result = await verifyPurchase(pack.id, txSig, payMethod, expectedLamports)
+      const result = await verifyPurchase(pack.id, txSig, payMethod, quoteId)
       setAdded(result.credits_added)
       setStep('done')
       onPurchased(result.new_balance)

@@ -6,6 +6,8 @@
 // - A service answering 401 means the 15-minute access token ran out: renew it once through
 //   identity and retry. If that fails the session is over ('vvc:signed-out').
 // - A 403 membership_required opens the Join flow ('vvc:join-required').
+// - A 403 hold_required (a holder perk, and the member no longer holds $VVC) opens Buy $VVC
+//   ('vvc:buy-vvc') with the server's reason.
 
 export class ApiError extends Error {
   readonly status: number
@@ -73,6 +75,9 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     const err = await toError(res)
     if (err.status === 403 && err.code === 'membership_required') {
       window.dispatchEvent(new CustomEvent(JOIN_REQUIRED_EVENT, { detail: { reason: null } }))
+    }
+    if (err.status === 403 && err.code === 'hold_required') {
+      window.dispatchEvent(new CustomEvent('vvc:buy-vvc', { detail: { reason: err.message } }))
     }
     throw err
   }
