@@ -3,7 +3,7 @@
 // viewer sees it this much later.
 
 const PUBLISH_S = 0.9   // encode + segment publish before it reaches the player's live edge (measured)
-const UNKNOWN_S = 6     // no player on screen, or not playing yet
+const UNKNOWN_S = 4.5   // no player on screen, or not playing yet
 
 let behind: number | null = null
 
