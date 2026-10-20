@@ -9,8 +9,8 @@ import { setStreamLatency } from '../lib/streamDelay'
 // a pause, it jumps straight back to the edge. There is no scrubber: it's live, you're either
 // on it or one click away from it.
 
-const TARGET_LATENCY = 3.5   // seconds behind the edge we aim for (1s segments: 3.5 never ran dry)
-const MAX_LATENCY = 7        // further behind than this: jump (must stay under the 12s window)
+const TARGET_LATENCY = 4.5   // seconds behind the edge we aim for (1s segments; 3.5 stalled on slow CDN fetches)
+const MAX_LATENCY = 9        // further behind than this: jump (must stay under the 12s window)
 const CATCH_UP_RATE = 1.08
 const LIVE_SLACK = 2.5       // within TARGET + this still reads as "LIVE"
 const RETRY_MS = 3000
