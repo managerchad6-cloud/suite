@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { sendChat, WS_URL } from '../api/livestream'
 import { subscribeOrchestrator, type ChatStage, type ChatStatus } from '../api/ws'
 import { ApiError } from '../api/client'
+import { viewerDelayMs } from '../lib/streamDelay'
 import { MemberGate } from '../identity/gate'
 import { ACTIONS, StreamActions, useMemeVoting, type ActionTab } from './live/StreamActions'
 
 // The input clears as soon as you press send and never locks. Each message gets a "Sending
-// message…" bar that fills on its own and completes once the stream's director has picked the
-// message up ('chat:status' past the overlay/inbox stages); what happens after that is the show.
+// message…" bar that fills on its own, says where the message is ('chat:status'), and completes
+// when the message shows up on this viewer's stream: the server's 'on-air' plus how far behind
+// live their player is. A dropped message completes at once.
 //
 // Everything else a viewer can put on stream (memes, ideas, videos, list votes) sits behind the
 // "+" (like attachments in a messenger), or a "/" command typed in the box.
@@ -18,12 +20,20 @@ interface Sent {
   text: string
   state: 'sending' | 'done' | 'failed'
   note?: string
+  /** Where the message is, while sending */
+  stage?: string
 }
 
 type Target = 'auto' | 'chad' | 'virgin'
 
-/** Stages that mean the director has taken the message into the pipeline */
-const PICKED_UP = new Set<ChatStage>(['held', 'forming', 'ready', 'on-air', 'dropped'])
+/** What the bar says at each stage on the way to the stream */
+const STAGE_LABEL: Partial<Record<ChatStage, string>> = {
+  review: 'Waiting for the director…',
+  held: 'Queued until the video ends…',
+  forming: 'Coming up on stream…',
+  ready: 'Coming up on stream…',
+  'on-air': 'Coming up on stream…',
+}
 const DONE_FADE_MS = 700        // matches the .chat-sent--done transition
 const FAILED_SHOW_MS = 5000
 const GIVE_UP_MS = 90_000       // no word from the stream (socket down): finish the bar anyway
@@ -57,8 +67,8 @@ export function ChatInput() {
   const nextKey = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
-  // Pick-ups that arrived before POST /api/chat returned the id
-  const early = useRef(new Set<string>())
+  // Statuses that arrived before POST /api/chat returned the id (latest per id)
+  const early = useRef(new Map<string, ChatStatus>())
 
   // The "/" menu: while the first word is a command being typed
   const slash = msg.startsWith('/') && !/\s/.test(msg) ? COMMANDS.filter(c => c.cmd.startsWith(msg.toLowerCase())) : []
@@ -70,14 +80,21 @@ export function ChatInput() {
     setTimeout(() => remove(key), DONE_FADE_MS)
   }
 
+  const apply = (key: number, st: ChatStatus) => {
+    if (st.stage === 'dropped') return finish(key)
+    const label = STAGE_LABEL[st.stage]
+    if (label) setSent((list) => list.map((s) => (s.key === key && s.state === 'sending' ? { ...s, stage: label } : s)))
+    // On air now on the server; this viewer sees it once their player gets there
+    if (st.stage === 'on-air') setTimeout(() => finish(key), viewerDelayMs())
+  }
+
   useEffect(() => subscribeOrchestrator(WS_URL, (m) => {
     if (m.event !== 'chat:status') return
     const st = m.data as ChatStatus
-    if (!PICKED_UP.has(st.stage)) return
     const mine = sentRef.current.find((s) => s.id === st.id)
-    if (mine) return finish(mine.key)
-    early.current.add(st.id)
-    if (early.current.size > 50) early.current.delete(early.current.values().next().value!)
+    if (mine) return apply(mine.key, st)
+    early.current.set(st.id, st)
+    if (early.current.size > 50) early.current.delete(early.current.keys().next().value!)
   }), [])
 
   // Close the "+" sheet on an outside click or Escape
@@ -120,7 +137,8 @@ export function ChatInput() {
       // Filtered, or a chat server without status events: nothing more to wait for
       if (res?.filtered || !id) return finish(key)
       setSent((list) => list.map((s) => (s.key === key ? { ...s, id } : s)))
-      if (early.current.delete(id)) finish(key)
+      const st = early.current.get(id)
+      if (st) { early.current.delete(id); apply(key, st) }
     } catch (err) {
       const status = err instanceof ApiError ? err.status : 0
       const note = status === 429 ? 'Slow down — a few messages a minute'
@@ -155,7 +173,7 @@ export function ChatInput() {
             <li key={s.key} className={`chat-sent-item chat-sent--${s.state}`}>
               <div className="chat-sent-row">
                 <span className="chat-sent-text">{s.text}</span>
-                <span className="chat-sent-stage">{s.state === 'failed' ? s.note : 'Sending message…'}</span>
+                <span className="chat-sent-stage">{s.state === 'failed' ? s.note : (s.stage ?? 'Sending message…')}</span>
               </div>
               {s.state !== 'failed' && <div className="chat-sent-bar"><span /></div>}
             </li>
