@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Hls, { ErrorTypes, Events } from 'hls.js'
 import { STREAM_URL } from '../api/livestream'
+import { setStreamLatency } from '../lib/streamDelay'
 
 // The stream is 2-second segments in a 12-second sliding playlist. The player stays a few
 // seconds behind the live edge and never drifts: up to MAX_LATENCY it catches up by playing a
@@ -8,8 +9,8 @@ import { STREAM_URL } from '../api/livestream'
 // a pause, it jumps straight back to the edge. There is no scrubber: it's live, you're either
 // on it or one click away from it.
 
-const TARGET_LATENCY = 5     // seconds behind the edge we aim for
-const MAX_LATENCY = 10       // further behind than this: jump (must stay under the 12s window)
+const TARGET_LATENCY = 4.5   // seconds behind the edge we aim for (1s segments; 3.5 stalled on slow CDN fetches)
+const MAX_LATENCY = 9        // further behind than this: jump (must stay under the 12s window)
 const CATCH_UP_RATE = 1.08
 const LIVE_SLACK = 2.5       // within TARGET + this still reads as "LIVE"
 const RETRY_MS = 3000
@@ -184,6 +185,7 @@ export function StreamPlayer() {
       const video = videoRef.current
       const l = measureLatency()
       setLatency(l)
+      setStreamLatency(video && !video.paused ? l : null) // chat waits this long for what you'll see
       if (!video || l == null || video.paused) return
       if (l > MAX_LATENCY + 1) {
         goLive() // hls.js should have done this; belt and braces (and Safari)
@@ -199,7 +201,7 @@ export function StreamPlayer() {
       if (l != null && l > TARGET_LATENCY + LIVE_SLACK) goLive()
     }
     document.addEventListener('visibilitychange', onVisible)
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible) }
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); setStreamLatency(null) }
   }, [goLive, measureLatency])
 
   // ── Controls ─────────────────────────────────────────────────────────────────
