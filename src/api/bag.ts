@@ -71,25 +71,63 @@ export const fetchBag = () => api<Bag>('/api/bag')
 export const fetchPublicBag = (wallet: string) => api<PublicBag>(`/api/bag/public/${encodeURIComponent(wallet)}`)
 export const setBagPublic = (pub: boolean) => api<{ public: boolean }>('/api/bag/privacy', { method: 'POST', body: { public: pub } })
 
-// One price stream for the page, shared by the ticker and the Bag page
-type Handler = (m: Market) => void
+// ─── The Bag's live stream: one EventSource for the page ─────────────────────
+// `price` (the ticker, the Bag page), and from the arena: `trade`, `pressure`, `rank`.
+
+export type Window = 'm5' | 'h1' | 'h6' | 'h24'
+export interface ArenaTrade {
+  signature: string
+  at: string
+  kind: 'buy' | 'sell'
+  wallet: string | null
+  tokens: number
+  sol: number
+  usd: number | null
+  member: boolean
+  /** Shrimp, Fish, Dolphin, Shark or Whale for wallets that aren't members */
+  label: string | null
+  rank: { key: string; name: string; score: number } | null
+  /** Set when this trade moved a member's rank */
+  rankTo: { key: string; name: string } | null
+}
+export type Pressure = Record<Window, { buys: number; sells: number; buySol: number; sellSol: number; partial: boolean }>
+export interface RankChange { wallet: string; signature: string; from: { key: string; name: string }; to: { key: string; name: string } }
+export const fetchArena = () => api<{ trades: ArenaTrade[]; pressure: Pressure }>('/api/bag/arena')
+
+type StreamEvents = { price: Market; trade: ArenaTrade; pressure: Pressure; rank: RankChange }
+const listeners: { [K in keyof StreamEvents]: Set<(d: StreamEvents[K]) => void> } = {
+  price: new Set(), trade: new Set(), pressure: new Set(), rank: new Set(),
+}
 let source: EventSource | null = null
 let last: Market | null = null
-const handlers = new Set<Handler>()
 
-export function subscribeMarket(handler: Handler): () => void {
-  handlers.add(handler)
-  if (last) handler(last)
-  if (!source) {
-    source = new EventSource('/api/bag/stream')
-    source.addEventListener('price', e => {
-      try { last = JSON.parse((e as MessageEvent).data); handlers.forEach(h => h(last!)) } catch { /* malformed */ }
+function ensureSource() {
+  if (source) return
+  source = new EventSource('/api/bag/stream')
+  for (const ev of Object.keys(listeners) as (keyof StreamEvents)[]) {
+    source.addEventListener(ev, e => {
+      try {
+        const data = JSON.parse((e as MessageEvent).data)
+        if (ev === 'price') last = data
+        listeners[ev].forEach(h => (h as (d: unknown) => void)(data))
+      } catch { /* malformed */ }
     })
   }
+}
+
+/** Listen to one kind of live event; the stream closes when nobody listens any more. */
+export function subscribeStream<K extends keyof StreamEvents>(event: K, handler: (d: StreamEvents[K]) => void): () => void {
+  listeners[event].add(handler)
+  ensureSource()
   return () => {
-    handlers.delete(handler)
-    if (handlers.size === 0) { source?.close(); source = null }
+    listeners[event].delete(handler)
+    if (Object.values(listeners).every(s => s.size === 0)) { source?.close(); source = null }
   }
+}
+
+export function subscribeMarket(handler: (m: Market) => void): () => void {
+  if (last) handler(last)
+  return subscribeStream('price', handler)
 }
 
 // ─── Buys and sells as events: the celebration listens, anything can fire one ──
@@ -149,7 +187,6 @@ export function livePosition(bag: Bag | null, market: Market | null) {
 }
 
 // ─── The token's pools on DexScreener (cached by the backend) ──────────────────
-export type Window = 'm5' | 'h1' | 'h6' | 'h24'
 export interface Dex {
   main: { pair: string; dex: string; url: string } | null
   priceUsd: number | null
