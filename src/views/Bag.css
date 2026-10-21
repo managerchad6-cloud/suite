@@ -94,8 +94,11 @@
 .climb-ladder li.next::after { content: 'NEXT'; position: absolute; top: -8px; padding: 0 5px; border-radius: 4px; background: #333; color: #ddd; font: 9px var(--font-ui); letter-spacing: 1px; }
 
 /* ── The chart room ──────────────────────────────────────────────────────── */
-.bag-room { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 22vw, 360px); gap: 16px; align-items: start; }
-.bag-trade-col { position: sticky; top: 16px; min-width: 0; }
+.bag-room { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 22vw, 360px); gap: 16px; align-items: stretch; }
+/* Your bag on top, the trade panel at the bottom: together exactly the chart box's height (the bag
+   module takes what's left), or taller only on screens too short for both */
+.bag-trade-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.bag-trade-col > .trade { flex: none; }
 
 /* Under the chart: the arena (wide) and who's winning / the market beside it */
 .bag-pit { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 420px); gap: 16px; align-items: start; }
@@ -118,8 +121,9 @@
 /* The chart sets the room's height: about 2.2:1 for its width, never taller than the screen below the
    ticker and chart toolbars (~250px), within 360–720px. The sidebar takes that height and scrolls. */
 .bag-chart-frame {
-  position: relative; display: flex; flex-direction: column; flex: none; background: #0b0b0b;
-  height: clamp(360px, min(100vh - 250px, (100vw - 660px) * 0.45), 720px);
+  position: relative; display: flex; flex-direction: column; flex: 1 0 auto; background: #0b0b0b;
+  /* its own size; it grows only when the bag + trade column beside it is taller (no empty band) */
+  min-height: clamp(360px, min(100vh - 250px, (100vw - 660px) * 0.45), 720px);
 }
 .bag-chart-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .bag-chart-empty { height: 100%; display: grid; place-items: center; color: #666; font-size: 13px; }
@@ -197,9 +201,9 @@
 
 /* ── Smaller screens ─────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
-  .bag-trade-col { position: static; }
+  .bag-trade-col { gap: 12px; }
   .bag-pit { grid-template-columns: 1fr; }
-  .bag-chart-frame { height: clamp(340px, (100vw - 40px) * 0.55, 560px); }
+  .bag-chart-frame { min-height: 0; height: clamp(340px, (100vw - 40px) * 0.55, 560px); }
   .bag-room, .bag-bottom { grid-template-columns: 1fr; }
   .bag-actions { flex-direction: row; }
   .bag-actions .bag-btn { flex: 1; }
@@ -211,5 +215,5 @@
   .climb { padding: 14px; }
   .climb-nums { margin-left: 0; }
   .climb-ladder { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .bag-chart-frame { height: clamp(300px, (100vw - 90px) * 1.1, 440px); }   /* about square on a phone */
+  .bag-chart-frame { min-height: 0; height: clamp(300px, (100vw - 90px) * 1.1, 440px); }   /* about square on a phone */
 }

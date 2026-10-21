@@ -12,6 +12,7 @@ import { MyChart } from '../components/MyChart'
 import { Arena } from '../components/Arena'
 import { Leaders } from '../components/Leaders'
 import { TradePanel } from '../components/TradePanel'
+import { BagStatus } from '../components/BagStatus'
 import './Bag.css'
 
 /** Re-render every `ms` (the clocks tick). */
@@ -93,6 +94,7 @@ export function Bag() {
       <section className="bag-room">
         <ChartRoom dex={dex} market={market} bag={isMember ? bag : null} />
         <aside className="bag-trade-col">
+          <BagStatus bag={isMember ? bag : null} market={market} memberSince={memberSince} onJoin={status !== 'member' ? () => join('track your bag') : null} />
           <TradePanel market={market} dex={dex} bag={isMember ? bag : null} onJoin={status !== 'member' ? () => join('get ranked') : null} />
         </aside>
       </section>
