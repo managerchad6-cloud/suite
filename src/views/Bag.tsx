@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
-  daysSince, fetchDex, fmtPct, fmtSol, fmtTokens, fmtUsd, livePosition, setBagPublic, since, until,
-  type Bag as BagData, type Dex, type Market, type Window,
+  daysSince, fetchDex, fmtPct, fmtSol, fmtTokens, fmtUsd, livePosition, rankArt, setBagPublic, since, until, RANK_EVENT,
+  type Bag as BagData, type Dex, type Market, type Rank, type RankEvent, type Window,
 } from '../api/bag'
 import { openBuyVvc, openSellVvc, fetchTokenConfig, type TokenConfig } from '../api/credits'
 import { useBag, refreshBag } from '../hooks/useBag'
@@ -51,48 +51,6 @@ function useDex() {
 }
 
 const short = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : fmtTokens(n))
-const clamp01 = (x: number) => Math.max(0, Math.min(1, x))
-const logScale = (x: number, full: number) => clamp01(Math.log1p(Math.max(0, x)) / Math.log1p(full))
-
-// ─── The score: six traits, each placed between Virgin (0) and Chad (1); the meter shows their average ────
-
-interface Row { label: string; virgin: string; chad: string; you: string; pos: number | null }
-
-function scorecard(bag: BagData | null, live: ReturnType<typeof livePosition>, memberSince: string | null): Row[] {
-  if (!bag) {
-    return [
-      { label: 'PnL', virgin: 'Down bad, blames the devs', chad: 'In profit, says nothing', you: '?', pos: null },
-      { label: 'Hands', virgin: 'Sells on every red candle', chad: 'Never sold a single token', you: '?', pos: null },
-      { label: 'Holding', virgin: 'Flips within the hour', chad: 'Holds for months', you: '?', pos: null },
-      { label: 'Bag', virgin: "Can't afford the minimum", chad: 'Kraken bag', you: '?', pos: null },
-      { label: 'Aping', virgin: 'Bought once, cried', chad: 'Buys every dip', you: '?', pos: null },
-      { label: 'Loyalty', virgin: 'Joined yesterday', chad: 'Here since day one', you: '?', pos: null },
-    ]
-  }
-  const pnl = live?.pnlPct ?? null
-  const bought = bag.trades.filter(t => t.kind === 'buy' || t.kind === 'in').reduce((s, t) => s + t.tokens, 0)
-  const sold = bag.trades.filter(t => t.kind === 'sell').reduce((s, t) => s - t.tokens, 0)
-  const buys = bag.trades.filter(t => t.kind === 'buy').length
-  const held = bag.oldestBagSince ?? bag.holdingSince
-  const heldDays = held ? daysSince(held) : 0
-  const memberDays = memberSince ? daysSince(memberSince) : 0
-  const tierPos: Record<string, number> = { holder: 0.45, bag: 0.65, whale: 0.85, kraken: 1 }
-  return [
-    { label: 'PnL', virgin: 'Down bad, blames the devs', chad: 'In profit, says nothing',
-      you: pnl === null ? 'no buys yet' : fmtPct(pnl), pos: pnl === null ? null : clamp01(0.5 + pnl / 200) },
-    { label: 'Hands', virgin: 'Sells on every red candle', chad: 'Never sold a single token',
-      you: sold > 0 ? `sold ${short(sold)}` : bought > 0 ? 'never sold' : '—', pos: bought > 0 ? clamp01(1 - sold / bought) : null },
-    { label: 'Holding', virgin: 'Flips within the hour', chad: 'Holds for months',
-      you: held ? `${heldDays}d` : '—', pos: held ? logScale(heldDays, 90) : null },
-    { label: 'Bag', virgin: "Can't afford the minimum", chad: 'Kraken bag',
-      you: bag.tier ? bag.tier.name : `${short(bag.balance)} $VVC`, pos: bag.tier ? tierPos[bag.tier.key] ?? 0.45 : 0.08 },
-    { label: 'Aping', virgin: 'Bought once, cried', chad: 'Buys every dip',
-      you: `${buys} buy${buys === 1 ? '' : 's'}`, pos: clamp01(buys / 8) },
-    { label: 'Loyalty', virgin: 'Joined yesterday', chad: 'Here since day one',
-      you: memberSince ? `${memberDays}d member` : '—', pos: memberSince ? logScale(memberDays, 120) : null },
-  ]
-}
-
 export function Bag() {
   const { status, me, profile, join } = useIdentity()
   const { market, bag } = useBag()
@@ -100,10 +58,6 @@ export function Bag() {
   const isMember = status === 'member' && !!bag
   const live = livePosition(isMember ? bag : null, market)
   const memberSince = me && me.state !== 'guest' ? me.account.memberSince : null
-  const rows = scorecard(isMember ? bag : null, live, memberSince)
-  const scored = rows.filter(r => r.pos !== null)
-  const score = scored.length ? Math.round((scored.reduce((s, r) => s + r.pos!, 0) / scored.length) * 100) : null
-  const verdict = score === null ? null : score >= 50 ? 'chad' : 'virgin'
 
   return (
     <div className="bag-view">
@@ -120,13 +74,12 @@ export function Bag() {
         </aside>
       </section>
 
-      <YouStrip
-        bag={isMember ? bag : null} live={live} verdict={verdict} score={score} market={market}
+      <Climb
+        bag={isMember ? bag : null} live={live} market={market}
         portrait={profile ? profileImage(profile) : null}
-        onJoin={status !== 'member' ? () => join('track your bag') : null}
+        onJoin={status !== 'member' ? () => join('get ranked') : null}
         pending={status === 'pending'}
       />
-
 
       {isMember && (
         <section className="bag-bottom">
@@ -140,44 +93,130 @@ export function Bag() {
   )
 }
 
-/** You on one Virgin–Chad meter: the verdict, the score, and your bag in a single strip. */
-function YouStrip({ bag, live, verdict, score, market, portrait, onJoin, pending }: {
-  bag: BagData | null; live: ReturnType<typeof livePosition>; verdict: 'chad' | 'virgin' | null; score: number | null
-  market: Market | null; portrait: string | null; onJoin: (() => void) | null; pending: boolean
+// ─── The climb: your rank on the ladder, and how to get Chadder ──────────────
+
+const TRAIT_ICON: Record<string, string> = { holding: '💎', hands: '🧻', bag: '💰', aping: '🦍', entries: '🎯', pnl: '📈', loyalty: '🫡' }
+
+const DEFAULT_LADDER: Rank[] = ([
+  ['incel', 'Incel', 0], ['virgin', 'Virgin', 10], ['lshad', 'Lshad', 25], ['shlad', 'Shlad', 32], ['cad', 'Cad', 39], ['basic', 'Basic', 47],
+  ['brad', 'Brad', 55], ['lad', 'Lad', 62], ['boomer', 'Dad', 67], ['thad', 'Thad', 74], ['chad', 'Chad', 84], ['gigachad', 'Gigachad', 94],
+] as const).map(([key, name, min]) => ({ key, name, min }))
+
+function Climb({ bag, live, market, portrait, onJoin, pending }: {
+  bag: BagData | null; live: ReturnType<typeof livePosition>; market: Market | null
+  portrait: string | null; onJoin: (() => void) | null; pending: boolean
 }) {
   const now = useNow()
+  const game = bag?.game ?? null
   const value = useRolling(live?.valueUsd ?? null)
   const pnl = useRolling(live?.pnlPct ?? null)
+  const [pick, setPick] = useState(2)                 // what-if: index into game.whatIf (0.5 SOL)
   const held = bag ? bag.oldestBagSince ?? bag.holdingSince : null
-  const at = score === null ? 50 : Math.max(6, Math.min(94, score))
+
+  // Ranked up or down since this browser last looked: celebrate (or mourn) it
+  useEffect(() => {
+    if (!game || !bag) return
+    const key = `vvc:rank:${bag.wallet}`
+    let prev: number | null = null
+    try {
+      const v = localStorage.getItem(key)
+      prev = v === null ? null : Number(v)
+      localStorage.setItem(key, String(game.rank.index))
+    } catch { return }
+    if (prev === null || !Number.isFinite(prev) || prev === game.rank.index) return
+    window.dispatchEvent(new CustomEvent<RankEvent>(RANK_EVENT, {
+      detail: { dir: game.rank.index > prev ? 'up' : 'down', key: game.rank.key, name: game.rank.name },
+    }))
+  }, [game?.rank.index, bag?.wallet])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ladder = game?.ladder ?? DEFAULT_LADDER
+  const rank = game?.rank ?? null
+  const progress = rank?.next && game ? Math.max(0, Math.min(1, (game.score - rank.min) / (rank.next.min - rank.min))) : 1
+  const what = game ? game.whatIf[Math.min(pick, game.whatIf.length - 1)] ?? null : null
+
   return (
-    <section className={`bag-strip${verdict ? ` bag-strip--${verdict}` : ''}`}>
-      <img className="bag-strip-char bag-strip-char--virgin" src="/assets/chars/virgin.png" alt="The Virgin" />
-      <div className="bag-strip-you">
-        <div className={`bag-you${verdict ? ` bag-you--${verdict}` : ''}`}>
-          {portrait && bag ? <img src={portrait} alt="You" /> : <span>?</span>}
+    <section className={`climb${rank ? ` climb--${rank.index >= 6 ? 'chad' : 'virgin'}` : ''}`}>
+      <div className="climb-you">
+        <div className="climb-art">
+          {rank ? <img src={rankArt(rank.key)} alt={rank.name} /> : <span>?</span>}
+          {portrait && bag && <img className="climb-pfp" src={portrait} alt="You" />}
         </div>
-        <div className={`bag-stamp${verdict ? ` bag-stamp--${verdict}` : ''}`}>
-          {verdict ? `CERTIFIED ${verdict === 'chad' ? 'CHAD' : 'VIRGIN'}` : 'WHICH ONE ARE YOU?'}
+        <div className="climb-who">
+          <small>{rank ? "YOU'RE A" : 'WHICH ONE ARE YOU?'}</small>
+          <h2>{rank ? rank.name : 'Unranked'}</h2>
+          {game && <div className="climb-score">Chad score <b>{game.score}</b>/100</div>}
+          {rank?.next ? (
+            <div className="climb-progress">
+              <div className="climb-bar"><i style={{ width: `${progress * 100}%` }} /></div>
+              <span><b>{rank.next.points}</b> point{rank.next.points === 1 ? '' : 's'} to <img src={rankArt(rank.next.key)} alt="" /> <b>{rank.next.name}</b></span>
+            </div>
+          ) : rank ? (
+            <div className="climb-progress climb-progress--max">Top of the ladder. Nothing above you but Zad.</div>
+          ) : null}
+          {onJoin && <button className="bag-join" onClick={onJoin}>{pending ? 'Finish joining' : 'Join to get ranked'}</button>}
         </div>
+        {bag && (
+          <div className="climb-nums">
+            <div className="bag-num"><small>BAG</small><span className="bag-value">{fmtUsd(value)}</span><em>{short(bag.balance)} ${market?.symbol ?? 'VVC'}</em></div>
+            <div className="bag-num"><small>PNL</small><span className={`bag-pnl bag-pnl--${(live?.pnlPct ?? 0) >= 0 ? 'up' : 'down'}`}>{pnl === null ? (bag.syncing || !bag.synced ? '…' : '—') : fmtPct(pnl)}</span><em>{live?.pnlSol != null ? `${live.pnlSol >= 0 ? '+' : ''}${fmtSol(live.pnlSol)}` : 'all bags'}</em></div>
+            <div className="bag-num"><small>HOLDING</small><span className="bag-clock">{held ? since(held, now) : '—'}</span><em>oldest bag</em></div>
+          </div>
+        )}
       </div>
-      <div className="bag-meter" aria-label={score === null ? 'Virgin to Chad' : `Chad score ${score} out of 100`}>
-        <span className="bag-meter-end bag-meter-end--virgin">VIRGIN</span>
-        <div className="bag-meter-track">
-          <b className={`bag-meter-you${verdict ? ` is-${verdict}` : ''}`} style={{ left: `${at}%` }}>{score === null ? '?' : score}</b>
-        </div>
-        <span className="bag-meter-end bag-meter-end--chad">CHAD</span>
+
+      <div className="climb-moves">
+        <h3 className="bag-h"><small>Level up</small>How to get Chadder</h3>
+        {game ? (
+          <ol>
+            {game.moves.slice(0, 5).map(m => (
+              <li key={m.trait + m.text}>
+                <span className="climb-icon" aria-hidden>{TRAIT_ICON[m.trait] ?? '⬆'}</span>
+                <span className="climb-move">{m.text}</span>
+                <b className={`climb-gain${m.gain && m.gain > 0 ? '' : ' climb-gain--none'}`}>{m.gain && m.gain > 0 ? `+${m.gain}` : '↗'}</b>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <ol>
+            <li><span className="climb-icon" aria-hidden>🦍</span><span className="climb-move">Ape in. Every real buy counts</span></li>
+            <li><span className="climb-icon" aria-hidden>💎</span><span className="climb-move">Hold. Diamond hands climb by themselves</span></li>
+            <li><span className="climb-icon" aria-hidden>🎯</span><span className="climb-move">Buy red candles, not green ones</span></li>
+          </ol>
+        )}
       </div>
-      {bag ? (
-        <div className="bag-strip-nums">
-          <div className="bag-num"><small>BAG</small><span className="bag-value">{fmtUsd(value)}</span><em>{short(bag.balance)} ${market?.symbol ?? 'VVC'}</em></div>
-          <div className="bag-num"><small>PNL</small><span className={`bag-pnl bag-pnl--${(live?.pnlPct ?? 0) >= 0 ? 'up' : 'down'}`}>{pnl === null ? (bag.syncing || !bag.synced ? '…' : '—') : fmtPct(pnl)}</span><em>{live?.pnlSol != null ? `${live.pnlSol >= 0 ? '+' : ''}${fmtSol(live.pnlSol)}` : 'all bags'}</em></div>
-          <div className="bag-num"><small>HOLDING</small><span className="bag-clock">{held ? since(held, now) : '—'}</span><em>oldest bag</em></div>
-        </div>
-      ) : onJoin ? (
-        <button className="bag-join" onClick={onJoin}>{pending ? 'Finish joining' : 'Join to find out'}</button>
-      ) : null}
-      <img className="bag-strip-char bag-strip-char--chad" src="/assets/chars/chad.png" alt="The Chad" />
+
+      <div className="climb-whatif">
+        <h3 className="bag-h"><small>What if</small>You aped right now</h3>
+        {game && what ? (
+          <>
+            <input
+              type="range" min={0} max={game.whatIf.length - 1} step={1} value={Math.min(pick, game.whatIf.length - 1)}
+              onChange={e => setPick(Number(e.target.value))} aria-label="SOL to ape"
+            />
+            <div className="climb-whatif-out">
+              <span className="climb-sol">{what.sol} SOL</span>
+              <span className="climb-arrow">→</span>
+              <img src={rankArt(what.rank.key)} alt="" />
+              <span className="climb-proj">
+                <b>{what.rank.name}</b>
+                <em className={what.score > game.score ? 'is-up' : ''}>{what.score > game.score ? `+${what.score - game.score}` : '±0'} · {what.score}/100</em>
+              </span>
+            </div>
+            <button className="bag-btn bag-btn--buy climb-ape" onClick={() => openBuyVvc()}>APE {what.sol} SOL</button>
+          </>
+        ) : (
+          <p className="bag-empty">Join and hold $VVC to see where a buy would take you.</p>
+        )}
+      </div>
+
+      <ol className="climb-ladder" aria-label="The ladder">
+        {ladder.map((r, i) => (
+          <li key={r.key} className={!rank ? '' : i < rank.index ? 'done' : i === rank.index ? 'here' : i === rank.index + 1 ? 'next' : ''}>
+            <img src={rankArt(r.key)} alt="" loading="lazy" />
+            <span>{r.name}</span>
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }

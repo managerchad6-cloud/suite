@@ -13,55 +13,42 @@
 .bag-h small { font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); }
 .bag-box { background: #141414; border: 1px solid #262626; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
-/* ── You on the meter: one compact strip under the chart ────────────────── */
-.bag-strip {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  height: 104px;
-  padding: 0 4px;
-  border-radius: 16px;
-  overflow: hidden;
+/* ── The climb: your rank, how to get Chadder, what-if, the ladder ─────────── */
+.climb {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(260px, 0.75fr);
+  grid-template-areas: 'you moves whatif' 'ladder ladder ladder';
+  gap: 14px 18px;
+  padding: 16px 18px;
+  border-radius: 18px;
   border: 1px solid #262626;
-  background: linear-gradient(90deg, rgba(93, 98, 128, 0.22), #131313 22%, #131313 78%, rgba(240, 160, 32, 0.2));
+  background: linear-gradient(110deg, rgba(93, 98, 128, 0.18), #131313 35%, #131313 70%, rgba(240, 160, 32, 0.14));
 }
-.bag-strip-char { flex: none; align-self: flex-end; height: 100%; width: auto; object-fit: contain; object-position: bottom; transition: filter 0.6s; }
-.bag-strip-char--virgin { filter: grayscale(1) brightness(0.9); }
-.bag-strip-char--chad { filter: drop-shadow(0 0 14px rgba(240, 160, 32, 0.4)); }
-.bag-strip--chad .bag-strip-char--virgin { filter: grayscale(1) brightness(0.5); }
-.bag-strip--virgin .bag-strip-char--chad { filter: grayscale(0.8) brightness(0.5); }
+.climb--chad { border-color: #3a2f18; }
 
-.bag-strip-you { flex: none; display: flex; align-items: center; gap: 12px; }
-.bag-you { flex: none; width: 60px; height: 60px; border-radius: 50%; padding: 3px; background: #333; }
-.bag-you img, .bag-you > span { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: #1d1d1d; font: 28px var(--font-display); color: #555; }
-.bag-you--chad   { background: conic-gradient(var(--gold), var(--chad-hi), var(--gold)); box-shadow: 0 0 20px rgba(240, 160, 32, 0.45); }
-.bag-you--virgin { background: var(--virgin); }
-.bag-you--virgin img { filter: grayscale(1); }
-.bag-stamp {
-  padding: 2px 10px; border: 3px solid currentColor; border-radius: 6px;
-  font-family: var(--font-display); font-size: 18px; letter-spacing: 1px; color: #ddd; white-space: nowrap;
-  transform: rotate(-3deg); animation: bag-stamp 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both;
-}
-.bag-stamp--chad   { color: var(--gold); text-shadow: 0 0 14px rgba(240, 160, 32, 0.5); }
-.bag-stamp--virgin { color: var(--virgin-hi); }
-@keyframes bag-stamp { from { transform: scale(2.2) rotate(-12deg); opacity: 0; } to { transform: rotate(-3deg); opacity: 1; } }
+.climb-you { grid-area: you; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; min-width: 0; }
+.climb-art { position: relative; flex: none; width: 112px; height: 132px; display: flex; align-items: flex-end; justify-content: center; }
+.climb-art > img:first-child { max-height: 100%; max-width: 100%; object-fit: contain; filter: drop-shadow(0 0 18px rgba(240, 160, 32, 0.35)); animation: climb-pop 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.climb--virgin .climb-art > img:first-child { filter: grayscale(0.6) drop-shadow(0 0 12px rgba(138, 144, 173, 0.3)); }
+.climb-art > span { font: 64px var(--font-display); color: #444; }
+.climb-pfp { position: absolute; right: -6px; bottom: -4px; width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--gold); object-fit: cover; background: #1d1d1d; }
+.climb--virgin .climb-pfp { border-color: var(--virgin); }
+@keyframes climb-pop { from { transform: scale(0.6) translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-.bag-meter { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 10px; }
-.bag-meter-end { font: 13px var(--font-display); letter-spacing: 1px; }
-.bag-meter-end--virgin { color: var(--virgin-hi); }
-.bag-meter-end--chad { color: var(--chad-hi); }
-.bag-meter-track { position: relative; flex: 1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--virgin), #2a2a2a 50%, var(--gold)); }
-.bag-meter-you {
-  position: absolute; top: 50%; transform: translate(-50%, -50%);
-  min-width: 34px; padding: 3px 8px; border-radius: 8px; text-align: center;
-  font: 15px var(--font-display); background: #2a2a2a; color: #aaa;
-  transition: left 1s cubic-bezier(0.3, 1.4, 0.5, 1);
-}
-.bag-meter-you.is-chad   { background: var(--gold); color: #2a1600; box-shadow: 0 0 14px rgba(240, 160, 32, 0.5); }
-.bag-meter-you.is-virgin { background: #3a3d4f; color: var(--virgin-hi); }
+.climb-who { display: flex; flex-direction: column; gap: 4px; min-width: 200px; }
+.climb-who small { font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.18em; color: #8a8a8a; }
+.climb-who h2 { margin: 0; font: clamp(34px, 3vw, 46px) var(--font-display); line-height: 0.95; color: var(--chad-hi); text-shadow: 0 0 22px rgba(240, 160, 32, 0.35); }
+.climb--virgin .climb-who h2 { color: var(--virgin-hi); text-shadow: none; }
+.climb-score { font-size: 13px; color: #9a9a9a; }
+.climb-score b { font: 18px var(--font-display); color: #fff; }
+.climb-progress { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; font-size: 13px; color: #bbb; }
+.climb-progress img { height: 22px; vertical-align: -6px; }
+.climb-progress b { color: #fff; }
+.climb-progress--max { color: var(--chad-hi); }
+.climb-bar { height: 10px; border-radius: 5px; background: #222; overflow: hidden; box-shadow: inset 0 0 0 1px #2c2c2c; }
+.climb-bar i { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--gold), var(--chad-hi)); box-shadow: 0 0 12px rgba(240, 160, 32, 0.5); transition: width 1s cubic-bezier(0.3, 1.3, 0.5, 1); }
+.climb-nums { display: flex; gap: clamp(14px, 2vw, 28px); margin-left: auto; flex-wrap: wrap; }
 
-.bag-strip-nums { flex: none; display: flex; gap: clamp(14px, 2vw, 32px); }
 .bag-num { display: flex; flex-direction: column; }
 .bag-num small { font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.18em; color: #7d7d7d; }
 .bag-num em { font-style: normal; font-size: 11px; color: #8a8a8a; }
@@ -70,7 +57,41 @@
 .bag-pnl--up   { color: var(--chad-hi); text-shadow: 0 0 16px rgba(240, 160, 32, 0.4); }
 .bag-pnl--down { color: var(--virgin-hi); }
 .bag-clock { font: 700 clamp(15px, 1.2vw, 19px) system-ui, sans-serif; line-height: 1.75; color: #e6e6e6; font-variant-numeric: tabular-nums; }
-.bag-join { flex: none; padding: 8px 16px; border-radius: 10px; border: none; background: var(--gold); color: #2a1600; font: 17px var(--font-display); cursor: pointer; }
+.bag-join { align-self: flex-start; margin-top: 6px; padding: 8px 16px; border-radius: 10px; border: none; background: var(--gold); color: #2a1600; font: 17px var(--font-display); cursor: pointer; }
+
+.climb-moves { grid-area: moves; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.climb-moves ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.climb-moves li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: #1a1a1a; border: 1px solid #242424; font-size: 13px; color: #ddd; animation: climb-li 0.35s ease-out both; }
+.climb-moves li:first-child { border-color: #3a2f18; background: linear-gradient(90deg, rgba(240, 160, 32, 0.12), #1a1a1a 60%); }
+.climb-moves li:nth-child(2) { animation-delay: 0.05s; } .climb-moves li:nth-child(3) { animation-delay: 0.1s; }
+.climb-moves li:nth-child(4) { animation-delay: 0.15s; } .climb-moves li:nth-child(5) { animation-delay: 0.2s; }
+@keyframes climb-li { from { opacity: 0; transform: translateX(-8px); } }
+.climb-icon { flex: none; font-size: 16px; }
+.climb-move { flex: 1; min-width: 0; }
+.climb-gain { flex: none; padding: 2px 8px; border-radius: 6px; background: var(--gold); color: #2a1600; font: 14px var(--font-display); }
+.climb-gain--none { background: #2a2a2a; color: #999; }
+
+.climb-whatif { grid-area: whatif; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 14px; background: #171717; border: 1px solid #2a2a2a; }
+.climb-whatif input[type='range'] { width: 100%; accent-color: var(--gold); }
+.climb-whatif-out { display: flex; align-items: center; gap: 10px; }
+.climb-whatif-out img { height: 48px; }
+.climb-sol { font: 22px var(--font-display); color: #fff; white-space: nowrap; }
+.climb-arrow { color: #777; font-size: 18px; }
+.climb-proj { display: flex; flex-direction: column; }
+.climb-proj b { font: 20px var(--font-display); color: var(--chad-hi); line-height: 1; }
+.climb-proj em { font-style: normal; font-size: 12px; color: #888; }
+.climb-proj em.is-up { color: var(--chad-hi); }
+.climb-ape { font-size: 20px; padding: 10px 0; }
+
+.climb-ladder { grid-area: ladder; list-style: none; margin: 0; padding: 4px 0 0; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; }
+.climb-ladder li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px 5px; border-radius: 10px; background: #161616; border: 1px solid #222; opacity: 0.45; filter: grayscale(1); transition: opacity 0.3s, filter 0.3s; }
+.climb-ladder li img { height: 38px; max-width: 100%; object-fit: contain; }
+.climb-ladder li span { font: 11px var(--font-ui); letter-spacing: 0.5px; color: #aaa; white-space: nowrap; }
+.climb-ladder li.done { opacity: 0.75; filter: grayscale(0.4); border-color: #3a2f18; }
+.climb-ladder li.here { opacity: 1; filter: none; border-color: var(--gold); background: linear-gradient(180deg, rgba(240, 160, 32, 0.22), #161616); box-shadow: 0 0 18px rgba(240, 160, 32, 0.3); }
+.climb-ladder li.here span { color: var(--chad-hi); }
+.climb-ladder li.next { opacity: 0.8; filter: grayscale(0.85); border-style: dashed; border-color: #555; }
+.climb-ladder li.next::after { content: 'NEXT'; position: absolute; top: -8px; padding: 0 5px; border-radius: 4px; background: #333; color: #ddd; font: 9px var(--font-ui); letter-spacing: 1px; }
 
 /* ── The chart room ──────────────────────────────────────────────────────── */
 .bag-room { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 400px); gap: 16px; align-items: stretch; }
@@ -166,12 +187,11 @@
   .bag-actions .bag-btn { flex: 1; }
 }
 @media (max-width: 1250px) {
-  .bag-strip-char { display: none; }
-  .bag-strip { padding: 0 14px; }
+  .climb { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'you you' 'moves whatif' 'ladder ladder'; }
 }
 @media (max-width: 860px) {
-  .bag-strip { height: auto; flex-wrap: wrap; padding: 14px; gap: 12px 16px; }
-  .bag-meter { flex-basis: 100%; order: 3; }
-  .bag-strip-nums { order: 2; margin-left: auto; }
+  .climb { grid-template-columns: 1fr; grid-template-areas: 'you' 'moves' 'whatif' 'ladder'; padding: 14px; }
+  .climb-nums { margin-left: 0; }
+  .climb-ladder { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .bag-chart-frame { min-height: 70vh; }
 }
