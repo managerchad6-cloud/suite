@@ -51,6 +51,7 @@ export default defineConfig({
       '/api/friends':      { target: STUDIO, changeOrigin: true },
       '/api/messages':     { target: STUDIO, changeOrigin: true },
       '/api/trollbox':     { target: STUDIO, changeOrigin: true },
+      '/api/bag':          { target: STUDIO, changeOrigin: true },
       '/api/leaderboard':  { target: STUDIO, changeOrigin: true },
       '/api/twitter':      { target: STUDIO,     changeOrigin: true },
       '/api/x':            { target: X_BACKEND, changeOrigin: true },

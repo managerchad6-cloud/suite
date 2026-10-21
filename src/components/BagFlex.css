@@ -1,0 +1,20 @@
+.bag-flex {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 12px 0 4px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: #151515;
+  border: 1px solid #2a2a2a;
+  font-size: 14px;
+  color: #bdbdbd;
+}
+.bag-flex b { color: var(--text); }
+.bag-flex-tier { font-family: var(--font-ui); color: var(--gold); letter-spacing: 1px; font-size: 16px; }
+.bag-flex-pnl { margin-left: auto; font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+.bag-flex .bag-up { color: var(--chad-hi); }
+.bag-flex .bag-down { color: var(--virgin); }
+.bag-flex--hidden { width: 100%; cursor: pointer; color: #8a8a8a; font-size: 13px; text-align: left; }
+.bag-flex--hidden:hover { border-color: var(--gold-dim); }

@@ -1,0 +1,47 @@
+.bag-ticker {
+  flex: none;
+  height: var(--ticker-h, 34px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 0 14px;
+  background: #0b0b0b;
+  border-bottom: 1px solid #222;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  z-index: 50;
+}
+.bag-ticker button { background: none; border: none; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+.bag-ticker-coin { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.bag-ticker-sym { font-family: var(--font-ui); color: var(--gold); letter-spacing: 1px; font-size: 14px; }
+.bag-ticker-price { font-variant-numeric: tabular-nums; font-weight: 600; padding: 1px 6px; border-radius: 4px; transition: background 0.6s, color 0.6s; }
+.bag-ticker-price--up   { background: rgba(240, 160, 32, 0.28); color: var(--chad-hi); transition: none; }
+.bag-ticker-price--down { background: rgba(93, 98, 128, 0.4);   color: var(--virgin-hi); transition: none; }
+.bag-ticker-chg, .bag-ticker-pnl { font-variant-numeric: tabular-nums; font-weight: 600; }
+.bag-ticker-mc { color: #7a7a7a; }
+.bag-up   { color: var(--chad-hi); }
+.bag-down { color: var(--virgin); }
+
+.bag-ticker-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.bag-ticker-mine { display: flex; align-items: center; gap: 8px; padding: 3px 10px !important; border-radius: 8px; background: #161616 !important; border: 1px solid #262626 !important; }
+.bag-ticker-mine:hover { border-color: var(--gold-dim) !important; }
+.bag-ticker-label { color: #7a7a7a; font-size: 12px; }
+.bag-ticker-ape {
+  padding: 3px 12px !important;
+  border-radius: 8px;
+  background: var(--gold) !important;
+  color: #2a1600 !important;
+  font-weight: 700 !important;
+}
+.bag-ticker-mute { font-size: 14px; opacity: 0.7; }
+.bag-ticker-mute:hover { opacity: 1; }
+
+/* The open trollbox covers the right edge: keep "your bag" clear of it */
+@media (min-width: 701px) {
+  .trollbox-open .bag-ticker { padding-right: 334px; }
+}
+
+@media (max-width: 700px) {
+  .bag-ticker-mc, .bag-ticker-label { display: none; }
+}

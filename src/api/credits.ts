@@ -108,6 +108,7 @@ export function issueMemeToken(): Promise<MemeToken & { credits_deducted: number
 export interface TokenConfig {
   symbol: string          // always shown as $VVC
   mint: string            // pre-launch: a placeholder set on the server
+  decimals: number
   buyEnabled: boolean     // false: "Buy $VVC" shows as coming soon
   holder: { minBalance: number; weeklyCredits: number; joinMinBalance: number }
   /** Bag-size tiers: from minBalance up, what they earn a week (before the time-held bonus) */
@@ -170,5 +171,10 @@ export function checkHolderNow(): Promise<HolderStatus> {
 
 /** Open the "Buy $VVC" modal from anywhere. */
 export function openBuyVvc() {
-  window.dispatchEvent(new CustomEvent('vvc:buy-vvc'))
+  window.dispatchEvent(new CustomEvent('vvc:buy-vvc', { detail: { side: 'buy' } }))
+}
+
+/** The same swap the other way round: $VVC → SOL. */
+export function openSellVvc() {
+  window.dispatchEvent(new CustomEvent('vvc:buy-vvc', { detail: { side: 'sell' } }))
 }
