@@ -53,7 +53,7 @@ const short = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x))
 const logScale = (x: number, full: number) => clamp01(Math.log1p(Math.max(0, x)) / Math.log1p(full))
 
-// ─── The scorecard: the meme, one row per trait, you placed between the two ────
+// ─── The score: six traits, each placed between Virgin (0) and Chad (1); the meter shows their average ────
 
 interface Row { label: string; virgin: string; chad: string; you: string; pos: number | null }
 
@@ -106,44 +106,6 @@ export function Bag() {
 
   return (
     <div className="bag-view">
-      <section className={`bag-top${verdict ? ` bag-top--${verdict}` : ''}`}>
-        <div className="bag-char bag-char--virgin">
-          <img src="/assets/chars/virgin.png" alt="" />
-          <span>THE VIRGIN</span>
-        </div>
-
-        <div className="bag-meme">
-          <YouHeader
-            bag={isMember ? bag : null} live={live} verdict={verdict} score={score} market={market}
-            portrait={profile ? profileImage(profile) : null}
-            onJoin={status !== 'member' ? () => join('track your bag') : null}
-            pending={status === 'pending'}
-          />
-          <div className="bag-score" role="table" aria-label="Virgin versus Chad, trait by trait">
-            {rows.map(r => (
-              <div key={r.label} className="bag-score-row" role="row">
-                <span className="bag-score-v" role="cell">{r.virgin}</span>
-                <div className="bag-score-mid" role="cell">
-                  <small>{r.label}</small>
-                  <div className="bag-score-track">
-                    {r.pos !== null && (
-                      <b className={r.pos >= 0.5 ? 'is-chad' : 'is-virgin'} style={{ left: `${Math.max(14, Math.min(86, r.pos * 100))}%` }}>{r.you}</b>
-                    )}
-                    {r.pos === null && <b className="is-none" style={{ left: '50%' }}>{r.you}</b>}
-                  </div>
-                </div>
-                <span className="bag-score-c" role="cell">{r.chad}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bag-char bag-char--chad">
-          <img src="/assets/chars/gigachad.webp" alt="" />
-          <span>THE CHAD</span>
-        </div>
-      </section>
-
       <section className="bag-room">
         <ChartRoom dex={dex} market={market} />
         <aside className="bag-side-panel">
@@ -157,6 +119,14 @@ export function Bag() {
         </aside>
       </section>
 
+      <YouStrip
+        bag={isMember ? bag : null} live={live} verdict={verdict} score={score} market={market}
+        portrait={profile ? profileImage(profile) : null}
+        onJoin={status !== 'member' ? () => join('track your bag') : null}
+        pending={status === 'pending'}
+      />
+
+
       {isMember && (
         <section className="bag-bottom">
           <Bags bag={bag!} />
@@ -169,7 +139,8 @@ export function Bag() {
   )
 }
 
-function YouHeader({ bag, live, verdict, score, market, portrait, onJoin, pending }: {
+/** You on one Virgin–Chad meter: the verdict, the score, and your bag in a single strip. */
+function YouStrip({ bag, live, verdict, score, market, portrait, onJoin, pending }: {
   bag: BagData | null; live: ReturnType<typeof livePosition>; verdict: 'chad' | 'virgin' | null; score: number | null
   market: Market | null; portrait: string | null; onJoin: (() => void) | null; pending: boolean
 }) {
@@ -177,28 +148,36 @@ function YouHeader({ bag, live, verdict, score, market, portrait, onJoin, pendin
   const value = useRolling(live?.valueUsd ?? null)
   const pnl = useRolling(live?.pnlPct ?? null)
   const held = bag ? bag.oldestBagSince ?? bag.holdingSince : null
+  const at = score === null ? 50 : Math.max(6, Math.min(94, score))
   return (
-    <div className="bag-you-row">
-      <div className={`bag-you${verdict ? ` bag-you--${verdict}` : ''}`}>
-        {portrait && bag ? <img src={portrait} alt="You" /> : <span>?</span>}
-        <i className="bag-vs">vs</i>
-      </div>
-      <div className="bag-you-verdict">
+    <section className={`bag-strip${verdict ? ` bag-strip--${verdict}` : ''}`}>
+      <img className="bag-strip-char bag-strip-char--virgin" src="/assets/chars/virgin.png" alt="The Virgin" />
+      <div className="bag-strip-you">
+        <div className={`bag-you${verdict ? ` bag-you--${verdict}` : ''}`}>
+          {portrait && bag ? <img src={portrait} alt="You" /> : <span>?</span>}
+        </div>
         <div className={`bag-stamp${verdict ? ` bag-stamp--${verdict}` : ''}`}>
           {verdict ? `CERTIFIED ${verdict === 'chad' ? 'CHAD' : 'VIRGIN'}` : 'WHICH ONE ARE YOU?'}
         </div>
-        {score !== null && <div className="bag-score-num">Chad score <b>{score}</b>/100</div>}
-        {onJoin && <button className="bag-join" onClick={onJoin}>{pending ? 'Finish joining' : 'Join to find out'}</button>}
       </div>
-      {bag && (
-        <div className="bag-you-nums">
-          <div className="bag-num"><small>YOUR BAG</small><span className="bag-value">{fmtUsd(value)}</span><em>{short(bag.balance)} ${market?.symbol ?? 'VVC'} · {fmtSol(live?.valueSol)}</em></div>
+      <div className="bag-meter" aria-label={score === null ? 'Virgin to Chad' : `Chad score ${score} out of 100`}>
+        <span className="bag-meter-end bag-meter-end--virgin">VIRGIN</span>
+        <div className="bag-meter-track">
+          <b className={`bag-meter-you${verdict ? ` is-${verdict}` : ''}`} style={{ left: `${at}%` }}>{score === null ? '?' : score}</b>
+        </div>
+        <span className="bag-meter-end bag-meter-end--chad">CHAD</span>
+      </div>
+      {bag ? (
+        <div className="bag-strip-nums">
+          <div className="bag-num"><small>BAG</small><span className="bag-value">{fmtUsd(value)}</span><em>{short(bag.balance)} ${market?.symbol ?? 'VVC'}</em></div>
           <div className="bag-num"><small>PNL</small><span className={`bag-pnl bag-pnl--${(live?.pnlPct ?? 0) >= 0 ? 'up' : 'down'}`}>{pnl === null ? (bag.syncing || !bag.synced ? '…' : '—') : fmtPct(pnl)}</span><em>{live?.pnlSol != null ? `${live.pnlSol >= 0 ? '+' : ''}${fmtSol(live.pnlSol)}` : 'all bags'}</em></div>
           <div className="bag-num"><small>HOLDING</small><span className="bag-clock">{held ? since(held, now) : '—'}</span><em>oldest bag</em></div>
         </div>
-      )}
-      {bag && (bag.syncing || !bag.synced) && <div className="bag-syncing">Reading your trades from the chain…</div>}
-    </div>
+      ) : onJoin ? (
+        <button className="bag-join" onClick={onJoin}>{pending ? 'Finish joining' : 'Join to find out'}</button>
+      ) : null}
+      <img className="bag-strip-char bag-strip-char--chad" src="/assets/chars/chad.png" alt="The Chad" />
+    </section>
   )
 }
 

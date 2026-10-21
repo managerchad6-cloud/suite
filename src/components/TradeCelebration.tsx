@@ -70,7 +70,7 @@ export function TradeCelebration() {
         {particles.map(p => (
           <span key={p.i} className="trade-fx-coin" style={{ left: `${p.left}%`, fontSize: p.size, animationDelay: `${p.delay}s`, animationDuration: `${p.dur}s` }}>{p.glyph}</span>
         ))}
-        <img className="trade-fx-chad" src="/assets/chars/gigachad.webp" alt="" />
+        <img className="trade-fx-chad" src="/assets/chars/chad.png" alt="" />
         <div className="trade-fx-stamp">YOU ABSOLUTE<br />FUCKING CHAD</div>
         {(ev.tokens || ev.tierUp) && (
           <div className="trade-fx-sub">
