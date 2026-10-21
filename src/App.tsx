@@ -6,6 +6,7 @@ import { JobTrackerPill } from './components/JobTrackerPill'
 import ZadHelper from './components/ZadHelper/ZadHelper'
 import { NotificationBell } from './components/NotificationPanel'
 import { ChatWidget } from './components/ChatWidget'
+import { Trollbox } from './components/Trollbox'
 import { CreditBalance } from './components/CreditBalance'
 import { TopNav } from './components/TopNav'
 import { fetchPlayer, recordLogin, type PlayerState, type BadgeDef } from './api/player'
@@ -242,6 +243,9 @@ export default function App() {
           onPartnerChange={setChatPartner}
         />
       )}
+
+      {/* One room for everyone: guests read, members talk */}
+      <Trollbox />
 
       <JoinFlow />
     </div>
