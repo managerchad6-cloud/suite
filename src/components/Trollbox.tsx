@@ -9,6 +9,8 @@ import { bestImage, getPublicProfiles, type PublicProfile } from '../identity/ap
 import { displayName } from '../identity/archetypes'
 import { useIdentity } from '../identity/IdentityProvider'
 import { MemberGate } from '../identity/gate'
+import { RankChip } from './RankChip'
+import { rankArt } from '../api/bag'
 import { truncateAddress } from '../wallet'
 import './Trollbox.css'
 
@@ -95,7 +97,9 @@ export function Trollbox() {
   // Who's talking: profiles in batches, each wallet asked once (non-members have none)
   const askedRef = useRef(new Set<string>())
   useEffect(() => {
-    const missing = [...new Set(messages.map(m => m.wallet).filter((w): w is string => !!w && !askedRef.current.has(w)))]
+    // Authors, and the members announcements are about (payload.wallet)
+    const about = (m: TrollMessage) => m.wallet ?? (typeof m.payload?.wallet === 'string' ? m.payload.wallet : null)
+    const missing = [...new Set(messages.map(about).filter((w): w is string => !!w && !askedRef.current.has(w)))]
     if (!missing.length) return
     missing.forEach(w => askedRef.current.add(w))
     getPublicProfiles(missing).then(found => { if (Object.keys(found).length) setProfiles(p => ({ ...p, ...found })) })
@@ -200,7 +204,19 @@ export function Trollbox() {
         {more && <div className="trollbox-more">Scroll up for older messages</div>}
         {!messages.length && <div className="trollbox-empty">Nobody's said anything yet. Be first.</div>}
         {messages.map((m, i) => {
-          if (m.kind === 'system') return <div key={m.id} className="trollbox-system">{m.body}</div>
+          if (m.kind === 'system') {
+            // Chad game announcements (rank changes, Chad of the Day) name the member and show the rank
+            const sw = typeof m.payload?.wallet === 'string' ? m.payload.wallet : null
+            const to = typeof m.payload?.to === 'string' ? m.payload.to : null
+            if (!sw) return <div key={m.id} className="trollbox-system">{m.body}</div>
+            const sp = profiles[sw]
+            return (
+              <button key={m.id} className={`trollbox-system trollbox-system--game${m.payload?.type === 'rank_down' ? ' is-down' : ''}`} onClick={() => navigate(`/u/${encodeURIComponent(sw)}`)}>
+                {to && <img src={rankArt(to)} alt="" />}
+                <span><b>{sw === memberWallet ? 'You' : sp ? displayName(sp) : truncateAddress(sw)}</b> {m.body}</span>
+              </button>
+            )
+          }
           const w = m.wallet!
           const p = profiles[w]
           const prev = messages[i - 1]
@@ -211,6 +227,7 @@ export function Trollbox() {
                 <button className="trollbox-author" onClick={() => navigate(`/u/${encodeURIComponent(w)}`)} title={w}>
                   {p ? <img src={bestImage(p)} alt="" /> : <span className="trollbox-av-fb">{w.slice(0, 2).toUpperCase()}</span>}
                   <span className="trollbox-name">{p ? displayName(p) : truncateAddress(w)}</span>
+                  <RankChip wallet={w} />
                   <time dateTime={m.created_at}>{clock(m.created_at)}</time>
                 </button>
               )}

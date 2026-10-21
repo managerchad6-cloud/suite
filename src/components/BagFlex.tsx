@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { daysSince, fetchPublicBag, fmtPct, fmtTokens, fmtUsd, type PublicBag } from '../api/bag'
+import { RankChip } from './RankChip'
 import './BagFlex.css'
 
 const TIER_ICON: Record<string, string> = { holder: '💵', bag: '💰', whale: '🐋', kraken: '🦑' }
@@ -22,6 +23,7 @@ export function BagFlex({ wallet }: { wallet: string }) {
   return (
     <div className="bag-flex">
       <span className="bag-flex-tier">{bag.tier ? `${TIER_ICON[bag.tier.key] ?? '💵'} ${bag.tier.name}` : '💵 Holding'}</span>
+      {bag.rank && <RankChip rank={bag.rank} />}
       {bag.tier && <span>{bag.tier.loyalty.name}</span>}
       <span><b>{fmtTokens(bag.balance)}</b> $VVC{bag.valueUsd != null ? ` · ${fmtUsd(bag.valueUsd)}` : ''}</span>
       {held && <span>holding <b>{daysSince(held)}d</b></span>}
