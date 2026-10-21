@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  daysSince, fmtPct, fmtSol, fmtTokens, fmtUsd, livePosition, setBagPublic, since, until,
-  type Bag as BagData, type Market,
+  daysSince, fetchDex, fmtPct, fmtSol, fmtTokens, fmtUsd, livePosition, setBagPublic, since, until,
+  type Bag as BagData, type Dex, type Market, type Window,
 } from '../api/bag'
 import { openBuyVvc, openSellVvc, fetchTokenConfig, type TokenConfig } from '../api/credits'
 import { useBag, refreshBag } from '../hooks/useBag'
@@ -36,162 +36,283 @@ function useRolling(target: number | null, ms = 900) {
   return shown
 }
 
-const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-const short = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : fmtTokens(n))
-
-/**
- * Your bag as a Virgin vs Chad meme: what makes you a Chad, what makes you a virgin.
- * Written like the captions on the memes, about you, from your real trades.
- */
-function traits(bag: BagData, live: ReturnType<typeof livePosition>, market: Market | null, memberSince: string | null) {
-  const chad: string[] = []
-  const virgin: string[] = []
-  const sym = `$${market?.symbol ?? 'VVC'}`
-  const pnl = live?.pnlPct ?? null
-  const held = bag.oldestBagSince ?? bag.holdingSince
-  const sells = bag.trades.filter(t => t.kind === 'sell')
-  const buys = bag.trades.filter(t => t.kind === 'buy')
-
-  if (bag.balance > 0) chad.push(`Holds ${short(bag.balance)} ${sym}${bag.tier ? ` (${bag.tier.name})` : ''}`)
-  if (pnl !== null && pnl >= 0) chad.push(`Up ${fmtPct(pnl)} on the bags${live?.pnlSol ? `, +${fmtSol(live.pnlSol)}` : ''}`)
-  if (held && daysSince(held) >= 1) chad.push(`Hasn't let go of a bag in ${daysSince(held)} days`)
-  if (bag.tier && bag.tier.loyalty.key !== 'fresh') chad.push(`${bag.tier.loyalty.name}. Earns +${bag.tier.loyalty.bonusPct}% credits for it`)
-  if (buys.length >= 3) chad.push(`Aped in ${buys.length} times`)
-  if (memberSince && daysSince(memberSince) >= 7) chad.push(`VVC member for ${daysSince(memberSince)} days`)
-
-  if (pnl !== null && pnl < 0) virgin.push(`Down ${fmtPct(pnl)}. Still checks the chart every 5 minutes`)
-  if (sells.length) {
-    const worst = sells.reduce((a, b) => (Math.abs(b.tokens) > Math.abs(a.tokens) ? b : a))
-    virgin.push(`Paper-handed ${short(Math.abs(worst.tokens))} on ${shortDate(worst.at)}`)
-    const sold = sells.reduce((s, t) => s - t.tokens, 0)
-    const got = sells.reduce((s, t) => s + t.sol, 0)
-    const missed = market ? sold * market.sol - got : 0
-    if (missed > 0.01) virgin.push(`Left ${fmtSol(missed)} on the table`)
-  }
-  if (!bag.tier) virgin.push('Not even a Holder yet')
-  else if (bag.tier.nextBag) virgin.push(`Not a ${bag.tier.nextBag.name}. ${short(bag.tier.nextBag.minBalance - bag.balance)} short`)
-  if (bag.tier?.nextLoyalty) virgin.push(`Not ${bag.tier.nextLoyalty.name} for another ${Math.max(1, Math.ceil((Date.parse(bag.tier.nextLoyalty.at) - Date.now()) / 86_400_000))} days`)
-
-  if (!chad.length) chad.push('Nothing. Has never bought a single token')
-  if (!virgin.length) virgin.push('Nothing. Not one virgin trait. Disgusting')
-  return { chad, virgin }
+/** DexScreener's market data, refreshed every 20s while the page is open. */
+function useDex() {
+  const [dex, setDex] = useState<Dex | null>(null)
+  useEffect(() => {
+    let stop = false
+    const load = () => fetchDex().then(d => { if (!stop) setDex(d) }).catch(() => {})
+    load()
+    const id = setInterval(load, 20_000)
+    return () => { stop = true; clearInterval(id) }
+  }, [])
+  return dex
 }
 
-// The bag: who you are on the Virgin–Chad scale, what you hold, what it's done. Home of the suite.
+const short = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : fmtTokens(n))
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x))
+const logScale = (x: number, full: number) => clamp01(Math.log1p(Math.max(0, x)) / Math.log1p(full))
+
+// ─── The scorecard: the meme, one row per trait, you placed between the two ────
+
+interface Row { label: string; virgin: string; chad: string; you: string; pos: number | null }
+
+function scorecard(bag: BagData | null, live: ReturnType<typeof livePosition>, memberSince: string | null): Row[] {
+  if (!bag) {
+    return [
+      { label: 'PnL', virgin: 'Down bad, blames the devs', chad: 'In profit, says nothing', you: '?', pos: null },
+      { label: 'Hands', virgin: 'Sells on every red candle', chad: 'Never sold a single token', you: '?', pos: null },
+      { label: 'Holding', virgin: 'Flips within the hour', chad: 'Holds for months', you: '?', pos: null },
+      { label: 'Bag', virgin: "Can't afford the minimum", chad: 'Kraken bag', you: '?', pos: null },
+      { label: 'Aping', virgin: 'Bought once, cried', chad: 'Buys every dip', you: '?', pos: null },
+      { label: 'Loyalty', virgin: 'Joined yesterday', chad: 'Here since day one', you: '?', pos: null },
+    ]
+  }
+  const pnl = live?.pnlPct ?? null
+  const bought = bag.trades.filter(t => t.kind === 'buy' || t.kind === 'in').reduce((s, t) => s + t.tokens, 0)
+  const sold = bag.trades.filter(t => t.kind === 'sell').reduce((s, t) => s - t.tokens, 0)
+  const buys = bag.trades.filter(t => t.kind === 'buy').length
+  const held = bag.oldestBagSince ?? bag.holdingSince
+  const heldDays = held ? daysSince(held) : 0
+  const memberDays = memberSince ? daysSince(memberSince) : 0
+  const tierPos: Record<string, number> = { holder: 0.45, bag: 0.65, whale: 0.85, kraken: 1 }
+  return [
+    { label: 'PnL', virgin: 'Down bad, blames the devs', chad: 'In profit, says nothing',
+      you: pnl === null ? 'no buys yet' : fmtPct(pnl), pos: pnl === null ? null : clamp01(0.5 + pnl / 200) },
+    { label: 'Hands', virgin: 'Sells on every red candle', chad: 'Never sold a single token',
+      you: sold > 0 ? `sold ${short(sold)}` : bought > 0 ? 'never sold' : '—', pos: bought > 0 ? clamp01(1 - sold / bought) : null },
+    { label: 'Holding', virgin: 'Flips within the hour', chad: 'Holds for months',
+      you: held ? `${heldDays}d` : '—', pos: held ? logScale(heldDays, 90) : null },
+    { label: 'Bag', virgin: "Can't afford the minimum", chad: 'Kraken bag',
+      you: bag.tier ? bag.tier.name : `${short(bag.balance)} $VVC`, pos: bag.tier ? tierPos[bag.tier.key] ?? 0.45 : 0.08 },
+    { label: 'Aping', virgin: 'Bought once, cried', chad: 'Buys every dip',
+      you: `${buys} buy${buys === 1 ? '' : 's'}`, pos: clamp01(buys / 8) },
+    { label: 'Loyalty', virgin: 'Joined yesterday', chad: 'Here since day one',
+      you: memberSince ? `${memberDays}d member` : '—', pos: memberSince ? logScale(memberDays, 120) : null },
+  ]
+}
+
 export function Bag() {
   const { status, me, profile, join } = useIdentity()
   const { market, bag } = useBag()
-  const live = livePosition(bag, market)
+  const dex = useDex()
+  const isMember = status === 'member' && !!bag
+  const live = livePosition(isMember ? bag : null, market)
   const memberSince = me && me.state !== 'guest' ? me.account.memberSince : null
-  const sym = `$${market?.symbol ?? 'VVC'}`
-
-  if (status !== 'member' || !bag) {
-    return (
-      <div className="bag-view">
-        <Panel
-          verdict={null}
-          virgin={['Doesn\'t hold ' + sym, 'Watches the chart from the sidelines', 'Says "it\'s just a meme coin"']}
-          chad={['Holds ' + sym, 'Number go up', 'Gets free credits every week for it']}
-          center={<GuestCenter market={market} />}
-        />
-        <div className="bag-actions">
-          <button className="bag-btn bag-btn--buy" onClick={() => openBuyVvc()}>APE IN</button>
-          {status !== 'member' && (
-            <button className="bag-btn bag-btn--sell" onClick={() => join('track your bag')}>{status === 'pending' ? 'FINISH JOINING' : 'JOIN'}</button>
-          )}
-        </div>
-        <Chart market={market} bag={null} />
-      </div>
-    )
-  }
-
-  const t = traits(bag, live, market, memberSince)
-  const pnl = live?.pnlPct ?? null
-  const verdict: 'chad' | 'virgin' = bag.balance <= 0 || (pnl !== null && pnl < 0) ? 'virgin' : 'chad'
+  const rows = scorecard(isMember ? bag : null, live, memberSince)
+  const scored = rows.filter(r => r.pos !== null)
+  const score = scored.length ? Math.round((scored.reduce((s, r) => s + r.pos!, 0) / scored.length) * 100) : null
+  const verdict = score === null ? null : score >= 50 ? 'chad' : 'virgin'
 
   return (
     <div className="bag-view">
-      <Panel
-        verdict={verdict}
-        virgin={t.virgin}
-        chad={t.chad}
-        center={<YouCenter bag={bag} live={live} verdict={verdict} portrait={profile ? profileImage(profile) : null} sym={sym} />}
-      />
-      <div className="bag-actions">
-        <button className="bag-btn bag-btn--buy" onClick={() => openBuyVvc()}>APE IN</button>
-        <button className="bag-btn bag-btn--sell" onClick={openSellVvc}>PAPER HAND IT</button>
-      </div>
-      <div className="bag-row">
-        <Chart market={market} bag={bag} />
-        <Receipts bag={bag} memberSince={memberSince} />
-      </div>
-      <Bags bag={bag} />
-      <Trades bag={bag} />
-      <Privacy bag={bag} />
+      <section className={`bag-top${verdict ? ` bag-top--${verdict}` : ''}`}>
+        <div className="bag-char bag-char--virgin">
+          <img src="/assets/chars/virgin.png" alt="" />
+          <span>THE VIRGIN</span>
+        </div>
+
+        <div className="bag-meme">
+          <YouHeader
+            bag={isMember ? bag : null} live={live} verdict={verdict} score={score} market={market}
+            portrait={profile ? profileImage(profile) : null}
+            onJoin={status !== 'member' ? () => join('track your bag') : null}
+            pending={status === 'pending'}
+          />
+          <div className="bag-score" role="table" aria-label="Virgin versus Chad, trait by trait">
+            {rows.map(r => (
+              <div key={r.label} className="bag-score-row" role="row">
+                <span className="bag-score-v" role="cell">{r.virgin}</span>
+                <div className="bag-score-mid" role="cell">
+                  <small>{r.label}</small>
+                  <div className="bag-score-track">
+                    {r.pos !== null && (
+                      <b className={r.pos >= 0.5 ? 'is-chad' : 'is-virgin'} style={{ left: `${Math.max(14, Math.min(86, r.pos * 100))}%` }}>{r.you}</b>
+                    )}
+                    {r.pos === null && <b className="is-none" style={{ left: '50%' }}>{r.you}</b>}
+                  </div>
+                </div>
+                <span className="bag-score-c" role="cell">{r.chad}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bag-char bag-char--chad">
+          <img src="/assets/chars/gigachad.webp" alt="" />
+          <span>THE CHAD</span>
+        </div>
+      </section>
+
+      <section className="bag-room">
+        <ChartRoom dex={dex} market={market} />
+        <aside className="bag-side-panel">
+          <div className="bag-actions">
+            <button className="bag-btn bag-btn--buy" onClick={() => openBuyVvc()}>APE IN</button>
+            <button className="bag-btn bag-btn--sell" onClick={openSellVvc}>PAPER HAND IT</button>
+          </div>
+          <Pressure dex={dex} />
+          <Stats dex={dex} market={market} />
+          <Pools dex={dex} />
+        </aside>
+      </section>
+
+      {isMember && (
+        <section className="bag-bottom">
+          <Bags bag={bag!} />
+          <Receipts bag={bag!} memberSince={memberSince} />
+        </section>
+      )}
+      {isMember && <Trades bag={bag!} />}
+      {isMember && <Privacy bag={bag!} />}
     </div>
   )
 }
 
-/** The meme: Virgin on the left, Chad on the right, you in the middle. The side you're on lights up. */
-function Panel({ verdict, virgin, chad, center }: { verdict: 'chad' | 'virgin' | null; virgin: string[]; chad: string[]; center: ReactNode }) {
-  return (
-    <section className={`bag-panel${verdict ? ` bag-panel--${verdict}` : ''}`}>
-      <div className="bag-side bag-side--virgin">
-        <img className="bag-side-art" src="/assets/chars/virgin.png" alt="" />
-        <h2><small>The</small>Virgin you</h2>
-        <ul>{virgin.map(v => <li key={v}>{v}</li>)}</ul>
-      </div>
-      <div className="bag-center">{center}</div>
-      <div className="bag-side bag-side--chad">
-        <img className="bag-side-art" src="/assets/chars/gigachad.webp" alt="" />
-        <h2><small>The</small>Chad you</h2>
-        <ul>{chad.map(c => <li key={c}>{c}</li>)}</ul>
-      </div>
-    </section>
-  )
-}
-
-function YouCenter({ bag, live, verdict, portrait, sym }: {
-  bag: BagData; live: ReturnType<typeof livePosition>; verdict: 'chad' | 'virgin'; portrait: string | null; sym: string
+function YouHeader({ bag, live, verdict, score, market, portrait, onJoin, pending }: {
+  bag: BagData | null; live: ReturnType<typeof livePosition>; verdict: 'chad' | 'virgin' | null; score: number | null
+  market: Market | null; portrait: string | null; onJoin: (() => void) | null; pending: boolean
 }) {
   const now = useNow()
   const value = useRolling(live?.valueUsd ?? null)
   const pnl = useRolling(live?.pnlPct ?? null)
-  const held = bag.oldestBagSince ?? bag.holdingSince
-  // Where you sit between Virgin (−100%) and Chad (+100% and up)
-  const meter = live?.pnlPct == null ? (verdict === 'chad' ? 65 : 35) : Math.max(4, Math.min(96, 50 + live.pnlPct / 2))
+  const held = bag ? bag.oldestBagSince ?? bag.holdingSince : null
   return (
-    <>
-      <div className={`bag-you bag-you--${verdict}`}>
-        {portrait ? <img src={portrait} alt="You" /> : <span>?</span>}
+    <div className="bag-you-row">
+      <div className={`bag-you${verdict ? ` bag-you--${verdict}` : ''}`}>
+        {portrait && bag ? <img src={portrait} alt="You" /> : <span>?</span>}
         <i className="bag-vs">vs</i>
       </div>
-      <div className={`bag-stamp bag-stamp--${verdict}`}>CERTIFIED {verdict === 'chad' ? 'CHAD' : 'VIRGIN'}</div>
-      <div className="bag-meter" aria-label="Virgin to Chad">
-        <div className="bag-meter-track"><div className="bag-meter-dot" style={{ left: `${meter}%` }} /></div>
+      <div className="bag-you-verdict">
+        <div className={`bag-stamp${verdict ? ` bag-stamp--${verdict}` : ''}`}>
+          {verdict ? `CERTIFIED ${verdict === 'chad' ? 'CHAD' : 'VIRGIN'}` : 'WHICH ONE ARE YOU?'}
+        </div>
+        {score !== null && <div className="bag-score-num">Chad score <b>{score}</b>/100</div>}
+        {onJoin && <button className="bag-join" onClick={onJoin}>{pending ? 'Finish joining' : 'Join to find out'}</button>}
       </div>
-      <div className="bag-value">{fmtUsd(value)}</div>
-      <div className="bag-sub">{fmtTokens(bag.balance)} {sym} · {fmtSol(live?.valueSol)}</div>
-      <div className={`bag-pnl bag-pnl--${(live?.pnlPct ?? 0) >= 0 ? 'up' : 'down'}`}>
-        {pnl === null ? (bag.syncing || !bag.synced ? '…' : 'no buys yet') : fmtPct(pnl)}
-      </div>
-      {held && <div className="bag-clock" title="Holding your oldest bag for">⏳ {since(held, now)}</div>}
-      {(bag.syncing || !bag.synced) && <div className="bag-syncing">Reading your trades from the chain…</div>}
-    </>
+      {bag && (
+        <div className="bag-you-nums">
+          <div className="bag-num"><small>YOUR BAG</small><span className="bag-value">{fmtUsd(value)}</span><em>{short(bag.balance)} ${market?.symbol ?? 'VVC'} · {fmtSol(live?.valueSol)}</em></div>
+          <div className="bag-num"><small>PNL</small><span className={`bag-pnl bag-pnl--${(live?.pnlPct ?? 0) >= 0 ? 'up' : 'down'}`}>{pnl === null ? (bag.syncing || !bag.synced ? '…' : '—') : fmtPct(pnl)}</span><em>{live?.pnlSol != null ? `${live.pnlSol >= 0 ? '+' : ''}${fmtSol(live.pnlSol)}` : 'all bags'}</em></div>
+          <div className="bag-num"><small>HOLDING</small><span className="bag-clock">{held ? since(held, now) : '—'}</span><em>oldest bag</em></div>
+        </div>
+      )}
+      {bag && (bag.syncing || !bag.synced) && <div className="bag-syncing">Reading your trades from the chain…</div>}
+    </div>
   )
 }
 
-function GuestCenter({ market }: { market: Market | null }) {
+// ─── The chart room: DexScreener's TradingView chart, wrapped in the meme ────
+
+function ChartRoom({ dex, market }: { dex: Dex | null; market: Market | null }) {
+  const [pair, setPair] = useState<string | null>(null)
+  const active = pair ?? dex?.main?.pair ?? null
+  const up = (dex?.change.h24 ?? market?.change24h ?? 0) >= 0
+  const src = active
+    ? `https://dexscreener.com/solana/${active}?embed=1&loadChartSettings=0&trades=0&tabs=0&info=0&chartLeftToolbar=1&chartTheme=dark&theme=dark&chartStyle=1&chartType=usd&interval=15`
+    : null
   return (
-    <>
-      <div className="bag-you bag-you--guest"><span>?</span><i className="bag-vs">vs</i></div>
-      <div className="bag-stamp">WHICH ONE ARE YOU?</div>
-      <div className="bag-value">{market ? (market.usd >= 1 ? `$${market.usd.toFixed(3)}` : `$${market.usd.toPrecision(4)}`) : '…'}</div>
-      <div className={`bag-pnl bag-pnl--${(market?.change24h ?? 0) >= 0 ? 'up' : 'down'}`}>{fmtPct(market?.change24h)} <small>24h</small></div>
-      <div className="bag-sub">Market cap {fmtUsd(market?.mcapUsd)}</div>
-    </>
+    <section className={`bag-chartroom${up ? ' is-up' : ' is-down'}`}>
+      <header className="bag-chartroom-head">
+        <h2 className="bag-h"><small>${market?.symbol ?? 'VVC'} · the chart room</small>{up ? 'Number go up' : 'Number go down'}</h2>
+        {dex && dex.pools.length > 1 && (
+          <select className="bag-pool-pick" value={active ?? ''} onChange={e => setPair(e.target.value)} aria-label="Pool">
+            {dex.pools.map(p => <option key={p.pair} value={p.pair}>{p.dex} · {p.quote} · {fmtUsd(p.liquidityUsd)}</option>)}
+          </select>
+        )}
+      </header>
+      <div className="bag-chart-frame">
+        {src ? (
+          <iframe key={src} src={src} title="$VVC chart" loading="lazy" allow="clipboard-write" />
+        ) : (
+          <div className="bag-chart-empty">{dex ? 'No pool found for $VVC yet.' : 'Loading the chart…'}</div>
+        )}
+      </div>
+      <footer className="bag-chartroom-foot">
+        Indicators, drawing tools and timeframes are in the chart. Data: DexScreener.
+        {dex?.main && <a href={dex.main.url} target="_blank" rel="noopener noreferrer">Open full screen ↗</a>}
+      </footer>
+    </section>
   )
 }
+
+const WINDOWS: [Window, string][] = [['m5', '5m'], ['h1', '1h'], ['h6', '6h'], ['h24', '24h']]
+
+/** Who's winning: Chads buying vs Virgins selling, per timeframe. */
+function Pressure({ dex }: { dex: Dex | null }) {
+  const [w, setW] = useState<Window>('h1')
+  const t = dex?.txns[w] ?? { buys: 0, sells: 0 }
+  const total = t.buys + t.sells
+  const buyShare = total ? t.buys / total : 0.5
+  const verdict = !total ? 'Dead quiet. Even the virgins left' : buyShare >= 0.55 ? 'Chads are buying' : buyShare <= 0.45 ? 'Virgins are dumping' : 'Chads and virgins fighting it out'
+  return (
+    <div className="bag-box">
+      <div className="bag-box-head">
+        <h3 className="bag-h"><small>Who's winning</small>Chads vs virgins</h3>
+        <div className="bag-tf bag-tf--small">
+          {WINDOWS.map(([k, l]) => <button key={k} className={w === k ? 'on' : ''} onClick={() => setW(k)}>{l}</button>)}
+        </div>
+      </div>
+      <div className="bag-tug">
+        <div className="bag-tug-chad" style={{ width: `${buyShare * 100}%` }}><span>{t.buys} buys</span></div>
+        <div className="bag-tug-virgin"><span>{t.sells} sells</span></div>
+      </div>
+      <div className={`bag-tug-verdict ${buyShare >= 0.5 ? 'is-chad' : 'is-virgin'}`}>{verdict}</div>
+      <div className="bag-changes">
+        {WINDOWS.map(([k, l]) => {
+          const c = dex?.change[k] ?? null
+          return (
+            <div key={k} className={c == null ? '' : c >= 0 ? 'is-up' : 'is-down'}>
+              <small>{l}</small><b>{c == null ? '—' : fmtPct(c)}</b><em>vol {fmtUsd(dex?.volume[k] ?? null)}</em>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function Stats({ dex, market }: { dex: Dex | null; market: Market | null }) {
+  const age = dex?.createdAt ? daysSince(new Date(dex.createdAt).toISOString()) : null
+  const t24 = dex?.txns.h24
+  const items: [string, string][] = [
+    ['Price', dex?.priceUsd != null ? `$${dex.priceUsd.toPrecision(4)}` : market ? `$${market.usd.toPrecision(4)}` : '—'],
+    ['In SOL', market ? market.sol.toPrecision(3) : '—'],
+    ['Market cap', fmtUsd(dex?.marketCap ?? market?.mcapUsd ?? null)],
+    ['FDV', fmtUsd(dex?.fdv ?? null)],
+    ['Liquidity', fmtUsd(dex?.liquidityUsd ?? null)],
+    ['Volume 24h', fmtUsd(dex?.volume.h24 ?? null)],
+    ['Trades 24h', t24 ? (t24.buys + t24.sells).toLocaleString() : '—'],
+    ['Age', age !== null ? `${age} days` : '—'],
+  ]
+  return (
+    <div className="bag-box">
+      <h3 className="bag-h"><small>The tape</small>Market</h3>
+      <dl className="bag-stats">{items.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+    </div>
+  )
+}
+
+function Pools({ dex }: { dex: Dex | null }) {
+  if (!dex?.pools.length) return null
+  const total = dex.pools.reduce((s, p) => s + p.liquidityUsd, 0) || 1
+  return (
+    <div className="bag-box">
+      <h3 className="bag-h"><small>Where it trades</small>Pools</h3>
+      <ul className="bag-pools">
+        {dex.pools.map(p => (
+          <li key={p.pair}>
+            <span>{p.dex} <small>/{p.quote}</small></span>
+            <i style={{ width: `${(p.liquidityUsd / total) * 100}%` }} />
+            <b>{fmtUsd(p.liquidityUsd)}</b>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// ─── Your stuff ──────────────────────────────────────────────────────────────
 
 function Receipts({ bag, memberSince }: { bag: BagData; memberSince: string | null }) {
   const now = useNow()
@@ -201,13 +322,13 @@ function Receipts({ bag, memberSince }: { bag: BagData; memberSince: string | nu
   const tiers = config?.tiers ?? []
   const idx = bag.tier ? tiers.findIndex(t => t.key === bag.tier!.key) : -1
   return (
-    <section className="bag-receipts">
+    <div className="bag-box">
       <h3 className="bag-h"><small>The</small>Receipts</h3>
-      <dl>
-        <dt>Member for</dt><dd>{memberSince ? `${daysSince(memberSince)} days` : '—'}</dd>
-        <dt>Next level</dt><dd>{next ? <>{next.name} in <b>{until(next.at, now)}</b></> : bag.tier ? 'OG. Maxed out' : 'Become a Holder first'}</dd>
-        <dt>Paid in</dt><dd>{bag.costSol > 0 ? fmtSol(bag.costSol) : '—'}</dd>
-        <dt>Taken out</dt><dd>{bag.proceedsSol > 0 ? fmtSol(bag.proceedsSol) : '—'}</dd>
+      <dl className="bag-stats">
+        <div><dt>Member for</dt><dd>{memberSince ? `${daysSince(memberSince)} days` : '—'}</dd></div>
+        <div><dt>Next level</dt><dd>{next ? <>{next.name} in <b>{until(next.at, now)}</b></> : bag.tier ? 'OG. Maxed out' : 'Become a Holder'}</dd></div>
+        <div><dt>Paid in</dt><dd>{bag.costSol > 0 ? fmtSol(bag.costSol) : '—'}</dd></div>
+        <div><dt>Taken out</dt><dd>{bag.proceedsSol > 0 ? fmtSol(bag.proceedsSol) : '—'}</dd></div>
       </dl>
       {tiers.length > 0 && (
         <ol className="bag-ladder">
@@ -218,68 +339,30 @@ function Receipts({ bag, memberSince }: { bag: BagData; memberSince: string | nu
           ))}
         </ol>
       )}
-    </section>
-  )
-}
-
-function Chart({ market, bag }: { market: Market | null; bag: BagData | null }) {
-  const W = 800, H = 200, PAD = 10
-  const pts = market?.history ?? []
-  const geo = useMemo(() => {
-    if (pts.length < 2) return null
-    const t0 = pts[0][0], t1 = pts[pts.length - 1][0]
-    const lo = Math.min(...pts.map(p => p[1])), hi = Math.max(...pts.map(p => p[1]))
-    const x = (t: number) => PAD + ((t - t0) / Math.max(1, t1 - t0)) * (W - 2 * PAD)
-    const y = (v: number) => H - PAD - ((v - lo) / Math.max(1e-12, hi - lo)) * (H - 2 * PAD)
-    const line = pts.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')
-    const area = `${PAD},${H - PAD} ${line} ${W - PAD},${H - PAD}`
-    const marks = (bag?.trades ?? [])
-      .filter(t => (t.kind === 'buy' || t.kind === 'sell') && Date.parse(t.at) >= t0)
-      .map(t => {
-        const ts = Date.parse(t.at)
-        const near = pts.reduce((a, b) => (Math.abs(b[0] - ts) < Math.abs(a[0] - ts) ? b : a))
-        return { key: t.signature, kind: t.kind, cx: x(ts), cy: y(near[1]) }
-      })
-    return { line, area, marks, up: pts[pts.length - 1][1] >= pts[0][1] }
-  }, [pts, bag?.trades])
-
-  return (
-    <section className="bag-chart">
-      <h3 className="bag-h">
-        <small>{market?.symbol ? `$${market.symbol}` : '$VVC'} · 24h</small>
-        {geo ? (geo.up ? 'Number go up' : 'Number go down') : 'The chart'}
-      </h3>
-      {geo ? (
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={`bag-chart-svg ${geo.up ? 'is-up' : 'is-down'}`} aria-hidden>
-          <polygon points={geo.area} className="bag-chart-area" />
-          <polyline points={geo.line} fill="none" className="bag-chart-line" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
-          {geo.marks.map(m => <circle key={m.key} cx={m.cx} cy={m.cy} r="6" className={`bag-mark bag-mark--${m.kind}`} />)}
-        </svg>
-      ) : (
-        <div className="bag-chart-empty">The chart fills in as prices come in.</div>
-      )}
-      {bag && geo && geo.marks.length > 0 && <div className="bag-chart-legend"><i className="bag-mark--buy" /> you aped <i className="bag-mark--sell" /> you paper-handed</div>}
-    </section>
+    </div>
   )
 }
 
 function Bags({ bag }: { bag: BagData }) {
   const now = useNow(60_000)
-  if (!bag.lots.length) return null
   return (
-    <section>
+    <div className="bag-box">
       <h3 className="bag-h"><small>Your</small>Bags</h3>
-      <div className="bag-lots">
-        {[...bag.lots].reverse().map(l => (
-          <div key={l.since} className={`bag-lot${l.pnlPct !== null && l.pnlPct < 0 ? ' bag-lot--down' : ''}`}>
-            <div className="bag-lot-sack" aria-hidden>💰</div>
-            <div className="bag-lot-size">{short(l.tokens)}</div>
-            {l.pnlPct !== null && <div className="bag-lot-pnl">{fmtPct(l.pnlPct)}</div>}
-            <div className="bag-lot-meta">{Math.floor((now - Date.parse(l.since)) / 86_400_000)}d old · {l.entrySol !== null ? `in at ${l.entrySol.toPrecision(3)} SOL` : 'sent to you'}</div>
-          </div>
-        ))}
-      </div>
-    </section>
+      {bag.lots.length ? (
+        <div className="bag-lots">
+          {[...bag.lots].reverse().map(l => (
+            <div key={l.since} className={`bag-lot${l.pnlPct !== null && l.pnlPct < 0 ? ' bag-lot--down' : ''}`}>
+              <div className="bag-lot-sack" aria-hidden>💰</div>
+              <div className="bag-lot-size">{short(l.tokens)}</div>
+              {l.pnlPct !== null && <div className="bag-lot-pnl">{fmtPct(l.pnlPct)}</div>}
+              <div className="bag-lot-meta">{Math.floor((now - Date.parse(l.since)) / 86_400_000)}d old · {l.entrySol !== null ? `in at ${l.entrySol.toPrecision(3)} SOL` : 'sent to you'}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="bag-empty">No bags yet. Ape in and the first one shows up here.</p>
+      )}
+    </div>
   )
 }
 

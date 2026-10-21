@@ -131,3 +131,19 @@ export function livePosition(bag: Bag | null, market: Market | null) {
     pnlPct: pnlSol !== null ? (pnlSol / bag.costSol) * 100 : null,
   }
 }
+
+// ─── The token's pools on DexScreener (cached by the backend) ──────────────────
+export type Window = 'm5' | 'h1' | 'h6' | 'h24'
+export interface Dex {
+  main: { pair: string; dex: string; url: string } | null
+  priceUsd: number | null
+  change: Record<Window, number | null>
+  txns: Record<Window, { buys: number; sells: number }>
+  volume: Record<Window, number>
+  liquidityUsd: number
+  marketCap: number | null
+  fdv: number | null
+  createdAt: number | null
+  pools: { pair: string; dex: string; quote: string; liquidityUsd: number; volume24h: number }[]
+}
+export const fetchDex = () => api<Dex>('/api/bag/dex')
