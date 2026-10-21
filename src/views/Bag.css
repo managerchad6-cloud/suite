@@ -164,11 +164,6 @@
 .bag-stats dd { margin: 0; font-size: 15px; font-weight: 600; color: #e6e6e6; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
 .bag-stats dd b { color: var(--chad-hi); }
 
-.bag-pools { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.bag-pools li { position: relative; display: flex; justify-content: space-between; padding: 6px 8px; border-radius: 8px; background: #1a1a1a; font-size: 13px; overflow: hidden; }
-.bag-pools li span, .bag-pools li b { position: relative; z-index: 1; }
-.bag-pools li small { color: #777; }
-.bag-pools li i { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(240, 160, 32, 0.14); }
 
 /* ── Your stuff ──────────────────────────────────────────────────────────── */
 .bag-bottom { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 400px); gap: 16px; align-items: start; }
