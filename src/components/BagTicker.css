@@ -45,3 +45,6 @@
 @media (max-width: 700px) {
   .bag-ticker-mc, .bag-ticker-label { display: none; }
 }
+@media (max-width: 480px) {
+  .bag-ticker-chg { display: none; }
+}
