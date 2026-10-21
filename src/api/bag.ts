@@ -147,3 +147,8 @@ export interface Dex {
   pools: { pair: string; dex: string; quote: string; liquidityUsd: number; volume24h: number }[]
 }
 export const fetchDex = () => api<Dex>('/api/bag/dex')
+
+// ─── Candles for the member's own chart (main pool, in SOL) ────────────────────
+export type ChartTf = '1m' | '5m' | '15m' | '1h' | '4h' | '1d'
+export interface Candles { tf: ChartTf; pool: string; currency: 'SOL'; candles: [number, number, number, number, number, number][] }
+export const fetchCandles = (tf: ChartTf) => api<Candles>(`/api/bag/candles?tf=${tf}`)

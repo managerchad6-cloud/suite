@@ -7,6 +7,7 @@ import { openBuyVvc, openSellVvc, fetchTokenConfig, type TokenConfig } from '../
 import { useBag, refreshBag } from '../hooks/useBag'
 import { useIdentity } from '../identity/IdentityProvider'
 import { profileImage } from '../identity/api'
+import { MyChart } from '../components/MyChart'
 import './Bag.css'
 
 /** Re-render every `ms` (the clocks tick). */
@@ -107,7 +108,7 @@ export function Bag() {
   return (
     <div className="bag-view">
       <section className="bag-room">
-        <ChartRoom dex={dex} market={market} />
+        <ChartRoom dex={dex} market={market} bag={isMember ? bag : null} />
         <aside className="bag-side-panel">
           <div className="bag-actions">
             <button className="bag-btn bag-btn--buy" onClick={() => openBuyVvc()}>APE IN</button>
@@ -183,8 +184,13 @@ function YouStrip({ bag, live, verdict, score, market, portrait, onJoin, pending
 
 // ─── The chart room: DexScreener's TradingView chart, wrapped in the meme ────
 
-function ChartRoom({ dex, market }: { dex: Dex | null; market: Market | null }) {
+/**
+ * The chart room. MY CHART: your entries, your entry line and your profit/loss zones on the candles.
+ * PRO TOOLS: DexScreener's full TradingView chart (indicators, drawing tools) for proper analysis.
+ */
+function ChartRoom({ dex, market, bag }: { dex: Dex | null; market: Market | null; bag: BagData | null }) {
   const [pair, setPair] = useState<string | null>(null)
+  const [view, setView] = useState<'mine' | 'pro'>('mine')
   const active = pair ?? dex?.main?.pair ?? null
   const up = (dex?.change.h24 ?? market?.change24h ?? 0) >= 0
   const src = active
@@ -194,21 +200,29 @@ function ChartRoom({ dex, market }: { dex: Dex | null; market: Market | null }) 
     <section className={`bag-chartroom${up ? ' is-up' : ' is-down'}`}>
       <header className="bag-chartroom-head">
         <h2 className="bag-h"><small>${market?.symbol ?? 'VVC'} · the chart room</small>{up ? 'Number go up' : 'Number go down'}</h2>
-        {dex && dex.pools.length > 1 && (
+        <div className="bag-views" role="tablist" aria-label="Chart">
+          <button role="tab" aria-selected={view === 'mine'} className={view === 'mine' ? 'on' : ''} onClick={() => setView('mine')}>MY CHART</button>
+          <button role="tab" aria-selected={view === 'pro'} className={view === 'pro' ? 'on' : ''} onClick={() => setView('pro')}>PRO TOOLS</button>
+        </div>
+        {view === 'pro' && dex && dex.pools.length > 1 && (
           <select className="bag-pool-pick" value={active ?? ''} onChange={e => setPair(e.target.value)} aria-label="Pool">
             {dex.pools.map(p => <option key={p.pair} value={p.pair}>{p.dex} · {p.quote} · {fmtUsd(p.liquidityUsd)}</option>)}
           </select>
         )}
       </header>
       <div className="bag-chart-frame">
-        {src ? (
+        {view === 'mine' ? (
+          <MyChart bag={bag} market={market} />
+        ) : src ? (
           <iframe key={src} src={src} title="$VVC chart" loading="lazy" allow="clipboard-write" />
         ) : (
           <div className="bag-chart-empty">{dex ? 'No pool found for $VVC yet.' : 'Loading the chart…'}</div>
         )}
       </div>
       <footer className="bag-chartroom-foot">
-        Indicators, drawing tools and timeframes are in the chart. Data: DexScreener.
+        {view === 'mine'
+          ? 'Prices in SOL, main pool. Gold above your entry, grey below it. Data: GeckoTerminal.'
+          : 'Indicators, drawing tools and timeframes are in the chart. Data: DexScreener.'}
         {dex?.main && <a href={dex.main.url} target="_blank" rel="noopener noreferrer">Open full screen ↗</a>}
       </footer>
     </section>

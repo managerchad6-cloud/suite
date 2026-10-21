@@ -1,0 +1,29 @@
+.mychart { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.mychart-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid #1f1f1f; }
+.mychart-tfs { display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #0b0b0b; border: 1px solid #262626; }
+.mychart-tfs button { padding: 4px 10px; border-radius: 6px; border: none; background: none; color: #8a8a8a; font: 600 12px system-ui, sans-serif; cursor: pointer; }
+.mychart-tfs button.on { background: var(--gold); color: #2a1600; }
+.mychart-tfs button:not(.on):hover { color: #ddd; }
+.mychart-legend { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8a8a8a; flex-wrap: wrap; }
+.mychart-key { display: inline-block; width: 10px; height: 10px; margin-left: 8px; }
+.mychart-key--ape   { background: var(--chad-hi); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.mychart-key--paper { background: var(--virgin-hi); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.mychart-key--entry { width: 16px; height: 0; border-top: 2px dashed var(--chad-hi); }
+
+.mychart-stage { position: relative; flex: 1; min-height: 0; }
+.mychart-canvas { position: absolute; inset: 0; }
+.mychart-hud {
+  position: absolute; top: 12px; left: 14px; z-index: 3; pointer-events: none;
+  padding: 8px 12px; border-radius: 12px; background: rgba(12, 12, 12, 0.82); border: 1px solid #262626;
+}
+.mychart-hud-pnl { font: 34px var(--font-display); line-height: 1; font-variant-numeric: tabular-nums; }
+.mychart-hud-pnl small { font: 13px system-ui, sans-serif; color: #8a8a8a; }
+.mychart-hud-pnl.is-chad   { color: var(--chad-hi); text-shadow: 0 0 18px rgba(240, 160, 32, 0.45); }
+.mychart-hud-pnl.is-virgin { color: var(--virgin-hi); }
+.mychart-hud-sub { margin-top: 4px; font-size: 12px; color: #9a9a9a; font-variant-numeric: tabular-nums; }
+.mychart-hud-hover { margin-top: 6px; font-size: 13px; color: #cfcfcf; }
+.mychart-hud-hover.is-chad b   { color: var(--chad-hi); }
+.mychart-hud-hover.is-virgin b { color: var(--virgin-hi); }
+.mychart-hud-none { font-size: 13px; color: #9a9a9a; max-width: 260px; }
+.mychart-msg { position: absolute; inset: 0; display: grid; place-items: center; color: #666; font-size: 13px; z-index: 2; }
+.mychart-note { padding: 6px 14px; font-size: 11px; color: #7a7a7a; border-top: 1px solid #1f1f1f; }
