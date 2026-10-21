@@ -105,7 +105,6 @@ export function Bag() {
         <div className="bag-pit-side">
           <Pressure dex={dex} live={arena.pressure} last={arena.last} />
           <Stats dex={dex} market={market} />
-          <Pools dex={dex} />
         </div>
       </section>
 
@@ -336,25 +335,6 @@ function Stats({ dex, market }: { dex: Dex | null; market: Market | null }) {
     <div className="bag-box">
       <h3 className="bag-h"><small>The tape</small>Market</h3>
       <dl className="bag-stats">{items.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-    </div>
-  )
-}
-
-function Pools({ dex }: { dex: Dex | null }) {
-  if (!dex?.pools.length) return null
-  const total = dex.pools.reduce((s, p) => s + p.liquidityUsd, 0) || 1
-  return (
-    <div className="bag-box">
-      <h3 className="bag-h"><small>Where it trades</small>Pools</h3>
-      <ul className="bag-pools">
-        {dex.pools.map(p => (
-          <li key={p.pair}>
-            <span>{p.dex} <small>/{p.quote}</small></span>
-            <i style={{ width: `${(p.liquidityUsd / total) * 100}%` }} />
-            <b>{fmtUsd(p.liquidityUsd)}</b>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }
