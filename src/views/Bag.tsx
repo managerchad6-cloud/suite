@@ -10,6 +10,7 @@ import { useIdentity } from '../identity/IdentityProvider'
 import { profileImage } from '../identity/api'
 import { MyChart } from '../components/MyChart'
 import { Arena } from '../components/Arena'
+import { Leaders } from '../components/Leaders'
 import './Bag.css'
 
 /** Re-render every `ms` (the clocks tick). */
@@ -108,6 +109,8 @@ export function Bag() {
         onJoin={status !== 'member' ? () => join('get ranked') : null}
         pending={status === 'pending'}
       />
+
+      <Leaders me={memberWallet} />
 
       {isMember && (
         <section className="bag-bottom">

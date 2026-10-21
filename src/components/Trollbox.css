@@ -134,6 +134,15 @@
   text-align: center;
 }
 
+/* Chad game announcements: the member, their new rank */
+.trollbox-system--game {
+  display: flex; align-items: center; gap: 8px; width: calc(100% - 28px); text-align: left; cursor: pointer;
+  border: 1px solid #3a2f18; font: inherit; font-size: 13px;
+}
+.trollbox-system--game img { height: 30px; flex: none; }
+.trollbox-system--game b { color: #fff; }
+.trollbox-system--game.is-down { background: rgba(93, 98, 128, 0.18); border-color: #2c2f3f; color: var(--virgin-hi); }
+
 .trollbox-mod {
   position: absolute; top: 4px; right: 10px;
   display: none; gap: 2px;

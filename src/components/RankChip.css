@@ -1,0 +1,7 @@
+.rank-chip {
+  display: inline-flex; align-items: center; gap: 2px; flex: none;
+  padding: 0 6px 0 2px; border-radius: 6px; vertical-align: middle;
+  background: #22232c; color: var(--virgin-hi); font: 11px var(--font-ui); letter-spacing: 0.3px; white-space: nowrap;
+}
+.rank-chip img { width: 15px; height: 17px; object-fit: contain; }
+.rank-chip--chad { background: #2a2210; color: var(--chad-hi); }

@@ -64,6 +64,7 @@ export interface PublicBag {
   holdingSince?: string | null
   oldestBagSince?: string | null
   pnlPct?: number | null
+  rank?: { key: string; name: string; score: number } | null
 }
 
 export const fetchMarket = () => api<Market>('/api/bag/market')
@@ -205,3 +206,42 @@ export const fetchDex = () => api<Dex>('/api/bag/dex')
 export type ChartTf = '1m' | '5m' | '15m' | '1h' | '4h' | '1d'
 export interface Candles { tf: ChartTf; pool: string; currency: 'SOL'; candles: [number, number, number, number, number, number][] }
 export const fetchCandles = (tf: ChartTf) => api<Candles>(`/api/bag/candles?tf=${tf}`)
+
+// ─── Winners: leaderboards, Chad of the Day, rank flair ───────────────────────
+export interface LeaderRow {
+  wallet: string
+  rank: { key: string; name: string; score: number }
+  pnlPct: number | null
+  pnlSol: number | null
+  balance: number
+  heldDays: number | null
+}
+export interface Leaders {
+  printers: LeaderRow[]
+  chads: LeaderRow[]
+  diamond: LeaderRow[]
+  bags: LeaderRow[]
+  chadOfTheDay: { wallet: string; climb: number; score: number; rank: { key: string; name: string } } | null
+}
+export const fetchLeaders = () => api<Leaders>('/api/bag/leaders')
+
+// Members' ranks for flair next to their names: batched, cached for the page (a minute)
+type RankFlair = { key: string; name: string; score: number }
+const rankCache = new Map<string, { at: number; p: Promise<RankFlair | null> }>()
+let rankQueue: { wallet: string; resolve: (r: RankFlair | null) => void }[] = []
+let rankTimer: number | null = null
+function flushRanks() {
+  const batch = rankQueue.splice(0, 100)
+  rankTimer = rankQueue.length ? window.setTimeout(flushRanks, 0) : null
+  api<{ ranks: Record<string, RankFlair> }>(`/api/bag/ranks?wallets=${batch.map(b => b.wallet).join(',')}`)
+    .then(r => batch.forEach(b => b.resolve(r.ranks[b.wallet] ?? null)))
+    .catch(() => batch.forEach(b => b.resolve(null)))
+}
+export function fetchRank(wallet: string): Promise<RankFlair | null> {
+  const hit = rankCache.get(wallet)
+  if (hit && Date.now() - hit.at < 60_000) return hit.p
+  const p = new Promise<RankFlair | null>(resolve => { rankQueue.push({ wallet, resolve }) })
+  rankCache.set(wallet, { at: Date.now(), p })
+  rankTimer ??= window.setTimeout(flushRanks, 30)
+  return p
+}
