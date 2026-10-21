@@ -169,12 +169,15 @@ export function checkHolderNow(): Promise<HolderStatus> {
   return holderResult(api('/api/credits/holder/check', { method: 'POST' }))
 }
 
-/** Open the "Buy $VVC" modal from anywhere. */
-export function openBuyVvc() {
-  window.dispatchEvent(new CustomEvent('vvc:buy-vvc', { detail: { side: 'buy' } }))
+/**
+ * Open the "Buy $VVC" modal from anywhere, optionally with the amount of SOL already filled in.
+ * (Buttons pass it straight to onClick, so anything that isn't a string is ignored.)
+ */
+export function openBuyVvc(amount?: unknown) {
+  window.dispatchEvent(new CustomEvent('vvc:buy-vvc', { detail: { side: 'buy', amount: typeof amount === 'string' ? amount : undefined } }))
 }
 
-/** The same swap the other way round: $VVC → SOL. */
-export function openSellVvc() {
-  window.dispatchEvent(new CustomEvent('vvc:buy-vvc', { detail: { side: 'sell' } }))
+/** The same swap the other way round: $VVC → SOL, optionally with the $VVC amount filled in. */
+export function openSellVvc(amount?: unknown) {
+  window.dispatchEvent(new CustomEvent('vvc:buy-vvc', { detail: { side: 'sell', amount: typeof amount === 'string' ? amount : undefined } }))
 }

@@ -78,24 +78,26 @@ export function BuyVvcHost() {
   // Why it opened, when a holder perk sent us here (403 hold_required)
   const [reason, setReason] = useState<string | null>(null)
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
+  const [amount, setAmount] = useState<string | undefined>(undefined)
   useEffect(() => {
     const h = (e: Event) => {
-      const d = (e as CustomEvent<{ reason?: string; side?: 'buy' | 'sell' } | null>).detail
+      const d = (e as CustomEvent<{ reason?: string; side?: 'buy' | 'sell'; amount?: string } | null>).detail
       setReason(d?.reason ?? null)
       setSide(d?.side ?? 'buy')
+      setAmount(d?.amount)
       setOpen(true)
     }
     window.addEventListener('vvc:buy-vvc', h)
     return () => window.removeEventListener('vvc:buy-vvc', h)
   }, [])
-  return open ? <BuyVvcModal key={side} side={side} reason={reason} onClose={() => setOpen(false)} /> : null
+  return open ? <BuyVvcModal key={`${side}:${amount ?? ''}`} side={side} amount={amount} reason={reason} onClose={() => setOpen(false)} /> : null
 }
 
 type SwapState = 'idle' | 'loading' | 'ready' | 'unavailable' | 'checking' | 'done'
 /** What the last swap did for the signed-in wallet. */
 type Outcome = { kind: 'credits' | 'holder' | 'more' | 'elsewhere' | 'pending'; bought?: number; from?: string }
 
-function BuyVvcModal({ side, reason, onClose }: { side: 'buy' | 'sell'; reason: string | null; onClose: () => void }) {
+function BuyVvcModal({ side, amount, reason, onClose }: { side: 'buy' | 'sell'; amount?: string; reason: string | null; onClose: () => void }) {
   const { status, memberWallet, join } = useIdentity()
   const isMember = status === 'member' && !!memberWallet
   const [config, setConfig] = useState<TokenConfig | null>(null)
@@ -197,9 +199,16 @@ function BuyVvcModal({ side, reason, onClose }: { side: 'buy' | 'sell'; reason: 
         jup.init({
           displayMode: 'integrated',
           integratedTargetId: TARGET_ID,
-          formProps: side === 'sell'
-            ? { initialInputMint: config.mint, initialOutputMint: SOL_MINT, fixedMint: config.mint }
-            : { initialInputMint: SOL_MINT, initialOutputMint: config.mint, fixedMint: config.mint },
+          formProps: {
+            ...(side === 'sell'
+              ? { initialInputMint: config.mint, initialOutputMint: SOL_MINT, fixedMint: config.mint }
+              : { initialInputMint: SOL_MINT, initialOutputMint: config.mint, fixedMint: config.mint }),
+            // The trade panel's amount. Jupiter takes it in the input token's smallest unit
+            // (lamports for SOL, base units for $VVC): "0.5" SOL is "500000000"
+            ...(amount && Number(amount) > 0
+              ? { initialAmount: String(Math.round(Number(amount) * 10 ** (side === 'sell' ? config.decimals : 9))) }
+              : {}),
+          },
           containerStyles: { width: '100%', height: '100%', borderRadius: '12px', overflow: 'hidden' },
           branding: { name: `${side === 'sell' ? 'Sell' : 'Buy'} $${config.symbol}` },
           onSuccess: (r: SwapSuccess) => afterSwapRef.current(r),
@@ -207,7 +216,7 @@ function BuyVvcModal({ side, reason, onClose }: { side: 'buy' | 'sell'; reason: 
         setSwap('ready')
       })
       .catch(() => { if (alive.current) setSwap('unavailable') })
-  }, [config, swap, side])
+  }, [config, swap, side, amount])
 
   useEffect(() => () => { (window as WinJup).Jupiter?.close?.() }, [])
 

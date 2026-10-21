@@ -11,6 +11,7 @@ import { profileImage } from '../identity/api'
 import { MyChart } from '../components/MyChart'
 import { Arena } from '../components/Arena'
 import { Leaders } from '../components/Leaders'
+import { TradePanel } from '../components/TradePanel'
 import './Bag.css'
 
 /** Re-render every `ms` (the clocks tick). */
@@ -91,16 +92,19 @@ export function Bag() {
     <div className="bag-view">
       <section className="bag-room">
         <ChartRoom dex={dex} market={market} bag={isMember ? bag : null} />
-        <aside className="bag-side-panel">
-          <div className="bag-actions">
-            <button className="bag-btn bag-btn--buy" onClick={() => openBuyVvc()}>APE IN</button>
-            <button className="bag-btn bag-btn--sell" onClick={openSellVvc}>PAPER HAND IT</button>
-          </div>
+        <aside className="bag-trade-col">
+          <TradePanel market={market} dex={dex} bag={isMember ? bag : null} onJoin={status !== 'member' ? () => join('get ranked') : null} />
+        </aside>
+      </section>
+
+      {/* Under the chart, like pump.fun's trades: the live arena, who's winning, the market */}
+      <section className="bag-pit">
+        <Arena trades={arena.trades} fresh={arena.fresh} me={memberWallet} wide />
+        <div className="bag-pit-side">
           <Pressure dex={dex} live={arena.pressure} last={arena.last} />
-          <Arena trades={arena.trades} fresh={arena.fresh} me={memberWallet} />
           <Stats dex={dex} market={market} />
           <Pools dex={dex} />
-        </aside>
+        </div>
       </section>
 
       <Climb
@@ -141,7 +145,6 @@ function Climb({ bag, live, market, portrait, onJoin, pending }: {
   const game = bag?.game ?? null
   const value = useRolling(live?.valueUsd ?? null)
   const pnl = useRolling(live?.pnlPct ?? null)
-  const [pick, setPick] = useState(2)                 // what-if: index into game.whatIf (0.5 SOL)
   const held = bag ? bag.oldestBagSince ?? bag.holdingSince : null
 
   // Ranked up or down since this browser last looked: celebrate (or mourn) it
@@ -163,7 +166,6 @@ function Climb({ bag, live, market, portrait, onJoin, pending }: {
   const ladder = game?.ladder ?? DEFAULT_LADDER
   const rank = game?.rank ?? null
   const progress = rank?.next && game ? Math.max(0, Math.min(1, (game.score - rank.min) / (rank.next.min - rank.min))) : 1
-  const what = game ? game.whatIf[Math.min(pick, game.whatIf.length - 1)] ?? null : null
 
   return (
     <section className={`climb${rank ? ` climb--${rank.index >= 6 ? 'chad' : 'virgin'}` : ''}`}>
@@ -213,30 +215,6 @@ function Climb({ bag, live, market, portrait, onJoin, pending }: {
             <li><span className="climb-icon" aria-hidden>💎</span><span className="climb-move">Hold. Diamond hands climb by themselves</span></li>
             <li><span className="climb-icon" aria-hidden>🎯</span><span className="climb-move">Buy red candles, not green ones</span></li>
           </ol>
-        )}
-      </div>
-
-      <div className="climb-whatif">
-        <h3 className="bag-h"><small>What if</small>You aped right now</h3>
-        {game && what ? (
-          <>
-            <input
-              type="range" min={0} max={game.whatIf.length - 1} step={1} value={Math.min(pick, game.whatIf.length - 1)}
-              onChange={e => setPick(Number(e.target.value))} aria-label="SOL to ape"
-            />
-            <div className="climb-whatif-out">
-              <span className="climb-sol">{what.sol} SOL</span>
-              <span className="climb-arrow">→</span>
-              <img src={rankArt(what.rank.key)} alt="" />
-              <span className="climb-proj">
-                <b>{what.rank.name}</b>
-                <em className={what.score > game.score ? 'is-up' : ''}>{what.score > game.score ? `+${what.score - game.score}` : '±0'} · {what.score}/100</em>
-              </span>
-            </div>
-            <button className="bag-btn bag-btn--buy climb-ape" onClick={() => openBuyVvc()}>APE {what.sol} SOL</button>
-          </>
-        ) : (
-          <p className="bag-empty">Join and hold $VVC to see where a buy would take you.</p>
         )}
       </div>
 

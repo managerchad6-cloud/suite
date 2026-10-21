@@ -17,7 +17,7 @@ const ago = (iso: string, now: number) => {
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`
 }
 
-export function Arena({ trades: all, fresh, me }: { trades: ArenaTrade[]; fresh: Set<string>; me: string | null }) {
+export function Arena({ trades: all, fresh, me, wide = false }: { trades: ArenaTrade[]; fresh: Set<string>; me: string | null; wide?: boolean }) {
   const trades = all.filter(t => t.sol >= MIN_FEED_SOL || (!!me && t.wallet === me))
   const navigate = useNavigate()
   const [profiles, setProfiles] = useState<Record<string, PublicProfile>>({})
@@ -31,7 +31,7 @@ export function Arena({ trades: all, fresh, me }: { trades: ArenaTrade[]; fresh:
   }, [trades])  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="bag-box arena">
+    <div className={`bag-box arena${wide ? ' arena--wide' : ''}`}>
       <div className="arena-head">
         <h3 className="bag-h"><small>Live</small>The arena</h3>
         <span className="arena-live"><i />LIVE</span>
@@ -40,7 +40,7 @@ export function Arena({ trades: all, fresh, me }: { trades: ArenaTrade[]; fresh:
         <p className="bag-empty">Waiting for the first trade…</p>
       ) : (
         <ol className="arena-feed">
-          {trades.slice(0, 14).map(t => {
+          {trades.slice(0, wide ? 40 : 14).map(t => {
             const p = t.wallet ? profiles[t.wallet] : undefined
             const mine = !!me && t.wallet === me
             const buy = t.kind === 'buy'
