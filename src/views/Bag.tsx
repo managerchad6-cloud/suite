@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import {
   daysSince, fetchDex, fmtPct, fmtSol, fmtTokens, fmtUsd, livePosition, rankArt, setBagPublic, since, until, RANK_EVENT,
-  type Bag as BagData, type Dex, type Market, type Rank, type RankEvent, type Window,
+  fetchArena, subscribeStream,
+  type ArenaTrade, type Bag as BagData, type Dex, type Market, type Pressure as LivePressure, type Rank, type RankEvent, type Window,
 } from '../api/bag'
 import { openBuyVvc, openSellVvc, fetchTokenConfig, type TokenConfig } from '../api/credits'
 import { useBag, refreshBag } from '../hooks/useBag'
 import { useIdentity } from '../identity/IdentityProvider'
 import { profileImage } from '../identity/api'
 import { MyChart } from '../components/MyChart'
+import { Arena } from '../components/Arena'
 import './Bag.css'
 
 /** Re-render every `ms` (the clocks tick). */
@@ -50,11 +52,36 @@ function useDex() {
   return dex
 }
 
+/** The arena, live: latest trades (newest first), buys vs sells, and which trades just arrived. */
+function useArena() {
+  const [trades, setTrades] = useState<ArenaTrade[]>([])
+  const [pressure, setPressure] = useState<LivePressure | null>(null)
+  const [fresh, setFresh] = useState<Set<string>>(new Set())
+  const [last, setLast] = useState<ArenaTrade | null>(null)
+  useEffect(() => {
+    let stop = false
+    fetchArena().then(a => { if (!stop) { setTrades(a.trades); setPressure(a.pressure) } }).catch(() => {})
+    const offs = [
+      subscribeStream('trade', t => {
+        setTrades(prev => (prev.some(p => p.signature === t.signature) ? prev : [t, ...prev].slice(0, 60)))
+        setFresh(prev => new Set(prev).add(t.signature))
+        setTimeout(() => setFresh(prev => { const n = new Set(prev); n.delete(t.signature); return n }), 2000)
+        setLast(t)
+      }),
+      subscribeStream('pressure', setPressure),
+      subscribeStream('rank', r => setTrades(prev => prev.map(t => (t.signature === r.signature ? { ...t, rankTo: r.to } : t)))),
+    ]
+    return () => { stop = true; offs.forEach(off => off()) }
+  }, [])
+  return { trades, pressure, fresh, last }
+}
+
 const short = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : fmtTokens(n))
 export function Bag() {
-  const { status, me, profile, join } = useIdentity()
+  const { status, me, profile, join, memberWallet } = useIdentity()
   const { market, bag } = useBag()
   const dex = useDex()
+  const arena = useArena()
   const isMember = status === 'member' && !!bag
   const live = livePosition(isMember ? bag : null, market)
   const memberSince = me && me.state !== 'guest' ? me.account.memberSince : null
@@ -68,7 +95,8 @@ export function Bag() {
             <button className="bag-btn bag-btn--buy" onClick={() => openBuyVvc()}>APE IN</button>
             <button className="bag-btn bag-btn--sell" onClick={openSellVvc}>PAPER HAND IT</button>
           </div>
-          <Pressure dex={dex} />
+          <Pressure dex={dex} live={arena.pressure} last={arena.last} />
+          <Arena trades={arena.trades} fresh={arena.fresh} me={memberWallet} />
           <Stats dex={dex} market={market} />
           <Pools dex={dex} />
         </aside>
@@ -270,22 +298,26 @@ function ChartRoom({ dex, market, bag }: { dex: Dex | null; market: Market | nul
 
 const WINDOWS: [Window, string][] = [['m5', '5m'], ['h1', '1h'], ['h6', '6h'], ['h24', '24h']]
 
-/** Who's winning: Chads buying vs Virgins selling, per timeframe. */
-function Pressure({ dex }: { dex: Dex | null }) {
+/**
+ * Who's winning: Chads buying vs Virgins selling, per timeframe. Live from the arena (every trade
+ * moves it) where its log covers the window; DexScreener's counts (all pools, every 20s) otherwise.
+ */
+function Pressure({ dex, live, last }: { dex: Dex | null; live: LivePressure | null; last: ArenaTrade | null }) {
   const [w, setW] = useState<Window>('h1')
-  const t = dex?.txns[w] ?? { buys: 0, sells: 0 }
+  const fromArena = !!live && !live[w].partial
+  const t = fromArena ? live![w] : dex?.txns[w] ?? { buys: 0, sells: 0 }
   const total = t.buys + t.sells
   const buyShare = total ? t.buys / total : 0.5
   const verdict = !total ? 'Dead quiet. Even the virgins left' : buyShare >= 0.55 ? 'Chads are buying' : buyShare <= 0.45 ? 'Virgins are dumping' : 'Chads and virgins fighting it out'
   return (
     <div className="bag-box">
       <div className="bag-box-head">
-        <h3 className="bag-h"><small>Who's winning</small>Chads vs virgins</h3>
+        <h3 className="bag-h"><small>Who's winning{fromArena ? ' · live' : ''}</small>Chads vs virgins</h3>
         <div className="bag-tf bag-tf--small">
           {WINDOWS.map(([k, l]) => <button key={k} className={w === k ? 'on' : ''} onClick={() => setW(k)}>{l}</button>)}
         </div>
       </div>
-      <div className="bag-tug">
+      <div className={`bag-tug${last ? ` bag-tug--${last.kind}` : ''}`} key={last?.signature ?? 'tug'}>
         <div className="bag-tug-chad" style={{ width: `${buyShare * 100}%` }}><span>{t.buys} buys</span></div>
         <div className="bag-tug-virgin"><span>{t.sells} sells</span></div>
       </div>

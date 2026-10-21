@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { announceTrade, fetchBag, fetchMarket, lastAnnouncedAt, subscribeMarket, TRADE_EVENT, type Bag, type Market } from '../api/bag'
+import { announceTrade, fetchBag, fetchMarket, lastAnnouncedAt, subscribeMarket, subscribeStream, TRADE_EVENT, type Bag, type Market } from '../api/bag'
 import { useIdentity } from '../identity/IdentityProvider'
 
 // One copy of the market and your bag for the whole page (ticker, Bag page, celebrations).
@@ -70,7 +70,14 @@ export function useBag(): { market: Market | null; bag: Bag | null } {
     const onTrade = () => [3000, 20000, 45000].forEach(ms => setTimeout(refreshBag, ms))
     window.addEventListener(TRADE_EVENT, onTrade)
     window.addEventListener('vvc:holder-status', refreshBag)
+    // The arena saw you trade (anywhere, any app): celebrate at once, unless this suite's swap already did
+    const offArena = subscribeStream('trade', t => {
+      if (t.wallet !== memberWallet) return
+      if (Date.now() - lastAnnouncedAt() > 5 * 60_000) announceTrade({ side: t.kind, tokens: t.tokens })
+      else refreshBag()
+    })
     return () => {
+      offArena()
       window.removeEventListener(TRADE_EVENT, onTrade)
       window.removeEventListener('vvc:holder-status', refreshBag)
     }
