@@ -16,8 +16,8 @@
 /* ── The climb: your rank, how to get Chadder, what-if, the ladder ─────────── */
 .climb {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(260px, 0.75fr);
-  grid-template-areas: 'you moves whatif' 'ladder ladder ladder';
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-areas: 'you moves' 'ladder ladder';
   gap: 14px 18px;
   padding: 16px 18px;
   border-radius: 18px;
@@ -94,7 +94,12 @@
 .climb-ladder li.next::after { content: 'NEXT'; position: absolute; top: -8px; padding: 0 5px; border-radius: 4px; background: #333; color: #ddd; font: 9px var(--font-ui); letter-spacing: 1px; }
 
 /* ── The chart room ──────────────────────────────────────────────────────── */
-.bag-room { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 400px); gap: 16px; align-items: stretch; }
+.bag-room { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 22vw, 360px); gap: 16px; align-items: start; }
+.bag-trade-col { position: sticky; top: 16px; min-width: 0; }
+
+/* Under the chart: the arena (wide) and who's winning / the market beside it */
+.bag-pit { display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 420px); gap: 16px; align-items: start; }
+.bag-pit-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .bag-chartroom { background: #141414; border: 1px solid #262626; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
 .bag-chartroom.is-up   { border-color: #3a2f18; box-shadow: 0 0 0 1px rgba(240, 160, 32, 0.08), 0 0 40px rgba(240, 160, 32, 0.06); }
 .bag-chartroom.is-down { border-color: #2c2f3f; }
@@ -121,8 +126,7 @@
 .bag-chartroom-foot { display: flex; gap: 10px; justify-content: space-between; padding: 8px 16px; font-size: 11px; color: #6a6a6a; border-top: 1px solid #222; }
 .bag-chartroom-foot a { color: var(--gold); text-decoration: none; }
 
-.bag-side-panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; height: 0; min-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #2e2e2e transparent; padding-right: 2px; }
-.bag-side-panel > * { flex: none; }
+
 .bag-actions { display: flex; flex-direction: column; gap: 10px; }
 .bag-btn { padding: 13px 0; border-radius: 14px; cursor: pointer; font-family: var(--font-display); font-size: 24px; letter-spacing: 1px; transition: transform 0.12s, filter 0.15s; }
 .bag-btn:hover  { filter: brightness(1.1); transform: translateY(-2px) rotate(-0.5deg); }
@@ -193,17 +197,18 @@
 
 /* ── Smaller screens ─────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
-  .bag-side-panel { height: auto; min-height: 0; overflow: visible; padding-right: 0; }
+  .bag-trade-col { position: static; }
+  .bag-pit { grid-template-columns: 1fr; }
   .bag-chart-frame { height: clamp(340px, (100vw - 40px) * 0.55, 560px); }
   .bag-room, .bag-bottom { grid-template-columns: 1fr; }
   .bag-actions { flex-direction: row; }
   .bag-actions .bag-btn { flex: 1; }
 }
 @media (max-width: 1250px) {
-  .climb { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'you you' 'moves whatif' 'ladder ladder'; }
+  .climb { grid-template-columns: 1fr; grid-template-areas: 'you' 'moves' 'ladder'; }
 }
 @media (max-width: 860px) {
-  .climb { grid-template-columns: 1fr; grid-template-areas: 'you' 'moves' 'whatif' 'ladder'; padding: 14px; }
+  .climb { padding: 14px; }
   .climb-nums { margin-left: 0; }
   .climb-ladder { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .bag-chart-frame { height: clamp(300px, (100vw - 90px) * 1.1, 440px); }   /* about square on a phone */

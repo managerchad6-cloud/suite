@@ -33,5 +33,19 @@
 .arena-row--sell .arena-what b { color: var(--virgin-hi); }
 .arena-what em { margin-left: 6px; font-style: normal; font-size: 11px; color: #777; }
 .arena-when { grid-area: when; font-size: 11px; color: #6a6a6a; text-decoration: none; }
+/* Under the chart: one trade per line, like pump.fun's trades table */
+.arena--wide .arena-feed { max-height: 380px; }
+.arena--wide .arena-row {
+  grid-template-columns: minmax(180px, 1.3fr) minmax(0, 1.4fr) 56px;
+  grid-template-areas: 'who what when' 'up up up';
+  align-items: center; padding: 6px 12px;
+}
+.arena--wide .arena-when { text-align: right; }
+
 .arena-rankup { grid-area: up; display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--chad-hi); animation: arena-in 0.5s ease-out both; }
 .arena-rankup img { height: 18px; }
+
+/* Narrow screens: the wide feed goes back to two-line rows */
+@media (max-width: 860px) {
+  .arena--wide .arena-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'who when' 'what what' 'up up'; }
+}
