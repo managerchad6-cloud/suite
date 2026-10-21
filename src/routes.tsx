@@ -15,9 +15,20 @@ import { MemePage } from './views/MemePage'
 import { PublicProfile } from './views/PublicProfile'
 import { VideoStudio } from './views/VideoStudio'
 import { VideoFeed } from './views/VideoFeed'
+import { Bag } from './views/Bag'
 import type { AppOutletContext } from './App'
 import type { MemeSourceType } from './types/unified'
 import { useBack } from './lib/links'
+
+/** Home: members land on their bag; everyone else on the memes (for now). */
+export function HomeRoute() {
+  const { status } = useIdentity()
+  return <Navigate to={status === 'member' ? '/bag' : '/memes'} replace />
+}
+
+export function BagRoute() {
+  return <Bag />
+}
 
 // Every page is open to everyone; participation inside them is locked for non-members.
 // The two pages about *your* account (profile, retake) send non-members to the memes.

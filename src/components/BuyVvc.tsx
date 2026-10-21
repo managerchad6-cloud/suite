@@ -10,6 +10,7 @@ import {
   type HolderStatus, type TokenConfig,
 } from '../api/credits'
 import { HolderLadder } from './HolderLadder'
+import { announceTrade } from '../api/bag'
 import { Confetti } from './Confetti'
 import './BuyVvc.css'
 
@@ -18,6 +19,9 @@ const SOL_MINT = 'So11111111111111111111111111111111111111112'
 const TARGET_ID = 'vvc-jupiter-swap'
 // The server allows a forced re-read every ~20s: check soon after the swap, then again
 const RECHECK_DELAYS_MS = [2_000, 22_000, 45_000]
+
+/** What Jupiter hands onSuccess: the quote tells us which way the swap went and how much. */
+interface SwapSuccess { quoteResponseMeta?: { quoteResponse?: { inputMint?: string; inAmount?: string; outAmount?: string } } }
 
 interface JupiterPlugin {
   init(opts: Record<string, unknown>): void
@@ -73,19 +77,25 @@ export function BuyVvcHost() {
   const [open, setOpen] = useState(false)
   // Why it opened, when a holder perk sent us here (403 hold_required)
   const [reason, setReason] = useState<string | null>(null)
+  const [side, setSide] = useState<'buy' | 'sell'>('buy')
   useEffect(() => {
-    const h = (e: Event) => { setReason((e as CustomEvent<{ reason?: string } | null>).detail?.reason ?? null); setOpen(true) }
+    const h = (e: Event) => {
+      const d = (e as CustomEvent<{ reason?: string; side?: 'buy' | 'sell' } | null>).detail
+      setReason(d?.reason ?? null)
+      setSide(d?.side ?? 'buy')
+      setOpen(true)
+    }
     window.addEventListener('vvc:buy-vvc', h)
     return () => window.removeEventListener('vvc:buy-vvc', h)
   }, [])
-  return open ? <BuyVvcModal reason={reason} onClose={() => setOpen(false)} /> : null
+  return open ? <BuyVvcModal key={side} side={side} reason={reason} onClose={() => setOpen(false)} /> : null
 }
 
 type SwapState = 'idle' | 'loading' | 'ready' | 'unavailable' | 'checking' | 'done'
 /** What the last swap did for the signed-in wallet. */
 type Outcome = { kind: 'credits' | 'holder' | 'more' | 'elsewhere' | 'pending'; bought?: number; from?: string }
 
-function BuyVvcModal({ reason, onClose }: { reason: string | null; onClose: () => void }) {
+function BuyVvcModal({ side, reason, onClose }: { side: 'buy' | 'sell'; reason: string | null; onClose: () => void }) {
   const { status, memberWallet, join } = useIdentity()
   const isMember = status === 'member' && !!memberWallet
   const [config, setConfig] = useState<TokenConfig | null>(null)
@@ -124,7 +134,15 @@ function BuyVvcModal({ reason, onClose }: { reason: string | null; onClose: () =
   }, [config?.buyEnabled])
 
   // A finished swap: celebrate, then re-read the balance until the new bag shows up (or we run out of tries)
-  const afterSwap = useCallback(() => {
+  const afterSwap = useCallback((result?: SwapSuccess) => {
+    // Chad or virgin: the quote says which way it went
+    const q = result?.quoteResponseMeta?.quoteResponse
+    const sold = !!config && q?.inputMint === config.mint
+    const raw = Number(sold ? q?.inAmount : q?.outAmount)
+    const tokens = config && raw > 0 ? raw / 10 ** config.decimals : undefined
+    announceTrade({ side: sold ? 'sell' : 'buy', tokens })
+    // A sale needs no balance chase here: the bag page reloads on the trade event
+    if (sold) { onClose(); return }
     timers.current.forEach(clearTimeout)
     timers.current = []
     setBurst(b => b + 1)
@@ -164,7 +182,7 @@ function BuyVvcModal({ reason, onClose }: { reason: string | null; onClose: () =
         if (last || elsewhere) conclude()
       }, delay))
     })
-  }, [isMember, holder, memberWallet])
+  }, [isMember, holder, memberWallet, config, onClose])
   // onSuccess is bound once when the swap is set up: route it to the latest callback
   const afterSwapRef = useRef(afterSwap)
   afterSwapRef.current = afterSwap
@@ -179,15 +197,17 @@ function BuyVvcModal({ reason, onClose }: { reason: string | null; onClose: () =
         jup.init({
           displayMode: 'integrated',
           integratedTargetId: TARGET_ID,
-          formProps: { initialInputMint: SOL_MINT, initialOutputMint: config.mint, fixedMint: config.mint },
+          formProps: side === 'sell'
+            ? { initialInputMint: config.mint, initialOutputMint: SOL_MINT, fixedMint: config.mint }
+            : { initialInputMint: SOL_MINT, initialOutputMint: config.mint, fixedMint: config.mint },
           containerStyles: { width: '100%', height: '100%', borderRadius: '12px', overflow: 'hidden' },
-          branding: { name: `Buy $${config.symbol}` },
-          onSuccess: () => afterSwapRef.current(),
+          branding: { name: `${side === 'sell' ? 'Sell' : 'Buy'} $${config.symbol}` },
+          onSuccess: (r: SwapSuccess) => afterSwapRef.current(r),
         })
         setSwap('ready')
       })
       .catch(() => { if (alive.current) setSwap('unavailable') })
-  }, [config, swap])
+  }, [config, swap, side])
 
   useEffect(() => () => { (window as WinJup).Jupiter?.close?.() }, [])
 
@@ -202,7 +222,7 @@ function BuyVvcModal({ reason, onClose }: { reason: string | null; onClose: () =
       {burst > 0 && <Confetti key={burst} pieces={granted > 0 ? 110 : 70} />}
       <div className="buyvvc-modal" role="dialog" aria-label={`Buy ${sym}`}>
         <div className="buyvvc-header">
-          <span className="buyvvc-title">Get {sym}</span>
+          <span className="buyvvc-title">{side === 'sell' ? `Sell ${sym}` : `Get ${sym}`}</span>
           <button className="buyvvc-close" onClick={onClose} aria-label="Close">✕</button>
         </div>
 

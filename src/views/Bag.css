@@ -1,0 +1,114 @@
+/* ── The Bag ── */
+
+.bag-view {
+  --bag-up: var(--chad-hi);
+  --bag-down: var(--virgin);
+  min-height: 100%;
+  padding: 24px clamp(14px, 3vw, 36px) 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1180px;
+  margin: 0 auto;
+  transition: background 1.2s ease;
+}
+.bag-view--up   { background: radial-gradient(ellipse 80% 40% at 30% 0%, rgba(240, 160, 32, 0.13), transparent 70%); }
+.bag-view--down { background: radial-gradient(ellipse 80% 40% at 30% 0%, rgba(93, 98, 128, 0.22), transparent 70%); }
+
+.bag-up   { color: var(--bag-up); }
+.bag-down { color: var(--bag-down); }
+.bag-flat { color: #aaa; }
+.bag-label { font-size: 11px; letter-spacing: 1.4px; color: #7d7d7d; font-weight: 600; }
+.bag-sub   { font-size: 13px; color: #8a8a8a; }
+.bag-h     { font-family: var(--font-ui); font-weight: normal; color: var(--gold); letter-spacing: 1px; font-size: 18px; margin: 4px 0 10px; }
+.bag-card  { background: #161616; border: 1px solid #262626; border-radius: 14px; padding: 14px 16px; }
+
+/* Hero */
+.bag-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.9fr;
+  gap: 18px 28px;
+  align-items: end;
+  padding: 22px 24px 18px;
+  background: #141414;
+  border: 1px solid #262626;
+  border-radius: 18px;
+}
+.bag-hero--market { grid-template-columns: 1fr 1fr; }
+.bag-value { font-size: clamp(38px, 5.4vw, 64px); font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+.bag-pnl   { font-size: clamp(38px, 5.4vw, 64px); font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+.bag-view--up .bag-pnl.bag-up     { text-shadow: 0 0 28px rgba(240, 160, 32, 0.45); }
+.bag-view--down .bag-pnl.bag-down { text-shadow: 0 0 22px rgba(138, 144, 173, 0.35); }
+.bag-hero-tier { text-align: right; }
+.bag-tier { font-family: var(--font-ui); color: var(--gold); font-size: 22px; letter-spacing: 1px; }
+.bag-tier--none { color: #777; }
+.bag-loyalty { font-size: 14px; color: #d7c08a; margin-top: 2px; }
+.bag-next { font-size: 12px; color: #777; margin-top: 4px; }
+
+.bag-meter { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; font: 700 11px system-ui, sans-serif; letter-spacing: 1.5px; color: #777; }
+.bag-meter-track { position: relative; flex: 1; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #5a6170, #2a2a2a 50%, var(--gold)); }
+.bag-meter-dot {
+  position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%;
+  transform: translate(-50%, -50%); background: #fff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+  transition: left 1s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.bag-syncing { grid-column: 1 / -1; font-size: 12px; color: var(--gold); animation: bag-pulse 1.4s ease-in-out infinite; }
+@keyframes bag-pulse { 50% { opacity: 0.45; } }
+
+/* Clocks */
+.bag-clocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.bag-clock { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 4px 0 2px; }
+
+/* Chart */
+.bag-chart { padding: 12px 14px 8px; }
+.bag-chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.bag-chart-legend { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8a8a8a; }
+.bag-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-left: 8px; }
+.bag-dot--buy, .bag-mark--buy   { background: var(--bag-up); fill: var(--bag-up); }
+.bag-dot--sell, .bag-mark--sell { background: var(--bag-down); fill: var(--bag-down); }
+.bag-mark { stroke: #111; stroke-width: 2; }
+.bag-chart-svg { width: 100%; height: 180px; display: block; }
+.bag-line-up   { stroke: var(--bag-up); }
+.bag-line-down { stroke: var(--bag-down); }
+.bag-chart-empty { height: 120px; display: grid; place-items: center; color: #666; font-size: 13px; }
+
+/* Buy / sell */
+.bag-actions { display: flex; gap: 12px; }
+.bag-btn {
+  flex: 1; padding: 15px 0; border-radius: 14px; border: none; cursor: pointer;
+  font-family: var(--font-ui); font-size: 20px; letter-spacing: 1.5px;
+  transition: transform 0.12s, filter 0.15s;
+}
+.bag-btn:hover  { filter: brightness(1.12); transform: translateY(-1px); }
+.bag-btn:active { transform: scale(0.98); }
+.bag-btn--buy  { background: var(--gold); color: #2a1600; box-shadow: 0 0 30px rgba(240, 160, 32, 0.28); }
+.bag-btn--sell { background: #1c1d25; color: var(--virgin-hi); border: 1px solid #2c2f3f; flex: 0.45; }
+.bag-btn--ghost { background: #1d1d1d; color: var(--text); border: 1px solid #333; flex: 0.6; }
+
+/* Bags + trades */
+.bag-lots { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.bag-lot-size { font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+.bag-lot-pnl { font-weight: 800; font-size: 20px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.bag-trades { padding: 6px 0; }
+.bag-trade {
+  display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 10px; padding: 9px 16px;
+  color: var(--text); text-decoration: none; font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.bag-trade + .bag-trade { border-top: 1px solid #222; }
+.bag-trade:hover { background: #1b1b1b; }
+
+.bag-privacy { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #9a9a9a; cursor: pointer; }
+.bag-privacy input { accent-color: var(--gold); width: 16px; height: 16px; }
+
+/* Guests */
+.bag-cta { text-align: center; padding: 28px 16px 8px; }
+.bag-cta h2 { font-family: var(--font-display); font-weight: normal; font-size: clamp(28px, 4vw, 44px); color: var(--gold); margin-bottom: 8px; }
+.bag-cta p { color: #9a9a9a; margin-bottom: 20px; }
+.bag-cta .bag-actions { max-width: 520px; margin: 0 auto; }
+
+@media (max-width: 760px) {
+  .bag-hero { grid-template-columns: 1fr 1fr; }
+  .bag-hero-tier { grid-column: 1 / -1; text-align: left; }
+  .bag-trade { grid-template-columns: 1fr 1fr; }
+}

@@ -3,7 +3,7 @@ if (!('Buffer' in globalThis)) (globalThis as unknown as Record<string, unknown>
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom'
+import { createHashRouter, RouterProvider } from 'react-router-dom'
 import './index.css'
 import './identity/identity.css'
 import App from './App'
@@ -13,7 +13,7 @@ import {
   VoteRoute, CastRoute, PrizesRoute, TreasuryRoute,
   StudioRoute, StudioEditRoute,
   FactoryRoute, ForumRoute, ForumBoardRoute, ForumThreadRoute,
-  ProfileRoute, PublicProfileRoute,
+  ProfileRoute, PublicProfileRoute, HomeRoute, BagRoute,
   VideoStudioRoute, VideoFeedRoute, NotFoundRoute, RouteError,
 } from './routes'
 
@@ -30,7 +30,8 @@ const router = createHashRouter([
     children: [
       // A page that breaks shows the error inside the layout, so the nav stays
       { errorElement: <RouteError />, children: [
-        { index: true,               element: <Navigate to="/memes" replace /> },
+        { index: true,               element: <HomeRoute /> },
+        { path: 'bag',               element: <BagRoute /> },
         { path: 'live',              element: <LiveRoute /> },
         { path: 'pfp',               element: <RetakeRoute /> },
         { path: 'memes',             element: <FeedRoute /> },

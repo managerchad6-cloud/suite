@@ -17,6 +17,7 @@ import {
   ActivityList, CharacterCard, EmptyCard, HeroIdentity, MemeGrid, ProfileHero, ProfileTabs, SortToggle, SpectrumBar, Stat,
   alignment, shortWallet, useMemeCards, type MemeSource,
 } from '../components/ProfileShowcase'
+import { BagFlex } from '../components/BagFlex'
 
 interface Props {
   wallet: string
@@ -187,6 +188,8 @@ export function PublicProfile({ wallet, onBack, onOpenMeme, onOpenProfile, onOpe
           {profile === null && actions}
         </ProfileHero>
       )}
+
+      <BagFlex wallet={wallet} />
 
       <ProfileTabs tab={tab} onTab={setTab}
         tabs={[['memes', 'Memes', cards.length], ['badges', 'Badges', badgeCount], ['activity', 'Activity', null], ['wall', 'Wall', null]]}

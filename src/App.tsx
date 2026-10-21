@@ -7,6 +7,8 @@ import ZadHelper from './components/ZadHelper/ZadHelper'
 import { NotificationBell } from './components/NotificationPanel'
 import { ChatWidget } from './components/ChatWidget'
 import { Trollbox } from './components/Trollbox'
+import { BagTicker } from './components/BagTicker'
+import { TradeCelebration } from './components/TradeCelebration'
 import { CreditBalance } from './components/CreditBalance'
 import { TopNav } from './components/TopNav'
 import { fetchPlayer, recordLogin, type PlayerState, type BadgeDef } from './api/player'
@@ -27,6 +29,7 @@ export type AppOutletContext = {
 }
 
 export const NAV_ITEMS = [
+  { path: '/bag',     icon: '💰', label: 'BAG',     zadTarget: 'bag'     },
   { path: '/live',    icon: '◉', label: 'LIVE',    zadTarget: 'live'    },
   { path: '/memes',   icon: '🖼', label: 'MEMES',  zadTarget: 'memes'   },
   { path: '/vote',    icon: '🗳', label: 'VOTE',   zadTarget: 'vote'    },
@@ -41,7 +44,7 @@ export const NAV_ITEMS = [
 
 // Browser tab titles by section
 const PAGE_TITLE: Record<string, string> = {
-  '/live': 'Live', '/memes': 'Memes', '/vote': 'Vote', '/cast': 'Cast', '/prizes': 'Prizes',
+  '/bag': 'Your bag', '/live': 'Live', '/memes': 'Memes', '/vote': 'Vote', '/cast': 'Cast', '/prizes': 'Prizes',
   '/treasury': 'Treasury', '/studio': 'Studio', '/factory': 'Factory', '/forum': 'Forum', '/profile': 'Your profile',
 }
 // Pages that name the tab themselves (a meme's title, a member's name)
@@ -229,8 +232,11 @@ export default function App() {
         </nav>
       )}
 
-      <main className="suite-content">
-        <Outlet context={ctx} />
+      <main className="suite-main">
+        <BagTicker />
+        <div className="suite-content">
+          <Outlet context={ctx} />
+        </div>
       </main>
 
       {/* Direct messages are between members */}
@@ -247,6 +253,7 @@ export default function App() {
       {/* One room for everyone: guests read, members talk */}
       <Trollbox />
 
+      <TradeCelebration />
       <JoinFlow />
     </div>
   )
