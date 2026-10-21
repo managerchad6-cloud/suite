@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { TRADE_EVENT, fmtTokens, type TradeEvent } from '../api/bag'
+import { RANK_EVENT, TRADE_EVENT, fmtTokens, rankArt, type RankEvent, type TradeEvent } from '../api/bag'
 import { playBuy, playSell } from '../lib/sounds'
 import './TradeCelebration.css'
 
@@ -9,9 +9,10 @@ const SELL_TEXT = 'you fucking virgin'
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
 // Buying is an event: Chad bursts in and calls you one. Selling drains the colour out of the suite.
-// Mounted once in App; fire it with announceTrade() from anywhere.
+// Ranking up on the Chad ladder gets the same treatment with your new rank; ranking down, the gloom.
+// Mounted once in App; fire it with announceTrade() (or a RANK_EVENT) from anywhere.
 export function TradeCelebration() {
-  const [ev, setEv] = useState<(TradeEvent & { key: number }) | null>(null)
+  const [ev, setEv] = useState<(TradeEvent & { key: number; rank?: RankEvent }) | null>(null)
   const [typed, setTyped] = useState('')
   const timer = useRef<number | null>(null)
 
@@ -25,8 +26,19 @@ export function TradeCelebration() {
       if (d.side === 'buy') playBuy(); else playSell()
       timer.current = window.setTimeout(() => setEv(null), d.side === 'buy' ? BUY_MS : SELL_MS)
     }
+    const onRank = (e: Event) => {
+      const r = (e as CustomEvent<RankEvent>).detail
+      if (!r) return
+      if (timer.current) clearTimeout(timer.current)
+      setTyped('')
+      const side = r.dir === 'up' ? 'buy' : 'sell'
+      setEv({ side, rank: r, key: Date.now() })
+      if (side === 'buy') playBuy(); else playSell()
+      timer.current = window.setTimeout(() => setEv(null), side === 'buy' ? BUY_MS : SELL_MS)
+    }
     window.addEventListener(TRADE_EVENT, on)
-    return () => window.removeEventListener(TRADE_EVENT, on)
+    window.addEventListener(RANK_EVENT, onRank)
+    return () => { window.removeEventListener(TRADE_EVENT, on); window.removeEventListener(RANK_EVENT, onRank) }
   }, [])
 
   // The whole suite reacts: shakes on a buy, goes grey on a sell
@@ -42,8 +54,9 @@ export function TradeCelebration() {
   // Typed out slowly, like it hurts
   useEffect(() => {
     if (ev?.side !== 'sell') return
+    const text = ev.rank ? `demoted to ${ev.rank.name.toLowerCase()}` : SELL_TEXT
     let i = 0
-    const id = setInterval(() => { setTyped(SELL_TEXT.slice(0, ++i)); if (i >= SELL_TEXT.length) clearInterval(id) }, 120)
+    const id = setInterval(() => { setTyped(text.slice(0, ++i)); if (i >= text.length) clearInterval(id) }, 120)
     return () => clearInterval(id)
   }, [ev])
 
@@ -70,9 +83,11 @@ export function TradeCelebration() {
         {particles.map(p => (
           <span key={p.i} className="trade-fx-coin" style={{ left: `${p.left}%`, fontSize: p.size, animationDelay: `${p.delay}s`, animationDuration: `${p.dur}s` }}>{p.glyph}</span>
         ))}
-        <img className="trade-fx-chad" src="/assets/chars/chad.png" alt="" />
-        <div className="trade-fx-stamp">YOU ABSOLUTE<br />FUCKING CHAD</div>
-        {(ev.tokens || ev.tierUp) && (
+        <img className="trade-fx-chad" src={ev.rank ? rankArt(ev.rank.key) : '/assets/chars/chad.png'} alt="" />
+        {ev.rank
+          ? <div className="trade-fx-stamp">RANKED UP<br />YOU'RE A {ev.rank.name.toUpperCase()}</div>
+          : <div className="trade-fx-stamp">YOU ABSOLUTE<br />FUCKING CHAD</div>}
+        {!ev.rank && (ev.tokens || ev.tierUp) && (
           <div className="trade-fx-sub">
             {ev.tokens ? `+${fmtTokens(ev.tokens)} $VVC` : ''}{ev.tokens && ev.tierUp ? ' · ' : ''}{ev.tierUp ? `${ev.tierUp.toUpperCase()} UNLOCKED` : ''}
           </div>
@@ -86,10 +101,10 @@ export function TradeCelebration() {
       {particles.map(p => (
         <span key={p.i} className="trade-fx-drop" style={{ left: `${p.left}%`, animationDelay: `${p.delay}s`, animationDuration: `${p.dur}s` }} />
       ))}
-      <img className="trade-fx-virgin" src="/assets/chars/virgin.png" alt="" />
+      <img className="trade-fx-virgin" src={ev.rank ? rankArt(ev.rank.key) : '/assets/chars/virgin.png'} alt="" />
       <div className="trade-fx-typed">{typed}<span className="trade-fx-caret">|</span></div>
-      <div className="trade-fx-paper">PAPER HANDS</div>
-      {ev.tokens ? <div className="trade-fx-sub trade-fx-sub--sell">−{fmtTokens(ev.tokens)} $VVC</div> : null}
+      <div className="trade-fx-paper">{ev.rank ? 'RANKED DOWN' : 'PAPER HANDS'}</div>
+      {!ev.rank && ev.tokens ? <div className="trade-fx-sub trade-fx-sub--sell">−{fmtTokens(ev.tokens)} $VVC</div> : null}
     </div>
   )
 }

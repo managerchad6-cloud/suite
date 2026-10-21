@@ -36,7 +36,23 @@ export interface Bag {
   synced: boolean
   syncing: boolean
   public: boolean
+  game?: Game
 }
+
+// ─── The Chad game (memestudio-backend chad.js) ────────────────────────────────
+export interface Rank { key: string; name: string; min: number }
+export interface Game {
+  score: number
+  rank: Rank & { index: number; next: (Rank & { points: number }) | null }
+  traits: Record<'pnl' | 'hands' | 'holding' | 'bag' | 'aping' | 'entries' | 'loyalty', number | null>
+  moves: { trait: string; text: string; gain: number | null }[]
+  whatIf: { sol: number; score: number; rank: { key: string; name: string } }[]
+  ladder: Rank[]
+}
+/** Each rank's character art */
+export const rankArt = (key: string) => `/assets/chars/${key}.${key === 'gigachad' ? 'webp' : 'png'}`
+export const RANK_EVENT = 'vvc:rank'
+export interface RankEvent { dir: 'up' | 'down'; key: string; name: string }
 
 export interface PublicBag {
   wallet: string
